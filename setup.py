@@ -18,7 +18,7 @@ sys.path.insert(0,os.path.abspath(package_basename))
 import _version
 import utils
 version = _version.__version__
-lib_dir = utils.lib_dir
+lib_dir = os.path.join(package_basedir,'lib')
 src_dir = os.path.join(package_basedir,'src')
 
 
@@ -89,6 +89,6 @@ if __name__ == '__main__':
               'bdist_egg': custom_bdist_egg,
               'clean': custom_clean
           },
-         data_files = [('lib',glob.glob('lib/*.so'))],
+         data_files = [('lib',glob.glob(os.path.join(lib_dir,'*')))],
          packages=[package_basename]
     )

@@ -24,6 +24,11 @@ positions_rec_randoms = positions_randoms - rec.read_shifts(positions_randoms)
 # positions_rec_randoms = positions_randoms - rec.read_shifts(positions_randoms,with_rsd=False)
 ```
 
+## Warning
+
+In progress! Handling installation with pip (issue with data_files), and bugs with MultiGridReconstruction.
+Should be solved fairly rapidly.
+
 ## Documentation
 
 Documentation is hosted on Read the Docs, [pyrecon docs](https://pyrecon.readthedocs.io/).

@@ -13,12 +13,6 @@ Extra requirements are:
 
   - `pyfftw <https://github.com/pyFFTW/pyFFTW>`_ (for faster FFTs)
 
-PIP
----
-To install **pyrecon**, simply run::
-
-  python -m pip install git+https://github.com/adematti/pyrecon
-
 git
 ---
 First::
