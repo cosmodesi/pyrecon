@@ -6,7 +6,7 @@ import traceback
 
 import numpy as np
 
-lib_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)),'..','lib')
+lib_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)),'lib')
 
 
 def exception_handler(exc_type, exc_value, exc_traceback):

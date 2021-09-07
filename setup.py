@@ -19,7 +19,7 @@ sys.path.insert(0,os.path.abspath(package_basename))
 import _version
 import utils
 version = _version.__version__
-lib_dir = os.path.join(package_basedir,'lib')
+lib_dir = utils.lib_dir
 src_dir = os.path.join(package_basedir,'src')
 
 
@@ -49,7 +49,7 @@ class custom_build(build):
             subprocess.call('make',shell=True,cwd=src_dir)
 
         self.execute(compile,[],'Compiling')
-        new_lib_dir = os.path.join(os.path.abspath(self.build_lib),'lib')
+        new_lib_dir = os.path.join(os.path.abspath(self.build_lib),package_basename,'lib')
         shutil.rmtree(new_lib_dir,ignore_errors=True)
         shutil.copytree(lib_dir,new_lib_dir)
 
