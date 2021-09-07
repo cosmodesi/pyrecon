@@ -1,0 +1,27 @@
+**/__pycache__
+**/pytest_cache
+**/*.egg
+**/*.egg-info
+**/.cache
+**/.config
+**/.wget*
+**/dist
+**/eggs
+**/build
+**/_catalogs
+**/_codes
+**/*.npy
+**/*.rdzw
+**/*.xyzw
+**/*.blg
+**/*.bbl
+**/*.pdf
+**/*.aux
+**/*.log
+**/*.out
+**/_build
+**/bak*
+**/lib
+
+# Unit test / coverage reports
+**/.coverage

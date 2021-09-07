@@ -1,0 +1,221 @@
+import os
+import time
+import subprocess
+
+import numpy as np
+import fitsio
+
+from pyrecon import MultiGridReconstruction
+
+
+
+def get_random_catalog(seed=None):
+    size = 100000
+    rng = np.random.RandomState(seed=seed)
+    positions = np.array([rng.uniform(0.,1000.,size) for i in range(3)]).T
+    weights = rng.uniform(0.5,1.,size)
+    return {'Position':positions,'Weight':weights}
+
+
+def test_random():
+    data = get_random_catalog(seed=42)
+    randoms = get_random_catalog(seed=84)
+    recon = MultiGridReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=16,dtype='f4')
+    recon.assign_data(data['Position'],data['Weight'])
+    recon.assign_randoms(randoms['Position'],randoms['Weight'])
+    recon.set_density_contrast()
+    #recon.run(jacobi_niterations=1,vcycle_niterations=1)
+    recon.run()
+    recon.f = recon.beta
+    print(recon.read_shifts(data['Position']))
+    assert np.all(recon.read_shifts(data['Position']) < 1.)
+
+
+def distance(pos):
+    return np.sum(pos**2,axis=-1)**0.5
+
+
+def compute_ref(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
+
+    from nbodykit.lab import cosmology
+    from nbodykit.transform import CartesianToSky
+
+    cosmo = cosmology.Planck15.match(Omega0_m=0.3) # default in recon
+
+    input_fn = [fn.replace('.fits','.rdzw') for fn in [data_fn,randoms_fn]]
+
+    for fn,infn in zip([data_fn,randoms_fn],input_fn):
+        catalog = fitsio.read(fn)
+        radeczw = list(CartesianToSky(catalog['Position'],cosmo).compute()) + [catalog['Weight']]
+        np.savetxt(infn,np.array(radeczw).T)
+
+    catalog_dir = os.path.dirname(infn)
+    subprocess.call('{0} {1} {2} {2} 2 0.81 15'.format(recon_code,*[os.path.basename(infn) for infn in input_fn]),shell=True,cwd=catalog_dir)
+
+    output_fn = [os.path.join(catalog_dir,base) for base in ['data_rec.xyzw','rand_rec.xyzw']]
+    for infn,fn,outfn in zip([data_fn,randoms_fn],[output_data_fn,output_randoms_fn],output_fn):
+        x,y,z,w = np.loadtxt(outfn,unpack=True)
+        positions = np.array([x,y,z]).T
+        catalog = fitsio.read(infn)
+        #print(np.mean(distance(positions-catalog['Position'])))
+        catalog['Position'] = positions
+        catalog['Weight'] = w
+        fitsio.write(fn,catalog,clobber=True)
+
+
+def test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
+
+    recon = MultiGridReconstruction(nthreads=2,boxsize=1200.,boxcenter=[1746,400,400],nmesh=128,dtype='f8')
+    recon.set_cosmo(f=0.81,bias=2.)
+
+    ext = 1
+    nslabs = 10
+    for fn,assign in zip([data_fn,randoms_fn],[recon.assign_data,recon.assign_randoms]):
+        with fitsio.FITS(fn,'r') as ff:
+            ff = ff[ext]
+            size = ff.get_nrows()
+            for islab in range(nslabs):
+                start = islab*size//nslabs
+                stop = (islab+1)*size//nslabs
+                data = ff.read(columns=['Position','Weight'],rows=range(start,stop))
+                assign(data['Position'],data['Weight'])
+
+    recon.set_density_contrast()
+    recon.run()
+    recon.f = recon.beta
+
+    for input_fn,output_fn in zip([data_fn,randoms_fn],[output_data_fn,output_randoms_fn]):
+        with fitsio.FITS(input_fn,'r') as ffin:
+            ffin = ffin[ext]
+            size = ffin.get_nrows()
+            with fitsio.FITS(output_fn,'rw',clobber=True) as ffout:
+                for islab in range(nslabs):
+                    start = islab*size//nslabs
+                    stop = (islab+1)*size//nslabs
+                    data = ffin.read(rows=range(start,stop))
+                    #if input_fn == randoms_fn:
+                    #    recon.set_cosmo(f=0.)
+                    data['Position'] += recon.read_shifts(data['Position'])
+                    if islab == 0: ffout.write(data)
+                    else: ffout[-1].append(data)
+
+
+def compare_ref(data_fn, output_data_fn, ref_output_data_fn):
+    positions = fitsio.read(data_fn)['Position']
+    output_positions = fitsio.read(output_data_fn)['Position']
+    ref_output_positions = fitsio.read(ref_output_data_fn)['Position']
+
+    print('test - ref',np.mean(distance(output_positions-ref_output_positions)))
+    print('test',np.mean(distance(output_positions-positions)))
+    print('ref',np.mean(distance(ref_output_positions-positions)))
+
+
+def compute_power(*list_data_randoms):
+
+    from matplotlib import pyplot as plt
+    from nbodykit.lab import FITSCatalog, FKPCatalog, ConvolvedFFTPower
+
+    for linestyle,(data_fn,randoms_fn) in zip(['-','--'],list_data_randoms):
+
+        data = FITSCatalog(data_fn)
+        randoms = FITSCatalog(randoms_fn)
+
+        for catalog in [data,randoms]:
+            catalog['WEIGHT_FKP'] = np.ones(catalog.size,dtype='f8')
+            catalog['WEIGHT_COMP'] = catalog['Weight']
+
+        fkp = FKPCatalog(data,randoms)
+        BoxSize = 3000.
+        Nmesh = 128
+        ells = (0,2,4)
+        mesh = fkp.to_mesh(position='Position',fkp_weight='WEIGHT_FKP',comp_weight='WEIGHT_COMP',nbar='NZ',BoxSize=BoxSize,Nmesh=Nmesh,resampler='tsc',interlaced=True,compensated=True)
+        power = ConvolvedFFTPower(mesh,poles=ells,kmin=0.,dk=0.01)
+        poles = power.poles
+
+        for ill,ell in enumerate(ells):
+            pk = poles['power_{:d}'.format(ell)] - power.attrs['shotnoise'] if ell == 0 else poles['power_{:d}'.format(ell)]
+            plt.plot(poles['k'],poles['k']*pk,color='C{:d}'.format(ill),linestyle=linestyle)
+
+    plt.xlabel('$k$ [$h/\mathrm{Mpc}$]')
+    plt.ylabel('$kP(k)$ [$(\mathrm{Mpc}/h)^{2}$]')
+    plt.show()
+
+
+class MemoryMonitor(object):
+    """
+    Class that monitors memory usage and clock, useful to check for memory leaks.
+
+    >>> with MemoryMonitor() as mem:
+            '''do something'''
+            mem()
+            '''do something else'''
+    """
+
+    def __init__(self, pid=None, msg=''):
+        """
+        Initalize :class:`MemoryMonitor` and register current memory usage.
+
+        Parameters
+        ----------
+        pid : int, default=None
+            Process identifier. If ``None``, use the identifier of the current process.
+
+        msg : string, default=''
+            Additional message.
+        """
+        import psutil
+        self.proc = psutil.Process(os.getpid() if pid is None else pid)
+        self.mem = self.proc.memory_info().rss / 1e6
+        self.time = time.time()
+        self.msg = msg
+        msg = 'using {:.3f} [Mb]'.format(self.mem)
+        if self.msg:
+            msg = '[{}] {}'.format(self.msg,msg)
+        print(msg)
+
+    def __enter__(self):
+        """Enter context."""
+
+    def __call__(self):
+        """Update memory usage."""
+        mem = self.proc.memory_info().rss / 1e6
+        t = time.time()
+        msg = 'using {:.3f} [Mb] (increase of {:.3f} [Mb]) after {:.3f} [s]'.format(mem,mem-self.mem,t-self.time)
+        if self.msg:
+            msg = '[{}] {}'.format(self.msg,msg)
+        print(msg)
+        self.mem = mem
+        self.time = t
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        """Exit context."""
+        self()
+
+
+if __name__ == '__main__':
+
+    #with MemoryMonitor() as mem:
+    #    for i in range(2):
+    #        test_random()
+    import utils
+    from utils import data_fn, randoms_fn, catalog_dir
+    #utils.setup()
+    from pyrecon.utils import setup_logging
+
+    setup_logging()
+
+    recon_code = os.path.join(os.path.abspath(os.path.dirname(__file__)),'_codes','recon')
+    output_data_fn = os.path.join(catalog_dir,'data_rec.fits')
+    output_randoms_fn = os.path.join(catalog_dir,'randoms_rec.fits')
+    ref_output_data_fn = os.path.join(catalog_dir,'ref_data_rec.fits')
+    ref_output_randoms_fn = os.path.join(catalog_dir,'ref_randoms_rec.fits')
+
+
+    test_random()
+    #save_lognormal_catalogs(data_fn,randoms_fn,seed=42)
+    #test_recon(data_fn,randoms_fn,output_data_fn,output_randoms_fn)
+    #compute_ref(data_fn,randoms_fn,ref_output_data_fn,ref_output_randoms_fn)
+    #compare_ref(data_fn,output_data_fn,ref_output_data_fn)
+    #compute_power((data_fn,randoms_fn),(output_data_fn,output_randoms_fn))
+    #compute_power((data_fn,randoms_fn),(ref_output_data_fn,ref_output_randoms_fn))
+    #compute_power((ref_output_data_fn,ref_output_randoms_fn),(output_data_fn,output_randoms_fn))
