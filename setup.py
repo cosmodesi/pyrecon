@@ -3,6 +3,7 @@ import sys
 import sysconfig
 import importlib
 import subprocess
+import shutil
 import glob
 from distutils.command.build import build
 from distutils.command.clean import clean
@@ -34,6 +35,7 @@ class custom_build(build):
     def run(self):
         super(custom_build,self).run()
 
+        #lib_dir = os.path.join(os.path.abspath(self.build_lib),'pyrecon','lib')
         os.environ.setdefault('LIBDIR',lib_dir)
         library_dir = sysconfig.get_config_var('LIBDIR')
         os.environ.setdefault('OMPFLAG','-fopenmp -L{}'.format(library_dir))
@@ -47,6 +49,10 @@ class custom_build(build):
             subprocess.call('make',shell=True,cwd=src_dir)
 
         self.execute(compile,[],'Compiling')
+        new_lib_dir = os.path.join(os.path.abspath(self.build_lib),'lib')
+        shutil.rmtree(new_lib_dir,ignore_errors=True)
+        shutil.copytree(lib_dir,new_lib_dir)
+
 
 
 class custom_bdist_egg(bdist_egg):
@@ -69,8 +75,7 @@ class custom_clean(clean):
         # run the built-in clean
         super(custom_clean,self).run()
         # remove the recon products
-        os.environ.setdefault('LIBDIR',lib_dir)
-        subprocess.call('make clean',shell=True,cwd=src_dir)
+        shutil.rmtree(lib_dir,ignore_errors=True)
 
 
 if __name__ == '__main__':
@@ -83,12 +88,11 @@ if __name__ == '__main__':
           license='GPL3',
           url='http://github.com/adematti/pyrecon',
           install_requires=['numpy'],
-          cmdclass = {
+          cmdclass={
               'build': custom_build,
               'develop': custom_develop,
               'bdist_egg': custom_bdist_egg,
               'clean': custom_clean
           },
-         data_files = [('lib',glob.glob(os.path.join(lib_dir,'*')))],
          packages=[package_basename]
     )

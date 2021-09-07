@@ -26,7 +26,7 @@ positions_rec_randoms = positions_randoms - rec.read_shifts(positions_randoms)
 
 ## Warning
 
-In progress! Handling installation with pip (issue with data_files), and bugs with MultiGridReconstruction.
+In progress! Handling bugs with MultiGridReconstruction.
 Should be solved fairly rapidly.
 
 ## Documentation
