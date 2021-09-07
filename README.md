@@ -60,11 +60,6 @@ $>  export CC=clang
 Before installing pyrecon. This will set clang OpenMP flags for compilation.
 Note that with Mac OS gcc can point to clang.
 
-## Requirements
-
-- numpy
-- pyfftw (optional, for faster FFTs)
-
 ## License
 
 **pyrecon** is free software distributed under a GPLv3 license. For details see the [LICENSE](https://github.com/adematti/pyrecon/blob/main/LICENSE).
