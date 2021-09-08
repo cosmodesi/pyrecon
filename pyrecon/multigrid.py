@@ -51,6 +51,7 @@ class MultiGridReconstruction(BaseReconstruction):
                         self._type_float,self._type_float,ctypes.c_int,ctypes.c_int)
         self.mesh_phi = self.mesh_delta.zeros_like()
         self.mesh_phi.value.shape = -1
+        self.log_info('Computing displacement potential.')
         func(self.mesh_delta.value.ravel(),self.mesh_phi.value,
             self.mesh_delta.nmesh.astype(ctypes.c_int,copy=False),self.mesh_delta.boxsize.astype(self._type_float,copy=False),self.mesh_delta.boxcenter.astype(self._type_float,copy=False),
             self.beta,jacobi_damping_factor,jacobi_niterations,vcycle_niterations)

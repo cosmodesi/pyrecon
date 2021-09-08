@@ -178,7 +178,7 @@ void smooth_fft_gaussian(FLOAT *mesh, const int* nmesh, const FLOAT* smoothing_r
 */
 
 
-void read_finite_difference_cic(FLOAT* mesh, const int* nmesh, const FLOAT* boxsize, const FLOAT* positions, FLOAT* shifts, size_t npositions) {
+void read_finite_difference_cic(const FLOAT* mesh, const int* nmesh, const FLOAT* boxsize, const FLOAT* positions, FLOAT* shifts, size_t npositions) {
   // Computes the displacement field from mesh using second-order accurate
   // finite difference and shifts the data and randoms.
   // The displacements are pulled from the grid onto the positions of the
@@ -246,6 +246,9 @@ void read_finite_difference_cic(FLOAT* mesh, const int* nmesh, const FLOAT* boxs
     py += (mesh[ixp+iypp+izp]-mesh[ixp+iy0+izp])*wt;
     pz += (mesh[ixp+iyp+izpp]-mesh[ixp+iyp+iz0])*wt;
     FLOAT *sh = &(shifts[ii*NDIM]);
+    //px *= boxsize[0]*boxsize[0];
+    //py *= boxsize[0]*boxsize[0];
+    //pz *= boxsize[0]*boxsize[0];
     sh[0] = px/cell[0];
     sh[1] = py/cell[1];
     sh[2] = pz/cell[2];
@@ -253,13 +256,13 @@ void read_finite_difference_cic(FLOAT* mesh, const int* nmesh, const FLOAT* boxs
 }
 
 
-void read_cic(FLOAT* mesh, const int* nmesh, FLOAT* positions, FLOAT* shifts, size_t npositions) {
+void read_cic(const FLOAT* mesh, const int* nmesh, const FLOAT* positions, FLOAT* shifts, size_t npositions) {
   // Positions must be in [0,nmesh-1]
   const int nmeshz = nmesh[2];
   const int nmeshyz = nmesh[2]*nmesh[1];
   #pragma omp parallel for shared(mesh,positions,shifts)
   for (size_t ii=0; ii<npositions; ii++) {
-    FLOAT *pos = &(positions[ii*NDIM]);
+    const FLOAT *pos = &(positions[ii*NDIM]);
     int ix0 = (int) pos[0];
     int iy0 = (int) pos[1];
     int iz0 = (int) pos[2];

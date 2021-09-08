@@ -173,18 +173,23 @@ class BaseMesh(NDArrayLike,BaseClass,metaclass=BaseMetaClass):
     @SetterProperty
     def value(self, value):
         if value is not None:
-            value.shape = self.shape
-            value = value.astype(self.dtype,copy=False)
+            if isinstance(value,np.ndarray):
+                value.shape = self.shape
+                value = value.astype(self.dtype,copy=False)
+            else:
+                value_ = value
+                value = np.empty(shape=self.shape,dtype=self.dtype)
+                value[...] = value_
         self.__dict__['value'] = value
 
     def zeros_like(self):
         new = self.deepcopy(copy_value=False)
-        new.value = np.zeros(self.shape,self.dtype)
+        new.value = np.zeros(shape=self.shape,dtype=self.dtype)
         return new
 
     def empty_like(self, *args, **kwargs):
         new = self.deepcopy(copy_value=False)
-        new.value = np.empty_like(self.shape,self.dtype)
+        new.value = np.empty(shape=self.shape,dtype=self.dtype)
         return new
 
     def __repr__(self):
@@ -470,7 +475,7 @@ class RealMesh(BaseMesh):
         func = self._lib.read_finite_difference_cic
         func.argtypes = (self._type_mesh,type_nmesh,type_boxsize,type_positions,type_positions,ctypes.c_size_t)
         func(self.value.ravel(),self.nmesh.astype(ctypes.c_int,copy=False),self.boxsize.astype(self._type_float,copy=False),positions,values,size)
-        values.shape = (-1,self.ndim)
+        values.shape = (size,self.ndim)
         return values
 
     def smooth_gaussian(self, radius, method='fft', nsigmas=2.5, **kwargs):
@@ -496,8 +501,8 @@ class RealMesh(BaseMesh):
         if method == 'fft':
             engine = self.get_fft_engine(**kwargs)
             valuek = self.to_complex(engine=engine)
-            k2 = sum(0.5*(r*k)**2 for r,k in zip(radius_,utils.broadcast_arrays(*valuek.freq())))
-            valuek *= np.exp(-k2)
+            k2 = sum(-0.5*(r*k)**2 for r,k in zip(radius_,utils.broadcast_arrays(*valuek.freq())))
+            valuek *= np.exp(k2)
             self.value = valuek.to_real(engine=engine).value
             #func = self._lib.smooth_fft_gaussian
             #func.argtypes = (self._type_mesh,type_nmesh,type_boxsize)
@@ -509,7 +514,7 @@ class RealMesh(BaseMesh):
             func = self._lib.smooth_gaussian
             func.argtypes = (self._type_mesh,type_nmesh,type_boxsize,self._type_float)
             self.value.shape = -1
-            func(self.value,self.nmesh.astype(ctypes.c_int,copy=False),radius.astype(self._type_float,copy=False),nsigmas=nsigmas)
+            func(self.value,self.nmesh.astype(ctypes.c_int,copy=False),radius.astype(self._type_float,copy=False),nsigmas)
             self.value.shape = self.shape
 
     def get_fft_engine(self, engine='numpy', **kwargs):

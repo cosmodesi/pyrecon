@@ -22,6 +22,7 @@
 // Modified:	20-Apr-2015
 //
 
+
 void jacobi(FLOAT *v, const FLOAT *f, const int* nmesh, const FLOAT* boxsize, const FLOAT* boxcenter, const FLOAT beta, const FLOAT damping_factor, const int niterations) {
   // Does an update using damped Jacobi. This, and in residual below,
   // is where the explicit equation we are solving appears.
@@ -58,9 +59,9 @@ void jacobi(FLOAT *v, const FLOAT *f, const int* nmesh, const FLOAT* boxsize, co
           size_t izm = (iz-1+nmesh[2]) % nmesh[2];
           size_t ii = ix0 + iy0 + iz0;
           jac[ii] = f[ii]+
-                    (1+g*rx*rx)*(v[ixp+iy0+iz0]+v[ixm+iy0+iz0])+
-                    (1+g*ry*ry)*(v[ix0+iyp+iz0]+v[ix0+iym+iz0])+
-                    (1+g*rz*rz)*(v[ix0+iy0+izp]+v[ix0+iy0+izm])+
+                    (1/(cell[0]*cell[0])+g*rx*rx)*(v[ixp+iy0+iz0]+v[ixm+iy0+iz0])+
+                    (1/(cell[1]*cell[1])+g*ry*ry)*(v[ix0+iyp+iz0]+v[ix0+iym+iz0])+
+                    (1/(cell[2]*cell[2])+g*rz*rz)*(v[ix0+iy0+izp]+v[ix0+iy0+izm])+
                     (g*rx*ry/2)*(v[ixp+iyp+iz0]+v[ixm+iym+iz0]
                                 -v[ixm+iyp+iz0]-v[ixp+iym+iz0])+
                     (g*rx*rz/2)*(v[ixp+iy0+izp]+v[ixm+iy0+izm]
@@ -71,7 +72,7 @@ void jacobi(FLOAT *v, const FLOAT *f, const int* nmesh, const FLOAT* boxsize, co
                     (g*ry)*(v[ix0+iyp+iz0]-v[ix0+iym+iz0])+
                     (g*rz)*(v[ix0+iy0+izp]-v[ix0+iy0+izm]);
           jac[ii] /= 2*(icell2 + g*(rx*rx + ry*ry + rz*rz));
-          jac[ii] = f[ii];
+          //jac[ii] = f[ii];
         }
       }
     }
@@ -117,9 +118,9 @@ void residual(const FLOAT* v, const FLOAT* f, FLOAT* r, const int* nmesh, const 
         size_t izm = (iz-1+nmesh[2]) % nmesh[2];
         size_t ii = ix0 + iy0 + iz0;
         r[ii] = 2*(icell2 + g*(rx*rx + ry*ry + rz*rz))*v[ii] -
-                  ((1+g*rx*rx)*(v[ixp+iy0+iz0]+v[ixm+iy0+iz0])+
-                  (1+g*ry*ry)*(v[ix0+iyp+iz0]+v[ix0+iym+iz0])+
-                  (1+g*rz*rz)*(v[ix0+iy0+izp]+v[ix0+iy0+izm])+
+                  ((1/(cell[0]*cell[0])+g*rx*rx)*(v[ixp+iy0+iz0]+v[ixm+iy0+iz0])+
+                  (1/(cell[1]*cell[1])+g*ry*ry)*(v[ix0+iyp+iz0]+v[ix0+iym+iz0])+
+                  (1/(cell[2]*cell[2])+g*rz*rz)*(v[ix0+iy0+izp]+v[ix0+iy0+izm])+
                   (g*rx*ry/2)*(v[ixp+iyp+iz0]+v[ixm+iym+iz0]
                               -v[ixm+iyp+iz0]-v[ixp+iym+iz0])+
                   (g*rx*rz/2)*(v[ixp+iy0+izp]+v[ixm+iy0+izm]
@@ -147,23 +148,23 @@ void prolong(const FLOAT* v2h, FLOAT* v1h, const int* nmesh) {
   const int nmeshyz = nmesh[2]*nmesh[1];
   const int nmesh2z = 2*nmesh[2];
   const int nmesh2yz = 4*nmesh[2]*nmesh[1];
-  //#pragma omp parallel for shared(v2h,v1h)
+  #pragma omp parallel for shared(v2h,v1h)
   for (int ix=0; ix<nmesh[0]; ix++) {
-    size_t ix0 = nmeshyz*ix;
-    size_t ixp = nmeshyz*((ix+1) % nmesh[0]);
-    size_t i2x0 = nmesh2yz*2*ix;
-    size_t i2xp = nmesh2yz*(2*ix+1);
+    int ix0 = nmeshyz*ix;
+    int ixp = nmeshyz*((ix+1) % nmesh[0]);
+    int i2x0 = nmesh2yz*2*ix;
+    int i2xp = nmesh2yz*(2*ix+1);
     for (int iy=0; iy<nmesh[1]; iy++) {
-      size_t iy0 = nmeshz*iy;
-      size_t iyp = nmeshz*((iy+1) % nmesh[1]);
-      size_t i2y0 = nmesh2z*2*iy;
-      size_t i2yp = nmesh2z*(2*iy+1);
+      int iy0 = nmeshz*iy;
+      int iyp = nmeshz*((iy+1) % nmesh[1]);
+      int i2y0 = nmesh2z*2*iy;
+      int i2yp = nmesh2z*(2*iy+1);
       for (int iz=0; iz<nmesh[2]; iz++) {
-        size_t iz0 = iz;
-        size_t izp = (iz+1) % nmesh[2];
-        size_t i2z0 = 2*iz;
-        size_t i2zp = (2*iz + 1);
-        size_t ii0 = ix0+iy0+iz0;
+        int iz0 = iz;
+        int izp = (iz+1) % nmesh[2];
+        int i2z0 = 2*iz;
+        int i2zp = (2*iz + 1);
+        int ii0 = ix0+iy0+iz0;
         v1h[i2x0+i2y0+i2z0] = v2h[ii0];
         v1h[i2xp+i2y0+i2z0] = (v2h[ii0] + v2h[ixp+iy0+iz0])/2;
         v1h[i2x0+i2yp+i2z0] = (v2h[ii0] + v2h[ix0+iyp+iz0])/2;
@@ -176,8 +177,8 @@ void prolong(const FLOAT* v2h, FLOAT* v1h, const int* nmesh) {
                               + v2h[ix0+iy0+izp] + v2h[ixp+iy0+izp])/4;
         v1h[i2xp+i2yp+i2zp] = (v2h[ii0] + v2h[ixp+iy0+iz0]
                               + v2h[ix0+iyp+iz0] + v2h[ix0+iy0+izp]
-                              + v2h[ixp+iyp+iz0] + v2h[ix0+iyp+izp]
-                              + v2h[ixp+iy0+izp] + v2h[ixp+iyp+izp])/8;
+                              + v2h[ixp+iyp+iz0] + v2h[ixp+iy0+izp]
+                              + v2h[ix0+iyp+izp] + v2h[ixp+iyp+izp])/8;
       }
     }
   }
@@ -251,8 +252,8 @@ void vcycle(FLOAT* v, const FLOAT* f, const int* nmesh, const FLOAT* boxsize, co
     // Not at coarsest level -- recurse coarser.
     int nmesh2[NDIM];
     for (int idim=0; idim<NDIM; idim++) nmesh2[idim] = nmesh[idim]/2;
-    //FLOAT* r = (FLOAT *) malloc(size*sizeof(FLOAT));
-    FLOAT* r = (FLOAT *) calloc(size,sizeof(FLOAT));
+    FLOAT* r = (FLOAT *) malloc(size*sizeof(FLOAT));
+    //FLOAT* r = (FLOAT *) calloc(size,sizeof(FLOAT));
     residual(v,f,r,nmesh,boxsize,boxcenter,beta);
     FLOAT* f2h = (FLOAT *) malloc(size/8*sizeof(FLOAT));
     reduce(r,f2h,nmesh);
@@ -273,52 +274,6 @@ void vcycle(FLOAT* v, const FLOAT* f, const int* nmesh, const FLOAT* boxsize, co
   jacobi(v,f,nmesh,boxsize,boxcenter,beta,damping_factor,niterations);
 }
 
-/*
-void print_error(FLOAT* v, FLOAT* f, const int* nmesh,const FLOAT* boxsize, const FLOAT* boxcenter, const FLOAT beta) {
-// For debugging purposes, prints an estimate of the residual.
-  const size_t size = nmesh[0]*nmesh[1]*nmesh[2];
-  FLOAT* r = (FLOAT *) malloc(size*sizeof(FLOAT));
-  residual(v,f,r,,nmesh,boxsize,boxcenter,beta);
-  FLOAT res1=0,res2=0,src1=0,src2=0;
-  #pragma omp parallel for shared(v,f) reduction(+:src1,src2,res1,res2)
-  for (size_t ii=0; ii<size; ii++) {
-    src1 += ABS(f[ii]);
-    src2 += f[ii]*f[ii];
-    res1 += ABS(r[ii]);
-    res2 += r[ii]*r[ii];
-  }
-  free(r);
-  src2 = SQRT(src2);
-  res2 = SQRT(res2);
-  printf("# Source L1 norm is %.7f\n",src1);
-  printf("# Residual L1 norm is %.7f\n",res1);
-  printf("# Source L2 norm is %.7f\n",src2);
-  printf("# Residual L2 norm is %.7f\n",res2);
-}
-*/
-
-/*
-void fmg(const FLOAT* f1h, FLOAT* v1h, const int* nmesh, const FLOAT* boxsize, const FLOAT* boxcenter, const FLOAT beta,
-          const FLOAT jacobi_damping_factor, const int jacobi_niterations, const int vcycle_niterations) {
-  // The full multigrid cycle, also done recursively.
-  const size_t size = nmesh[0]*nmesh[1]*nmesh[2];
-  _Bool recurse = 1;
-  for (int idim=0; idim<NDIM; idim++) recurse &= ((nmesh[idim] > 4) && (nmesh[idim] % 2 == 0));
-  if (recurse) {
-    // Recurse to a coarser grid.
-    int nmesh2[NDIM];
-    for (int idim=0; idim<NDIM; idim++) nmesh2[idim] = nmesh[idim]/2;
-    FLOAT* f2h = (FLOAT *) calloc(size/8,sizeof(FLOAT));
-    reduce(f1h,f2h,nmesh);
-    FLOAT* v2h = (FLOAT *) calloc(size,sizeof(FLOAT));
-    fmg(f2h,v2h,nmesh2,boxsize,boxcenter,beta,jacobi_damping_factor,jacobi_niterations,vcycle_niterations);
-    free(f2h);
-    prolong(v2h,v1h,nmesh2);
-    free(v2h);
-  }
-  for (int iter=0; iter<vcycle_niterations; iter++) vcycle(v1h,f1h,nmesh,boxsize,boxcenter,beta,jacobi_damping_factor,jacobi_niterations);
-}
-*/
 
 FLOAT* fmg(FLOAT* f1h, FLOAT* v1h, const int* nmesh, const FLOAT* boxsize, const FLOAT* boxcenter, const FLOAT beta,
           const FLOAT jacobi_damping_factor, const int jacobi_niterations, const int vcycle_niterations) {

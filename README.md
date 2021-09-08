@@ -24,10 +24,10 @@ positions_rec_randoms = positions_randoms - rec.read_shifts(positions_randoms)
 # positions_rec_randoms = positions_randoms - rec.read_shifts(positions_randoms,with_rsd=False)
 ```
 
-## Warning
+## In progress
 
-In progress! Handling bugs with MultiGridReconstruction.
-Should be solved fairly rapidly.
+Script to run as a standalone.
+Should be done fairly rapidly.
 
 ## Documentation
 

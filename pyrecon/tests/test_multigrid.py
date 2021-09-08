@@ -12,7 +12,7 @@ from pyrecon import MultiGridReconstruction
 def get_random_catalog(seed=None):
     size = 100000
     rng = np.random.RandomState(seed=seed)
-    positions = np.array([rng.uniform(0.,1000.,size) for i in range(3)]).T
+    positions = np.array([rng.uniform(500.,1000.,size) for i in range(3)]).T
     weights = rng.uniform(0.5,1.,size)
     return {'Position':positions,'Weight':weights}
 
@@ -20,12 +20,12 @@ def get_random_catalog(seed=None):
 def test_random():
     data = get_random_catalog(seed=42)
     randoms = get_random_catalog(seed=84)
-    recon = MultiGridReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=16,dtype='f4')
+    recon = MultiGridReconstruction(f=0.8,bias=2.,nthreads=1,positions=randoms['Position'],nmesh=8,dtype='f8')
     recon.assign_data(data['Position'],data['Weight'])
     recon.assign_randoms(randoms['Position'],randoms['Weight'])
     recon.set_density_contrast()
-    #recon.run(jacobi_niterations=1,vcycle_niterations=1)
-    recon.run()
+    recon.run(jacobi_niterations=1,vcycle_niterations=1)
+    #recon.run()
     recon.f = recon.beta
     print(recon.read_shifts(data['Position']))
     assert np.all(recon.read_shifts(data['Position']) < 1.)
@@ -65,11 +65,11 @@ def compute_ref(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
 
 def test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
 
-    recon = MultiGridReconstruction(nthreads=2,boxsize=1200.,boxcenter=[1746,400,400],nmesh=128,dtype='f8')
+    recon = MultiGridReconstruction(nthreads=1,boxsize=1200.,boxcenter=[1746,400,400],nmesh=128,dtype='f8')
     recon.set_cosmo(f=0.81,bias=2.)
 
     ext = 1
-    nslabs = 10
+    nslabs = 1
     for fn,assign in zip([data_fn,randoms_fn],[recon.assign_data,recon.assign_randoms]):
         with fitsio.FITS(fn,'r') as ff:
             ff = ff[ext]
@@ -82,7 +82,8 @@ def test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
 
     recon.set_density_contrast()
     recon.run()
-    recon.f = recon.beta
+    #print(np.std(recon.mesh_phi))
+    #recon.f = recon.beta
 
     for input_fn,output_fn in zip([data_fn,randoms_fn],[output_data_fn,output_randoms_fn]):
         with fitsio.FITS(input_fn,'r') as ffin:
@@ -93,9 +94,9 @@ def test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
                     start = islab*size//nslabs
                     stop = (islab+1)*size//nslabs
                     data = ffin.read(rows=range(start,stop))
-                    #if input_fn == randoms_fn:
-                    #    recon.set_cosmo(f=0.)
-                    data['Position'] += recon.read_shifts(data['Position'])
+                    shifts = recon.read_shifts(data['Position'],with_rsd=input_fn!=randoms_fn)
+                    print('RMS',(np.mean(np.sum(shifts**2,axis=-1))/3)**0.5)
+                    data['Position'] -= shifts
                     if islab == 0: ffout.write(data)
                     else: ffout[-1].append(data)
 
@@ -211,11 +212,11 @@ if __name__ == '__main__':
     ref_output_randoms_fn = os.path.join(catalog_dir,'ref_randoms_rec.fits')
 
 
-    test_random()
+    #test_random()
     #save_lognormal_catalogs(data_fn,randoms_fn,seed=42)
-    #test_recon(data_fn,randoms_fn,output_data_fn,output_randoms_fn)
+    test_recon(data_fn,randoms_fn,output_data_fn,output_randoms_fn)
     #compute_ref(data_fn,randoms_fn,ref_output_data_fn,ref_output_randoms_fn)
     #compare_ref(data_fn,output_data_fn,ref_output_data_fn)
-    #compute_power((data_fn,randoms_fn),(output_data_fn,output_randoms_fn))
+    compute_power((data_fn,randoms_fn),(output_data_fn,output_randoms_fn))
     #compute_power((data_fn,randoms_fn),(ref_output_data_fn,ref_output_randoms_fn))
     #compute_power((ref_output_data_fn,ref_output_randoms_fn),(output_data_fn,output_randoms_fn))

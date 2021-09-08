@@ -52,6 +52,16 @@ def test_cic():
     assert np.allclose(shifts,shifts_ref)
 
 
+def test_finite_difference_cic():
+    mesh = RealMesh(boxsize=1000.,boxcenter=0.,nmesh=64,dtype='f8')
+    rng = np.random.RandomState(seed=42)
+    mesh.value = 1.
+    size = 10000
+    positions = np.array([rng.uniform(-400.,400.,size) for i in range(3)]).T
+    shifts = mesh.read_finite_difference_cic(positions)
+    assert np.allclose(shifts,0)
+
+
 def test_smoothing():
     from matplotlib import pyplot as plt
     mesh = RealMesh(boxsize=1000.,boxcenter=0.,nmesh=64,dtype='f8')
@@ -60,10 +70,10 @@ def test_smoothing():
     s = np.sum(mesh)
     mesh_fft = mesh.deepcopy()
     mesh_fft.smooth_gaussian(method='fft',radius=radius)
-    print(np.sum(mesh_fft)/s)
+    assert np.allclose(np.sum(mesh_fft),s)
     mesh_brute = mesh.deepcopy()
-    mesh_brute.smooth_gaussian(method='bruteforce',radius=radius)
-    print(np.sum(mesh_brute)/s)
+    mesh_brute.smooth_gaussian(method='real',radius=radius)
+    assert np.allclose(np.sum(mesh_brute),s)
     fig,lax = plt.subplots(nrows=1,ncols=3,sharex=True,sharey=True)
     sl = slice(1,4)
     lax[0].imshow(np.mean(mesh[:,:,sl],axis=-1))
@@ -97,8 +107,9 @@ def test_hermitian():
 
 if __name__ == '__main__':
 
-    #test_info()
-    #test_cic()
-    #test_smoothing()
-    #test_fft()
+    test_info()
+    test_cic()
+    test_finite_difference_cic()
+    test_smoothing()
+    test_fft()
     test_hermitian()
