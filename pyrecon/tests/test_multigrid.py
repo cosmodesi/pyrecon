@@ -48,12 +48,14 @@ def compute_ref(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
 
     for fn,infn in zip([data_fn,randoms_fn],input_fn):
         catalog = fitsio.read(fn)
-        distance, ra, dec = cartesian_to_sky(catalog['Position'])
-        radeczw = [ra,dec,DistanceToRedshift(comoving_distance)(distance)] + [catalog['Weight']]
-        np.savetxt(infn,np.array(radeczw).T)
+        #distance, ra, dec = cartesian_to_sky(catalog['Position'])
+        #rdzw = [ra,dec,DistanceToRedshift(comoving_distance)(distance)] + [catalog['Weight']]
+        rdzw = list(catalog['Position'].T) + [catalog['Weight']]
+        np.savetxt(infn,np.array(rdzw).T)
 
     catalog_dir = os.path.dirname(infn)
-    subprocess.call('{0} {1} {2} {2} 2 0.81 15'.format(recon_code,*[os.path.basename(infn) for infn in input_fn]),shell=True,cwd=catalog_dir)
+    command = '{0} {1} {2} {2} 2 0.81 15'.format(recon_code,*[os.path.basename(infn) for infn in input_fn])
+    subprocess.call(command,shell=True,cwd=catalog_dir)
 
     output_fn = [os.path.join(catalog_dir,base) for base in ['data_rec.xyzw','rand_rec.xyzw']]
     for infn,fn,outfn in zip([data_fn,randoms_fn],[output_data_fn,output_randoms_fn],output_fn):
@@ -67,10 +69,17 @@ def compute_ref(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
 
 
 def test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
-
-    recon = MultiGridReconstruction(nthreads=1,boxsize=1200.,boxcenter=[1746,400,400],nmesh=128,dtype='f8')
+    #boxsize = [1199.9995117188]*3 in float32
+    #boxcenter = [1753.8884277344,400.0001831055,400.0003662109] in float64
+    boxsize = 1199.9993880913
+    boxcenter = [1753.8883893991,400.0001954356,400.0003824141]
+    recon = MultiGridReconstruction(nthreads=2,boxsize=boxsize,boxcenter=boxcenter,nmesh=128,dtype='f4')
     recon.set_cosmo(f=0.81,bias=2.)
-
+    """
+    recon = MultiGridReconstruction(nthreads=1,positions=fitsio.read(randoms_fn,columns=['Position'])['Position'],nmesh=128,dtype='f4')
+    recon.set_cosmo(f=0.81,bias=2.)
+    print(recon.mesh_data.boxsize,recon.mesh_data.boxcenter)
+    """
     ext = 1
     nslabs = 1
     for fn,assign in zip([data_fn,randoms_fn],[recon.assign_data,recon.assign_randoms]):
@@ -83,7 +92,9 @@ def test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
                 data = ff.read(columns=['Position','Weight'],rows=range(start,stop))
                 assign(data['Position'],data['Weight'])
 
+
     recon.set_density_contrast()
+    #print(np.max(recon.mesh_delta))
     recon.run()
     #print(np.std(recon.mesh_phi))
     #recon.f = recon.beta
@@ -104,16 +115,13 @@ def test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
                     else: ffout[-1].append(data)
 
 
-def test_script():
-    subprocess.call('pyrecon.py config_multigrid.yaml',shell=True)
-
-
 def compare_ref(data_fn, output_data_fn, ref_output_data_fn):
     positions = fitsio.read(data_fn)['Position']
     output_positions = fitsio.read(output_data_fn)['Position']
     ref_output_positions = fitsio.read(ref_output_data_fn)['Position']
 
-    print('test - ref',np.mean(distance(output_positions-ref_output_positions)))
+    print('abs test - ref',np.max(distance(output_positions-ref_output_positions)))
+    print('rel test - ref',np.max(distance(output_positions-ref_output_positions)/distance(ref_output_positions-positions)))
     print('test',np.mean(distance(output_positions-positions)))
     print('ref',np.mean(distance(ref_output_positions-positions)))
 
@@ -170,9 +178,9 @@ if __name__ == '__main__':
 
     #test_random()
     #save_lognormal_catalogs(data_fn,randoms_fn,seed=42)
-    #test_recon(data_fn,randoms_fn,output_data_fn,output_randoms_fn)
+    test_recon(data_fn,randoms_fn,output_data_fn,output_randoms_fn)
     #compute_ref(data_fn,randoms_fn,ref_output_data_fn,ref_output_randoms_fn)
-    #compare_ref(data_fn,output_data_fn,ref_output_data_fn)
+    compare_ref(data_fn,output_data_fn,ref_output_data_fn)
     #compute_power((data_fn,randoms_fn),(output_data_fn,output_randoms_fn))
     #compute_power((data_fn,randoms_fn),(ref_output_data_fn,ref_output_randoms_fn))
     #compute_power((ref_output_data_fn,ref_output_randoms_fn),(output_data_fn,output_randoms_fn))

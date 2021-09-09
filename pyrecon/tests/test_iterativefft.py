@@ -11,8 +11,11 @@ from cosmo import CosmoSimple
 from recon import Recon
 
 
+def distance(pos):
+    return np.sum(pos**2,axis=-1)**0.5
+
 def test_iterative_fft(data_fn, randoms_fn):
-    nmesh = 64
+    nmesh = 128
     smooth = 15.
     f = 0.81
     bias = 2.0
@@ -57,7 +60,9 @@ def test_iterative_fft(data_fn, randoms_fn):
     rec.run(niterations=niter,smoothing_radius=smooth)
     shifts_data = rec.read_shifts('data')
     shifts_randoms = rec.read_shifts(randoms['Position'],with_rsd=False)
-    print(np.abs(np.diff(shifts_data-shifts_data_ref)).max(),np.abs(np.diff(shifts_randoms-shifts_randoms_ref)).max())
+    #print(np.abs(np.diff(shifts_data-shifts_data_ref)).max(),np.abs(np.diff(shifts_randoms-shifts_randoms_ref)).max())
+    print('abs test - ref',np.max(distance(shifts_data-shifts_data_ref)))
+    print('rel test - ref',np.max(distance(shifts_data-shifts_data_ref)/distance(shifts_data_ref)))
 
 
 if __name__ == '__main__':

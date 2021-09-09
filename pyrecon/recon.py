@@ -60,6 +60,7 @@ class BaseReconstruction(BaseClass):
         self.set_cosmo(f=f,bias=bias)
         self.mesh_data = RealMesh(**kwargs)
         self.mesh_randoms = RealMesh(**kwargs)
+        self.log_info('Using mesh {}.'.format(self.mesh_data))
         self.ran_min = ran_min
         self.smoothing_radius = smoothing_radius
 
@@ -133,9 +134,11 @@ class BaseReconstruction(BaseClass):
         # density estimate -- this is "fishy", but it tames some of the
         # worst swings due to 1/eps factors. Better would be an interpolation
         # or a pre-smoothing (or many more randoms).
-        mask = self.mesh_randoms > ran_min
-        #print(np.sum((self.mesh_randoms > 0) & (self.mesh_randoms < ran_min)))
-        alpha = np.sum(self.mesh_data)/np.sum(self.mesh_randoms)
+        mask = self.mesh_randoms >= ran_min
+        alpha = np.sum(self.mesh_data[mask])/np.sum(self.mesh_randoms[mask])
+        # Following two lines are how things are done in original code - does not seem exactly correct so commented out
+        #self.mesh_data[(self.mesh_randoms > 0) & (self.mesh_randoms < ran_min)] = 0.
+        #alpha = np.sum(self.mesh_data)/np.sum(self.mesh_randoms[mask])
         self.mesh_data[mask] /= alpha*self.mesh_randoms[mask]
         self.mesh_delta = self.mesh_data
         del self.mesh_data
