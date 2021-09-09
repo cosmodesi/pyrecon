@@ -42,7 +42,7 @@ class BaseReconstruction(BaseClass):
     bias : float
         Galaxy bias.
     """
-    def __init__(self, f=0., bias=1., **kwargs):
+    def __init__(self, f=0., bias=1., ran_min=0.75, smoothing_radius=15., **kwargs):
         """
         Initialize :class:`BaseReconstruction`.
 
@@ -60,6 +60,8 @@ class BaseReconstruction(BaseClass):
         self.set_cosmo(f=f,bias=bias)
         self.mesh_data = RealMesh(**kwargs)
         self.mesh_randoms = RealMesh(**kwargs)
+        self.ran_min = ran_min
+        self.smoothing_radius = smoothing_radius
 
     @property
     def beta(self):

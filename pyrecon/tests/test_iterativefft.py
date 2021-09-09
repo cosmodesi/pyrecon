@@ -11,7 +11,7 @@ from cosmo import CosmoSimple
 from recon import Recon
 
 
-def test(data_fn, randoms_fn):
+def test_iterative_fft(data_fn, randoms_fn):
     nmesh = 64
     smooth = 15.
     f = 0.81
@@ -53,6 +53,7 @@ def test(data_fn, randoms_fn):
     rec = IterativeFFTReconstruction(f=rec_ref.f,bias=rec_ref.bias,boxsize=boxsize,boxcenter=boxcenter,nmesh=nmesh,fft_engine='numpy',nthreads=nthreads)
     rec.assign_data(data['Position'],data['Weight'])
     rec.assign_randoms(randoms['Position'],randoms['Weight'])
+    rec.set_density_contrast()
     rec.run(niterations=niter,smoothing_radius=smooth)
     shifts_data = rec.read_shifts('data')
     shifts_randoms = rec.read_shifts(randoms['Position'],with_rsd=False)
@@ -60,9 +61,10 @@ def test(data_fn, randoms_fn):
 
 
 if __name__ == '__main__':
+
     import utils
     from utils import data_fn, randoms_fn, catalog_dir
-    #utils.setup()
     from pyrecon.utils import setup_logging
     setup_logging()
-    test(data_fn,randoms_fn)
+    #utils.setup()
+    test_iterative_fft(data_fn,randoms_fn)

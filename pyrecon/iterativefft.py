@@ -62,7 +62,7 @@ class IterativeFFTReconstruction(BaseReconstruction):
         self._sum_randoms += np.sum(weights)
         self._size_randoms += len(positions)
 
-    def set_density_contrast(self, ran_min=0.01):
+    def set_density_contrast(self, ran_min=0.01, smoothing_radius=15.):
         """
         Set :math:`mesh_delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
 
@@ -77,13 +77,15 @@ class IterativeFFTReconstruction(BaseReconstruction):
         ran_min : float, default=0.01
             :attr:`mesh_randoms` points below this threshold times mean random weights have their density contrast set to 0.
         """
+        self.ran_min = ran_min
+        self.smoothing_radius = smoothing_radius
         alpha = np.sum(self._weights_data)*1./self._sum_randoms
         self.mesh_delta = self.mesh_data - alpha*self.mesh_randoms
         mask = self.mesh_randoms > ran_min * self._sum_randoms/self._size_randoms
         self.mesh_delta[mask] /= (self.bias*alpha*self.mesh_randoms[mask])
         self.mesh_delta[~mask] = 0.
 
-    def run(self, niterations=3, smoothing_radius=15., **kwargs):
+    def run(self, niterations=3, **kwargs):
         """
         Run reconstruction, i.e. compute reconstructed data real-space positions (:attr:`_positions_rec_data`)
         and Zeldovich displacements fields :attr:`psi`.
@@ -92,22 +94,16 @@ class IterativeFFTReconstruction(BaseReconstruction):
         ----------
         niterations : int
             Number of iterations.
-
-        smoothing_radius : float, default=15
-            Smoothing scale.
-
-        kwargs : dict
-            Optional arguements for :meth:`set_density_contrast`.
         """
         self._iter = 0
         # Gaussian smoothing before density contrast calculation
-        self.mesh_data.smooth_gaussian(smoothing_radius,method='fft',engine=self.fft_engine)
-        self.mesh_randoms.smooth_gaussian(smoothing_radius,method='fft',engine=self.fft_engine)
+        self.mesh_data.smooth_gaussian(self.smoothing_radius,method='fft',engine=self.fft_engine)
+        self.mesh_randoms.smooth_gaussian(self.smoothing_radius,method='fft',engine=self.fft_engine)
         self._positions_rec_data = self._positions_data.copy()
         for iter in range(niterations):
-            self.psi = self._iterate(return_psi=iter==niterations-1,smoothing_radius=smoothing_radius,**kwargs)
+            self.psi = self._iterate(return_psi=iter==niterations-1)
 
-    def _iterate(self, return_psi=False, smoothing_radius=15., **kwargs):
+    def _iterate(self, return_psi=False):
         self.log_info('Running iteration {:d}.'.format(self._iter))
 
         if self._iter > 0:
@@ -115,9 +111,9 @@ class IterativeFFTReconstruction(BaseReconstruction):
             # Painting reconstructed data real-space positions
             super(IterativeFFTReconstruction,self).assign_data(self._positions_rec_data,weights=self._weights_data) # super in order not to save positions_rec_data
             # Gaussian smoothing before density contrast calculation
-            self.mesh_data.smooth_gaussian(smoothing_radius,method='fft',engine=self.fft_engine)
+            self.mesh_data.smooth_gaussian(self.smoothing_radius,method='fft',engine=self.fft_engine)
 
-        self.set_density_contrast(**kwargs)
+        self.set_density_contrast(ran_min=self.ran_min)
         del self.mesh_data
         deltak = self.mesh_delta.to_complex(engine=self.fft_engine)
         k = deltak.freq()

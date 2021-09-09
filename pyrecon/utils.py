@@ -3,6 +3,7 @@ import sys
 import time
 import logging
 import traceback
+import functools
 
 import numpy as np
 
@@ -56,7 +57,7 @@ def setup_logging(level=logging.INFO, stream=sys.stdout, filename=None, filemode
     class MyFormatter(logging.Formatter):
 
         def format(self, record):
-            self._style._fmt = '[%09.2f] ' % (time.time() - t0) + ' %(asctime)s %(name)-25s %(levelname)-8s %(message)s'
+            self._style._fmt = '[%09.2f] ' % (time.time() - t0) + ' %(asctime)s %(name)-28s %(levelname)-8s %(message)s'
             return super(MyFormatter,self).format(record)
 
     fmt = MyFormatter(datefmt='%m-%d %H:%M ')
@@ -210,3 +211,41 @@ def sky_to_cartesian(dist, ra, dec, degree=True, dtype=None):
     position[1] = cos_dec*np.sin(ra*conversion)
     position[2] = np.sin(dec*conversion)
     return (dist*np.asarray(position,dtype=dtype)).T
+
+
+class DistanceToRedshift(object):
+
+    """Class that holds a conversion distance -> redshift."""
+
+    def __init__(self, distance, zmax=100., nz=2048, interp_order=3):
+        """
+        Initialize :class:`DistanceToRedshift`.
+        Creates an array of redshift -> distance in log(redshift) and instantiates
+        a spline interpolator distance -> redshift.
+
+        Parameters
+        ----------
+        distance : callable
+            Callable that provides distance as a function of redshift (array).
+
+        zmax : float, default=100.
+            Maximum redshift for redshift <-> distance mapping.
+
+        nz : int, default=2048
+            Number of points for redshift <-> distance mapping.
+
+        interp_order : int, default=3
+            Interpolation order, e.g. ``1`` for linear interpolation, ``3`` for cubic splines.
+        """
+        self.distance = distance
+        self.zmax = zmax
+        self.nz = nz
+        zgrid = np.logspace(-8,np.log10(self.zmax),self.nz)
+        self.zgrid = np.concatenate([[0.], zgrid])
+        self.rgrid = self.distance(self.zgrid)
+        from scipy import interpolate
+        self.interp = interpolate.UnivariateSpline(self.rgrid,self.zgrid,k=interp_order,s=0)
+
+    def __call__(self, distance):
+        """Return (interpolated) redshift at distance ``distance`` (scalar or array)."""
+        return self.interp(distance)

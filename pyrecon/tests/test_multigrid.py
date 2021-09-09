@@ -37,16 +37,18 @@ def distance(pos):
 
 def compute_ref(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
 
-    from nbodykit.lab import cosmology
-    from nbodykit.transform import CartesianToSky
+    from astropy.cosmology import FlatLambdaCDM
+    cosmo = FlatLambdaCDM(H0=70,Om0=0.3)
 
-    cosmo = cosmology.Planck15.match(Omega0_m=0.3) # default in recon
+    def comoving_distance(z):
+        return cosmo.comoving_distance(z).value*cosmo.h
 
     input_fn = [fn.replace('.fits','.rdzw') for fn in [data_fn,randoms_fn]]
 
     for fn,infn in zip([data_fn,randoms_fn],input_fn):
         catalog = fitsio.read(fn)
-        radeczw = list(CartesianToSky(catalog['Position'],cosmo).compute()) + [catalog['Weight']]
+        distance, ra, dec = utils.cartesian_to_sky(catalog['Position'])
+        radeczw = [utils.DistanceToRedshift(comoving_distance)(distance),ra,dec] + [catalog['Weight']]
         np.savetxt(infn,np.array(radeczw).T)
 
     catalog_dir = os.path.dirname(infn)
@@ -101,6 +103,10 @@ def test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
                     else: ffout[-1].append(data)
 
 
+def test_script():
+    subprocess.call('pyrecon.py config_multigrid.yaml',shell=True)
+
+
 def compare_ref(data_fn, output_data_fn, ref_output_data_fn):
     positions = fitsio.read(data_fn)['Position']
     output_positions = fitsio.read(output_data_fn)['Position']
@@ -142,68 +148,18 @@ def compute_power(*list_data_randoms):
     plt.show()
 
 
-class MemoryMonitor(object):
-    """
-    Class that monitors memory usage and clock, useful to check for memory leaks.
-
-    >>> with MemoryMonitor() as mem:
-            '''do something'''
-            mem()
-            '''do something else'''
-    """
-
-    def __init__(self, pid=None, msg=''):
-        """
-        Initalize :class:`MemoryMonitor` and register current memory usage.
-
-        Parameters
-        ----------
-        pid : int, default=None
-            Process identifier. If ``None``, use the identifier of the current process.
-
-        msg : string, default=''
-            Additional message.
-        """
-        import psutil
-        self.proc = psutil.Process(os.getpid() if pid is None else pid)
-        self.mem = self.proc.memory_info().rss / 1e6
-        self.time = time.time()
-        self.msg = msg
-        msg = 'using {:.3f} [Mb]'.format(self.mem)
-        if self.msg:
-            msg = '[{}] {}'.format(self.msg,msg)
-        print(msg)
-
-    def __enter__(self):
-        """Enter context."""
-
-    def __call__(self):
-        """Update memory usage."""
-        mem = self.proc.memory_info().rss / 1e6
-        t = time.time()
-        msg = 'using {:.3f} [Mb] (increase of {:.3f} [Mb]) after {:.3f} [s]'.format(mem,mem-self.mem,t-self.time)
-        if self.msg:
-            msg = '[{}] {}'.format(self.msg,msg)
-        print(msg)
-        self.mem = mem
-        self.time = t
-
-    def __exit__(self, exc_type, exc_value, exc_traceback):
-        """Exit context."""
-        self()
-
-
 if __name__ == '__main__':
 
     #with MemoryMonitor() as mem:
     #    for i in range(2):
     #        test_random()
     import utils
-    from utils import data_fn, randoms_fn, catalog_dir
-    #utils.setup()
+    from utils import data_fn, randoms_fn, catalog_dir, MemoryMonitor
     from pyrecon.utils import setup_logging
 
     setup_logging()
+    utils.setup()
+    exit()
 
     recon_code = os.path.join(os.path.abspath(os.path.dirname(__file__)),'_codes','recon')
     output_data_fn = os.path.join(catalog_dir,'data_rec.fits')

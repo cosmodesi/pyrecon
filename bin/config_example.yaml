@@ -1,0 +1,43 @@
+input:
+  dir: ./test                                                                   # input directory to use as prefix
+  data_fn: test_data.fits                                                       # data fits and hdf5 files are accepted
+  randoms_fn: test_randoms.fits                                                 # randoms fits and hdf5 files are accepted
+  rdz: [RA, DEC, Z_RSD]                                                         # data columns to get positions from
+  rdz_randoms: [ra, dec, z]                                                     # random columns to get positions from
+  format: rdz                                                                   # file format (rdz, xyz), rdz required
+  weights: ${WEIGHT}                                                            # formula to get weight
+  weights_randoms:                                                              # random columns to get weights from
+  mask: (${RA}>0.) & (${RA}<30.) & (${DEC}>0.) & (${DEC}<30.)                   # mask for row selection
+  mask_randoms: (${RA}>0.) & (${RA}<30.) & (${DEC}>0.) & (${DEC}<30.)           # same for randoms (defaults to mask)
+  hdf5_prefix: '/galaxies'                                                      # prefix for dataset holding on hdf5 files
+
+output:
+  dir: ./test                                                                   # output directory to use as prefix
+  data_fn: data_rec_split.fits                                                  # fits and hdf5 files are accepted
+  randoms_fn: rand_rec_split.fits                                               # fits and hdf5 files are accepted
+  rdz_rec: [RA_REC, DEC_REC, Z_RSD_REC]                                         # column names for reconstructed RA/DEC/Z
+  xyz_rec: POSITION_REC                                                         # column name for reconstructed cartesian position
+  xyz: POSITION                                                                 # column name for input cartesian position
+  columns: [NZ]                                                                 # from input to keep on output file (if null or unprovided, keep them all)
+  columns_randoms: [nz]                                                         # from input to keep on output file (if null or unprovided, keep them all) (defaults to columns)
+  hdf5_prefix: '/galaxies'                                                      # prefix for dataset holding on hdf5 files
+
+algorithm:
+  name: MultiGridReconstruction                                                 # name of reconstruction algorithm (Julian's IterativeFFTReconstruction, Martin's MultiGridReconstruction)
+  convention: RecSym                                                            # RecSym = RSD-shifted randoms or RecIso = only data RSD-shifted
+  nthreads: 4                                                                   # number of OpenMP threads
+  # other algorithm-related parameters
+
+delta:
+  smoothing_radius: 15                                                          # smoothing radius for reconstruction
+
+cosmology:
+  bias: 1.4                                                                     # galaxy bias
+  f: 0.87                                                                       # growth rate
+  Omega_m: 0.3                                                                  # for rdz <=> cartesian position conversion
+
+mesh:
+  nmesh: 512                                                                    # mesh size (int or list of 3 ints)
+  boxsize:                                                                      # box size (floot or list of 3 floats)
+  boxcenter:                                                                    # box center
+  dtype: f4                                                                     # mesh data-type for f4 (float32) or f8 (float64)

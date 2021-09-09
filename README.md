@@ -8,7 +8,7 @@
  - IterativeFFTReconstruction, based on Julian Bautista's code https://github.com/julianbautista/eboss_clustering/blob/master/python/recon.py
 
 
-A typical reconstruction run is (e.g. for MultiGridReconstruction; the same works for other algorithms):
+With Python, a typical reconstruction run is (e.g. for MultiGridReconstruction; the same works for other algorithms):
 ```
 from pyrecon import MultiGridReconstruction
 
@@ -23,11 +23,17 @@ positions_rec_randoms = positions_randoms - rec.read_shifts(positions_randoms)
 # Or RecIso
 # positions_rec_randoms = positions_randoms - rec.read_shifts(positions_randoms,with_rsd=False)
 ```
+Also provided a script to run reconstruction as a standalone:
+```
+pyrecon [-h] config-fn [--data-fn [<fits, hdf5 file>]] [--randoms-fn [<fits, hdf5 file>]] [--output-data-fn [<fits, hdf5 file>]] [--output-randoms-fn [<fits, hdf5file>]]
+```
+An example of configuration file is provided in [config]https://github.com/adematti/pyrecon/blob/main/bin/config_example.yaml.
+data-fn, randoms-fn are input data and random file names to override those in configuration file.
+The same holds for output files output-data-fn, output-randoms-fn.
 
 ## In progress
 
-Script to run as a standalone.
-Should be done fairly rapidly.
+Check algorithm details (see notes in docstrings).
 
 ## Documentation
 

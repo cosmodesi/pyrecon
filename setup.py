@@ -88,11 +88,13 @@ if __name__ == '__main__':
           license='GPL3',
           url='http://github.com/adematti/pyrecon',
           install_requires=['numpy'],
+          extra_requires=['fitsio','h5py','astropy','scipy'], # for bin/recon script
           cmdclass={
               'build': custom_build,
               'develop': custom_develop,
               'bdist_egg': custom_bdist_egg,
               'clean': custom_clean
           },
-         packages=[package_basename]
+         packages=[package_basename],
+         scripts=['bin/pyrecon']
     )
