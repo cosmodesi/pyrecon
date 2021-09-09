@@ -6,6 +6,7 @@ import numpy as np
 import fitsio
 
 from pyrecon import MultiGridReconstruction
+from pyrecon.utils import cartesian_to_sky, DistanceToRedshift
 
 
 
@@ -47,8 +48,8 @@ def compute_ref(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
 
     for fn,infn in zip([data_fn,randoms_fn],input_fn):
         catalog = fitsio.read(fn)
-        distance, ra, dec = utils.cartesian_to_sky(catalog['Position'])
-        radeczw = [utils.DistanceToRedshift(comoving_distance)(distance),ra,dec] + [catalog['Weight']]
+        distance, ra, dec = cartesian_to_sky(catalog['Position'])
+        radeczw = [ra,dec,DistanceToRedshift(comoving_distance)(distance)] + [catalog['Weight']]
         np.savetxt(infn,np.array(radeczw).T)
 
     catalog_dir = os.path.dirname(infn)
@@ -158,8 +159,7 @@ if __name__ == '__main__':
     from pyrecon.utils import setup_logging
 
     setup_logging()
-    utils.setup()
-    exit()
+    #utils.setup()
 
     recon_code = os.path.join(os.path.abspath(os.path.dirname(__file__)),'_codes','recon')
     output_data_fn = os.path.join(catalog_dir,'data_rec.fits')
@@ -170,9 +170,9 @@ if __name__ == '__main__':
 
     #test_random()
     #save_lognormal_catalogs(data_fn,randoms_fn,seed=42)
-    test_recon(data_fn,randoms_fn,output_data_fn,output_randoms_fn)
+    #test_recon(data_fn,randoms_fn,output_data_fn,output_randoms_fn)
     #compute_ref(data_fn,randoms_fn,ref_output_data_fn,ref_output_randoms_fn)
     #compare_ref(data_fn,output_data_fn,ref_output_data_fn)
-    compute_power((data_fn,randoms_fn),(output_data_fn,output_randoms_fn))
+    #compute_power((data_fn,randoms_fn),(output_data_fn,output_randoms_fn))
     #compute_power((data_fn,randoms_fn),(ref_output_data_fn,ref_output_randoms_fn))
     #compute_power((ref_output_data_fn,ref_output_randoms_fn),(output_data_fn,output_randoms_fn))

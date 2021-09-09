@@ -69,3 +69,7 @@ Note that with Mac OS gcc can point to clang.
 ## License
 
 **pyrecon** is free software distributed under a GPLv3 license. For details see the [LICENSE](https://github.com/adematti/pyrecon/blob/main/LICENSE).
+
+## Credits
+
+Martin J. White and Julian E. Bautista for their codes, Pedro Rangel Caetano for inspiration for the script bin/recon.
