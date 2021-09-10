@@ -5,7 +5,8 @@ import subprocess
 import numpy as np
 import fitsio
 
-from pyrecon import MultiGridReconstruction
+#from pyrecon import MultiGridReconstruction
+from pyrecon.multigrid import OriginalMultiGridReconstruction as MultiGridReconstruction
 from pyrecon.utils import cartesian_to_sky, DistanceToRedshift
 
 
@@ -69,11 +70,11 @@ def compute_ref(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
 
 
 def test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
-    #boxsize = [1199.9995117188]*3 in float32
+    #boxsize = 1199.9995117188 in float32
     #boxcenter = [1753.8884277344,400.0001831055,400.0003662109] in float64
     boxsize = 1199.9993880913
     boxcenter = [1753.8883893991,400.0001954356,400.0003824141]
-    recon = MultiGridReconstruction(nthreads=2,boxsize=boxsize,boxcenter=boxcenter,nmesh=128,dtype='f4')
+    recon = MultiGridReconstruction(nthreads=2,boxsize=boxsize,boxcenter=boxcenter,nmesh=128,dtype='f8')
     recon.set_cosmo(f=0.81,bias=2.)
     """
     recon = MultiGridReconstruction(nthreads=1,positions=fitsio.read(randoms_fn,columns=['Position'])['Position'],nmesh=128,dtype='f4')

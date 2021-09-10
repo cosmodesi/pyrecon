@@ -9,11 +9,13 @@ from .mesh import RealMesh
 from . import utils
 
 
-class MultiGridReconstruction(BaseReconstruction):
+class OriginalMultiGridReconstruction(BaseReconstruction):
     """
     :mod:`ctypes`-based implementation for Martin J. White reconstruction code,
     using full multigrid V-cycle based on damped Jacobi iteration.
-    So far we stick to the implementation at https://github.com/martinjameswhite/recon_code.
+    We re-implemented https://github.com/martinjameswhite/recon_code/blob/master/multigrid.cpp, allowing for non-cubic (rectangular) mesh.
+    Numerical agreement in the Zeldovich displacements between original code and this re-implementation is 2e-4 (absolute), 2e-3 (relative).
+    Switching from float32 to float64 in the new implementation produces shifts of 1e-3, so these differences are probably within numerical accuracy.
     """
     _path_lib = os.path.join(utils.lib_dir,'multigrid_{}.so')
 
@@ -22,9 +24,54 @@ class MultiGridReconstruction(BaseReconstruction):
         Initialize :class:`MultiGridReconstruction`.
         See :class:`BaseReconstruction` for input parameters.
         """
-        super(MultiGridReconstruction,self).__init__(*args,**kwargs)
+        super(OriginalMultiGridReconstruction,self).__init__(*args,**kwargs)
         self._type_float = self.mesh_data._type_float
         self._lib = ctypes.CDLL(self._path_lib.format(self.mesh_data._precision),mode=ctypes.RTLD_LOCAL)
+
+    def set_density_contrast(self, ran_min=0.75, smoothing_radius=15., **kwargs):
+        """
+        Set :math:`mesh_delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
+
+        Note
+        ----
+        This method follows Martin's reconstruction code: we are not satisfied with the ``ran_min`` prescription.
+        At least ``ran_min`` should depend on random weights. See also Martin's notes below.
+
+        Parameters
+        ----------
+        ran_min : float, default=0.75
+            :attr:`mesh_randoms` points below this threshold have their density contrast set to 0.
+
+        smoothing_radius : float, default=15
+            Smoothing scale, see :meth:`RealMesh.smooth_gaussian`.
+
+        kwargs : dict
+            Optional arguments for :meth:`RealMesh.smooth_gaussian`.
+        """
+        # Martin's notes:
+        # We remove any points which have too few randoms for a decent
+        # density estimate -- this is "fishy", but it tames some of the
+        # worst swings due to 1/eps factors. Better would be an interpolation
+        # or a pre-smoothing (or many more randoms).
+        mask = self.mesh_randoms >= ran_min
+        # alpha = np.sum(self.mesh_data[mask])/np.sum(self.mesh_randoms[mask])
+        # Following two lines are how things are done in original code
+        self.mesh_data[(self.mesh_randoms > 0) & (self.mesh_randoms < ran_min)] = 0.
+        alpha = np.sum(self.mesh_data)/np.sum(self.mesh_randoms[mask])
+        self.mesh_data[mask] /= alpha*self.mesh_randoms[mask]
+        self.mesh_delta = self.mesh_data
+        del self.mesh_data
+        del self.mesh_randoms
+        self.mesh_delta -= 1
+        self.mesh_delta[~mask] = 0.
+        self.mesh_delta /= self.bias
+        # At this stage also remove the mean, so the source is genuinely mean 0.
+        # So as to not disturb the
+        # padding regions, we only compute and subtract the mean for the
+        # regions with delta != 0.
+        mask = self.mesh_delta != 0.
+        self.mesh_delta[mask] -= np.mean(self.mesh_delta[mask])
+        self.mesh_delta.smooth_gaussian(smoothing_radius,**kwargs)
 
     def run(self, jacobi_damping_factor=0.4, jacobi_niterations=5, vcycle_niterations=6):
         """
@@ -67,3 +114,53 @@ class MultiGridReconstruction(BaseReconstruction):
             los = positions/utils.distance(positions)[:,None]
             shifts += self.f*np.sum(shifts*los,axis=-1)[:,None]*los
         return shifts
+
+
+class MultiGridReconstruction(OriginalMultiGridReconstruction):
+
+    """Any update / test / improvement upon original algorithm."""
+
+    def set_density_contrast(self, ran_min=0.75, smoothing_radius=15., **kwargs):
+        """
+        Set :math:`mesh_delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
+
+        Note
+        ----
+        This method follows Martin's reconstruction code: we are not satisfied with the ``ran_min`` prescription.
+        At least ``ran_min`` should depend on random weights. See also Martin's notes below.
+
+        Parameters
+        ----------
+        ran_min : float, default=0.75
+            :attr:`mesh_randoms` points below this threshold have their density contrast set to 0.
+
+        smoothing_radius : float, default=15
+            Smoothing scale, see :meth:`RealMesh.smooth_gaussian`.
+
+        kwargs : dict
+            Optional arguments for :meth:`RealMesh.smooth_gaussian`.
+        """
+        # Martin's notes:
+        # We remove any points which have too few randoms for a decent
+        # density estimate -- this is "fishy", but it tames some of the
+        # worst swings due to 1/eps factors. Better would be an interpolation
+        # or a pre-smoothing (or many more randoms).
+        mask = self.mesh_randoms >= ran_min
+        alpha = np.sum(self.mesh_data[mask])/np.sum(self.mesh_randoms[mask])
+        # Following two lines are how things are done in original code - does not seem exactly correct so commented out
+        #self.mesh_data[(self.mesh_randoms > 0) & (self.mesh_randoms < ran_min)] = 0.
+        #alpha = np.sum(self.mesh_data)/np.sum(self.mesh_randoms[mask])
+        self.mesh_data[mask] /= alpha*self.mesh_randoms[mask]
+        self.mesh_delta = self.mesh_data
+        del self.mesh_data
+        del self.mesh_randoms
+        self.mesh_delta -= 1
+        self.mesh_delta[~mask] = 0.
+        self.mesh_delta /= self.bias
+        # At this stage also remove the mean, so the source is genuinely mean 0.
+        # So as to not disturb the
+        # padding regions, we only compute and subtract the mean for the
+        # regions with delta != 0.
+        mask = self.mesh_delta != 0.
+        self.mesh_delta[mask] -= np.mean(self.mesh_delta[mask])
+        self.mesh_delta.smooth_gaussian(smoothing_radius,**kwargs)

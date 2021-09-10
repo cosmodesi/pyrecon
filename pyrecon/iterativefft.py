@@ -4,10 +4,11 @@ from .recon import BaseReconstruction
 from . import utils
 
 
-class IterativeFFTReconstruction(BaseReconstruction):
+class OriginalIterativeFFTReconstruction(BaseReconstruction):
     """
-    Implementation of Bautista 2018 algorithm.
-    So far we sick to the implementation at https://github.com/julianbautista/eboss_clustering/blob/master/python/recon.py
+    Exact re-implementation of Bautista 2018 algorithm at https://github.com/julianbautista/eboss_clustering/blob/master/python/recon.py.
+    Numerical agreement in the Zeldovich displacements between original codes and this re-implementation is machine precision
+    (absolute and relative difference of 1e-12).
     """
     def __init__(self, fft_engine='numpy', fft_wisdom=None, **kwargs):
         """
@@ -24,7 +25,7 @@ class IterativeFFTReconstruction(BaseReconstruction):
         kwargs : dict
             See :class:`BaseReconstruction` for parameters.
         """
-        super(IterativeFFTReconstruction,self).__init__(**kwargs)
+        super(OriginalIterativeFFTReconstruction,self).__init__(**kwargs)
         kwargs = {}
         if fft_wisdom is not None: kwargs['wisdom'] = 'fft_wisdom'
         kwargs['hermitian'] = False
@@ -57,7 +58,7 @@ class IterativeFFTReconstruction(BaseReconstruction):
         if self.mesh_randoms.value is None:
             self._sum_randoms = 0.
             self._size_randoms = 0
-        #super(IterativeFFTReconstruction,self).assign_randoms(positions,weights=weights)
+        #super(OriginalIterativeFFTReconstruction,self).assign_randoms(positions,weights=weights)
         self.mesh_randoms.assign_cic(positions,weights=weights)
         self._sum_randoms += np.sum(weights)
         self._size_randoms += len(positions)
@@ -109,7 +110,7 @@ class IterativeFFTReconstruction(BaseReconstruction):
         if self._iter > 0:
             self.mesh_data = self.mesh_delta.copy(value=None)
             # Painting reconstructed data real-space positions
-            super(IterativeFFTReconstruction,self).assign_data(self._positions_rec_data,weights=self._weights_data) # super in order not to save positions_rec_data
+            super(OriginalIterativeFFTReconstruction,self).assign_data(self._positions_rec_data,weights=self._weights_data) # super in order not to save positions_rec_data
             # Gaussian smoothing before density contrast calculation
             self.mesh_data.smooth_gaussian(self.smoothing_radius,method='fft',engine=self.fft_engine)
 
@@ -188,3 +189,9 @@ class IterativeFFTReconstruction(BaseReconstruction):
             los = positions/utils.distance(positions)[:,None]
             shifts += self.f*np.sum(shifts*los,axis=-1)[:,None]*los
         return shifts
+
+
+
+class IterativeFFTReconstruction(OriginalIterativeFFTReconstruction):
+
+    """Any update / test / improvement upon original algorithm."""

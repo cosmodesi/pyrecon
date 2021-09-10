@@ -94,6 +94,7 @@ class BaseReconstruction(BaseClass):
     def assign_data(self, positions, weights=None):
         """
         Assign (paint) data to :attr:`mesh_data`.
+        This can be done slab-by-slab (e.g. to reduce memory footprint).
 
         Parameters
         ----------
@@ -109,54 +110,17 @@ class BaseReconstruction(BaseClass):
         """Same as :meth:`assign_data`, but for random objects."""
         self.mesh_randoms.assign_cic(positions,weights=weights)
 
-    def set_density_contrast(self, ran_min=0.75, smoothing_radius=15., **kwargs):
+    def set_density_contrast(self, **kwargs):
         """
-        Set :math:`mesh_delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
-
-        Note
-        ----
-        This method follows Martin's reconstruction code: we are not satisfied with the ``ran_min`` prescription.
-        At least ``ran_min`` should depend on random weights. See also Martin's notes below.
-
-        Parameters
-        ----------
-        ran_min : float, default=0.75
-            :attr:`mesh_randoms` points below this threshold have their density contrast set to 0.
-
-        smoothing_radius : float, default=15
-            Smoothing scale, see :meth:`RealMesh.smooth_gaussian`.
-
-        kwargs : dict
-            Optional arguments for :meth:`RealMesh.smooth_gaussian`.
+        Set :math:`mesh_delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`;
+        to be re-implemented in your algorithm.
+        Eventually we will probably converge on a base method for all reconstructions.
         """
-        # Martin's notes:
-        # We remove any points which have too few randoms for a decent
-        # density estimate -- this is "fishy", but it tames some of the
-        # worst swings due to 1/eps factors. Better would be an interpolation
-        # or a pre-smoothing (or many more randoms).
-        mask = self.mesh_randoms >= ran_min
-        alpha = np.sum(self.mesh_data[mask])/np.sum(self.mesh_randoms[mask])
-        # Following two lines are how things are done in original code - does not seem exactly correct so commented out
-        #self.mesh_data[(self.mesh_randoms > 0) & (self.mesh_randoms < ran_min)] = 0.
-        #alpha = np.sum(self.mesh_data)/np.sum(self.mesh_randoms[mask])
-        self.mesh_data[mask] /= alpha*self.mesh_randoms[mask]
-        self.mesh_delta = self.mesh_data
-        del self.mesh_data
-        del self.mesh_randoms
-        self.mesh_delta -= 1
-        self.mesh_delta[~mask] = 0.
-        self.mesh_delta /= self.bias
-        # At this stage also remove the mean, so the source is genuinely mean 0.
-        # So as to not disturb the
-        # padding regions, we only compute and subtract the mean for the
-        # regions with delta != 0.
-        mask = self.mesh_delta != 0.
-        self.mesh_delta[mask] -= np.mean(self.mesh_delta[mask])
-        self.mesh_delta.smooth_gaussian(smoothing_radius,**kwargs)
+        raise NotImplementedError('Implement method "set_density_contrast" in your "{}"-inherited algorithm'.format(self.__class__.___name__))
 
     def run(self, *args, **kwargs):
         """Run reconstruction; to be implemented in your algorithm."""
-        raise NotImplementedError('Implement "run" method in your "BaseReconstruction"-inherited algorithm')
+        raise NotImplementedError('Implement method "run" in your "{}"-inherited algorithm'.format(self.__class__.___name__))
 
     def read_shifts(self, positions, with_rsd=True):
         """
@@ -179,4 +143,4 @@ class BaseReconstruction(BaseClass):
         with_rsd : bool, default=True
             Whether (``True``) or not (``False``) to include RSD in the shifts.
         """
-        raise NotImplementedError('Implement "read_shifts" method in your "BaseReconstruction"-inherited algorithm')
+        raise NotImplementedError('Implement method "read_shifts" in your "{}"-inherited algorithm'.format(self.__class__.___name__))

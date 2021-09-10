@@ -31,13 +31,6 @@ An example of configuration file is provided in [config]https://github.com/adema
 data-fn, randoms-fn are input data and random file names to override those in configuration file.
 The same holds for output files output-data-fn, output-randoms-fn.
 
-## Notes
-
-Numerical agreement in the Zeldovich displacements between original codes and this new reimplementation is:
-
-  - IterativeFFTReconstruction: absolute and relative difference of 1e-12 (machine precision)
-  - MultiGridReconstruction: 2e-4 (absolute), 2e-3 (relative) difference. Switching from float32 to float64 in the new implementation produces shifts of 1e-3, so it is probably simply a
-    matter of numerical accuracy.
 
 ## In progress
 
