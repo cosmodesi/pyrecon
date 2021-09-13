@@ -14,8 +14,8 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
     :mod:`ctypes`-based implementation for Martin J. White reconstruction code,
     using full multigrid V-cycle based on damped Jacobi iteration.
     We re-implemented https://github.com/martinjameswhite/recon_code/blob/master/multigrid.cpp, allowing for non-cubic (rectangular) mesh.
-    Numerical agreement in the Zeldovich displacements between original code and this re-implementation is 2e-4 (absolute), 2e-3 (relative).
-    Switching from float32 to float64 in the new implementation produces shifts of 1e-3, so these differences are probably within numerical accuracy.
+    Numerical agreement in the Zeldovich displacements between original code and this re-implementation is numerical precision (absolute and relative difference of 1e-10).
+    To test this, change float to double and increase precision in io.cpp/write_data in the original code.
     """
     _path_lib = os.path.join(utils.lib_dir,'multigrid_{}.so')
 

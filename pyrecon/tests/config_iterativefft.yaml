@@ -16,8 +16,7 @@ output:
   columns: [NZ, Weight]
 
 algorithm:
-  name: MultiGridReconstruction
-  #name: IterativeFFTReconstruction
+  name: IterativeFFTReconstruction
   convention: RecSym
   nthreads: 4
   # other algorithm-related parameters

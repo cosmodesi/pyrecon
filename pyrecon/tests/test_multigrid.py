@@ -5,10 +5,8 @@ import subprocess
 import numpy as np
 import fitsio
 
-#from pyrecon import MultiGridReconstruction
-from pyrecon.multigrid import OriginalMultiGridReconstruction as MultiGridReconstruction
+from pyrecon.multigrid import OriginalMultiGridReconstruction, MultiGridReconstruction
 from pyrecon.utils import cartesian_to_sky, DistanceToRedshift
-
 
 
 def get_random_catalog(seed=None):
@@ -74,10 +72,10 @@ def test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
     #boxcenter = [1753.8884277344,400.0001831055,400.0003662109] in float64
     boxsize = 1199.9993880913
     boxcenter = [1753.8883893991,400.0001954356,400.0003824141]
-    recon = MultiGridReconstruction(nthreads=2,boxsize=boxsize,boxcenter=boxcenter,nmesh=128,dtype='f8')
+    recon = OriginalMultiGridReconstruction(nthreads=2,boxsize=boxsize,boxcenter=boxcenter,nmesh=128,dtype='f8')
     recon.set_cosmo(f=0.81,bias=2.)
     """
-    recon = MultiGridReconstruction(nthreads=1,positions=fitsio.read(randoms_fn,columns=['Position'])['Position'],nmesh=128,dtype='f4')
+    recon = OriginalMultiGridReconstruction(nthreads=1,positions=fitsio.read(randoms_fn,columns=['Position'])['Position'],nmesh=128,dtype='f4')
     recon.set_cosmo(f=0.81,bias=2.)
     print(recon.mesh_data.boxsize,recon.mesh_data.boxcenter)
     """
@@ -109,7 +107,7 @@ def test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
                     start = islab*size//nslabs
                     stop = (islab+1)*size//nslabs
                     data = ffin.read(rows=range(start,stop))
-                    shifts = recon.read_shifts(data['Position'],with_rsd=input_fn!=randoms_fn)
+                    shifts = recon.read_shifts(data['Position'],with_rsd=True)
                     print('RMS',(np.mean(np.sum(shifts**2,axis=-1))/3)**0.5)
                     data['Position'] -= shifts
                     if islab == 0: ffout.write(data)
@@ -125,6 +123,34 @@ def compare_ref(data_fn, output_data_fn, ref_output_data_fn):
     print('rel test - ref',np.max(distance(output_positions-ref_output_positions)/distance(ref_output_positions-positions)))
     print('test',np.mean(distance(output_positions-positions)))
     print('ref',np.mean(distance(ref_output_positions-positions)))
+
+
+def test_script(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
+
+    catalog_dir = '_catalogs'
+    command = 'pyrecon config_multigrid.yaml --data-fn {} --randoms-fn {} --output-data-fn {} --output-randoms-fn {}'.format(
+                os.path.relpath(data_fn,catalog_dir),os.path.relpath(randoms_fn,catalog_dir),
+                os.path.relpath(script_output_data_fn,catalog_dir),os.path.relpath(script_output_randoms_fn,catalog_dir))
+    subprocess.call(command,shell=True)
+    data = fitsio.read(data_fn,columns=['Position','Weight'])
+    randoms = fitsio.read(randoms_fn,columns=['Position','Weight'])
+    recon = MultiGridReconstruction(nthreads=4,positions=randoms['Position'],nmesh=128,dtype='f8')
+    recon.set_cosmo(f=0.8,bias=2.)
+    recon.assign_data(data['Position'],data['Weight'])
+    recon.assign_randoms(randoms['Position'],randoms['Weight'])
+
+    recon.set_density_contrast()
+    recon.run()
+
+    ref_positions_rec_data = data['Position'] - recon.read_shifts(data['Position'])
+    ref_positions_rec_randoms = randoms['Position'] - recon.read_shifts(randoms['Position'])
+
+    data = fitsio.read(output_data_fn,columns=['Position_rec'])
+    randoms = fitsio.read(output_randoms_fn,columns=['Position_rec'])
+
+    #print(ref_positions_rec_data,data['Position_rec'],ref_positions_rec_data-data['Position_rec'])
+    assert np.allclose(ref_positions_rec_data,data['Position_rec'])
+    assert np.allclose(ref_positions_rec_randoms,randoms['Position_rec'])
 
 
 def compute_power(*list_data_randoms):
@@ -168,6 +194,7 @@ if __name__ == '__main__':
     from pyrecon.utils import setup_logging
 
     setup_logging()
+    # Uncomment to compute catalogs needed for these tests
     #utils.setup()
 
     recon_code = os.path.join(os.path.abspath(os.path.dirname(__file__)),'_codes','recon')
@@ -175,13 +202,15 @@ if __name__ == '__main__':
     output_randoms_fn = os.path.join(catalog_dir,'randoms_rec.fits')
     ref_output_data_fn = os.path.join(catalog_dir,'ref_data_rec.fits')
     ref_output_randoms_fn = os.path.join(catalog_dir,'ref_randoms_rec.fits')
+    script_output_data_fn = os.path.join(catalog_dir,'script_data_rec.fits')
+    script_output_randoms_fn = os.path.join(catalog_dir,'script_randoms_rec.fits')
 
-
-    #test_random()
-    #save_lognormal_catalogs(data_fn,randoms_fn,seed=42)
+    test_random()
     test_recon(data_fn,randoms_fn,output_data_fn,output_randoms_fn)
-    #compute_ref(data_fn,randoms_fn,ref_output_data_fn,ref_output_randoms_fn)
+    compute_ref(data_fn,randoms_fn,ref_output_data_fn,ref_output_randoms_fn)
     compare_ref(data_fn,output_data_fn,ref_output_data_fn)
+    compare_ref(randoms_fn,output_randoms_fn,ref_output_randoms_fn)
+    test_script(data_fn,randoms_fn,script_output_data_fn,script_output_randoms_fn)
     #compute_power((data_fn,randoms_fn),(output_data_fn,output_randoms_fn))
     #compute_power((data_fn,randoms_fn),(ref_output_data_fn,ref_output_randoms_fn))
     #compute_power((ref_output_data_fn,ref_output_randoms_fn),(output_data_fn,output_randoms_fn))
