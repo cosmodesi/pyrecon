@@ -1,3 +1,5 @@
+"""Implementation of base reconstruction class."""
+
 import numpy as np
 
 from .mesh import RealMesh
@@ -17,16 +19,16 @@ class BaseReconstruction(BaseClass):
     .. code-block:: python
 
         # MyReconstruction is your reconstruction algorithm
-        rec = MyReconstruction(f=0.8,bias=2.0,nmesh=512,boxsize=1000.,boxcenter=2000.)
-        rec.assign_data(positions_data,weights_data)
-        rec.assign_randoms(positions_randoms,weights_randoms)
-        rec.set_density_contrast()
-        rec.run()
-        positions_rec_data = positions_data - rec.read_shifts(positions_data)
+        recon = MyReconstruction(f=0.8,bias=2.0,nmesh=512,boxsize=1000.,boxcenter=2000.)
+        recon.assign_data(positions_data,weights_data)
+        recon.assign_randoms(positions_randoms,weights_randoms)
+        recon.set_density_contrast()
+        recon.run()
+        positions_rec_data = positions_data - recon.read_shifts(positions_data)
         # RecSym = remove large scale RSD from randoms
-        positions_rec_randoms = positions_randoms - rec.read_shifts(positions_randoms)
+        positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms)
         # Or RecIso
-        # positions_rec_randoms = positions_randoms - rec.read_shifts(positions_randoms,with_rsd=False)
+        # positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms,with_rsd=False)
 
     Attributes
     ----------
@@ -125,15 +127,15 @@ class BaseReconstruction(BaseClass):
     def read_shifts(self, positions, with_rsd=True):
         """
         Read Zeldovich displacements; to be implemented in your algorithm.
-        To get reconstructed positions, given reconstruction instance ``rec``:
+        To get reconstructed positions, given reconstruction instance ``recon``:
 
         .. code-block:: python
 
-            positions_rec_data = positions_data - rec.read_shifts(positions_data)
+            positions_rec_data = positions_data - recon.read_shifts(positions_data)
             # RecSym = remove large scale RSD from randoms
-            positions_rec_randoms = positions_randoms - rec.read_shifts(positions_randoms)
+            positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms)
             # Or RecIso
-            # positions_rec_randoms = positions_randoms - rec.read_shifts(positions_randoms,with_rsd=False)
+            # positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms,with_rsd=False)
 
         Parameters
         ----------

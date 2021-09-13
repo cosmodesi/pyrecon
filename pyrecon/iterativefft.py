@@ -1,3 +1,5 @@
+"""Re-implementation of Bautista et al. 2018 (https://arxiv.org/pdf/1712.08064.pdf) algorithm."""
+
 import numpy as np
 
 from .recon import BaseReconstruction
@@ -6,7 +8,8 @@ from . import utils
 
 class OriginalIterativeFFTReconstruction(BaseReconstruction):
     """
-    Exact re-implementation of Bautista 2018 algorithm at https://github.com/julianbautista/eboss_clustering/blob/master/python/recon.py.
+    Exact re-implementation of Bautista et al. 2018 (https://arxiv.org/pdf/1712.08064.pdf) algorithm
+    at https://github.com/julianbautista/eboss_clustering/blob/master/python/recon.py.
     Numerical agreement in the Zeldovich displacements between original codes and this re-implementation is machine precision
     (absolute and relative difference of 1e-12).
     """

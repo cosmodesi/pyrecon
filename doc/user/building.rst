@@ -12,18 +12,23 @@ Only strict requirement is:
 Extra requirements are:
 
   - `pyfftw <https://github.com/pyFFTW/pyFFTW>`_ (for faster FFTs)
+  - fitsio, h5py, astropy, scipy to run **pyrecon** as a standalone
 
 pip
 ---
 To install **pyrecon**, simply run::
 
-  python -m pip install git+https://github.com/adematti/pyrecon
+  python -m pip install git+https://github.com/cosmodesi/pyrecon
+
+To run **pyrecon** as a standalone, a couple of extra dependencies are required (fitsio, h5py, astropy, scipy), which can be installed through::
+
+  python -m pip install git+https://github.com/cosmodesi/pyrecon#egg=pyrecon[extras]
 
 git
 ---
 First::
 
-  git clone https://github.com/adematti/pyrecon.git
+  git clone https://github.com/cosmodesi/pyrecon.git
 
 To install the code::
 

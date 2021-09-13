@@ -1,3 +1,5 @@
+"""Re-implementation of Martin J. White's reconstruction code."""
+
 import os
 import ctypes
 
@@ -11,7 +13,7 @@ from . import utils
 
 class OriginalMultiGridReconstruction(BaseReconstruction):
     """
-    :mod:`ctypes`-based implementation for Martin J. White reconstruction code,
+    :mod:`ctypes`-based implementation for Martin J. White's reconstruction code,
     using full multigrid V-cycle based on damped Jacobi iteration.
     We re-implemented https://github.com/martinjameswhite/recon_code/blob/master/multigrid.cpp, allowing for non-cubic (rectangular) mesh.
     Numerical agreement in the Zeldovich displacements between original code and this re-implementation is numerical precision (absolute and relative difference of 1e-10).

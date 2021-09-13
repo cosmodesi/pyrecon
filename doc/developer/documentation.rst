@@ -10,7 +10,7 @@ Building
 
 The documentation can be built following::
 
-  cd $HOME/cosmoprimo/doc
+  cd $HOME/pyrecon/doc
   make html
 
 Documentation pages can be displayed by opening ``_build/html/index.html`` with your web browser.

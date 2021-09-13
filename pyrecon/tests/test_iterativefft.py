@@ -11,7 +11,7 @@ from pyrecon import IterativeFFTReconstruction
 from pyrecon.iterativefft import OriginalIterativeFFTReconstruction, IterativeFFTReconstruction
 
 # here path to reference Julian's code: https://github.com/julianbautista/eboss_clustering/blob/master/python
-sys.path.insert(0,'../../../reconstruction/eboss_clustering/python')
+sys.path.insert(0,'../../../../reconstruction/eboss_clustering/python')
 import cosmo
 from cosmo import CosmoSimple
 from recon import Recon

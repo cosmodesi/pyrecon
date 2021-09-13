@@ -35,8 +35,7 @@ extensions = [
 # -- Project information -----------------------------------------------------
 
 project = 'pyrecon'
-copyright = '2021, Arnaud de Mattia'
-author = 'Arnaud de Mattia'
+copyright = '2021, cosmodesi'
 
 # The full version, including alpha/beta/rc tags
 release = __version__
@@ -63,8 +62,8 @@ exclude_patterns = ['build', '**.ipynb_checkpoints']
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = []
 
-git_repo = 'https://github.com/adematti/pyrecon.git'
-git_root = 'https://github.com/adematti/pyrecon/blob/main/'
+git_repo = 'https://github.com/cosmodesi/pyrecon.git'
+git_root = 'https://github.com/cosmodesi/pyrecon/blob/main/'
 
 extlinks = {'root': (git_root + '%s','')}
 

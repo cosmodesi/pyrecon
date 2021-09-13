@@ -27,7 +27,7 @@ def test_random():
     recon.run(jacobi_niterations=1,vcycle_niterations=1)
     #recon.run()
     recon.f = recon.beta
-    print(recon.read_shifts(data['Position']))
+    #print(recon.read_shifts(data['Position']))
     assert np.all(recon.read_shifts(data['Position']) < 1.)
 
 
