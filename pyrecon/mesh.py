@@ -371,7 +371,7 @@ class RealMesh(BaseMesh):
     @property
     def _precision(self):
         # Return float if float32, double if float64
-        return {4:'float',8:'double'}[self.dtype.itemsize]
+        return self._type_float.__name__[len('c_'):]
 
     @property
     def _type_float(self):

@@ -7,7 +7,6 @@
   - MultiGridReconstruction, based on Martin J. White's code https://github.com/martinjameswhite/recon_code
   - IterativeFFTReconstruction, based on Julian E. Bautista's code https://github.com/julianbautista/eboss_clustering/blob/master/python/recon.py
 
-
 With Python, a typical reconstruction run is (e.g. for MultiGridReconstruction; the same works for other algorithms):
 ```
 from pyrecon import MultiGridReconstruction

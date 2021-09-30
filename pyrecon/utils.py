@@ -156,7 +156,7 @@ def cartesian_to_sky(position, wrap=True, degree=True):
         Whether to wrap RA in :math:`[0, 2 \pi]`.
 
     degree : bool, default=True
-        Whether RA, Dec are in degree (``True``) or radian (``False``).
+        Whether RA, Dec are in degrees (``True``) or radians (``False``).
 
     Returns
     -------
@@ -193,7 +193,7 @@ def sky_to_cartesian(dist, ra, dec, degree=True, dtype=None):
         Declination.
 
     degree : default=True
-        Whether RA, Dec are in degree (``True``) or radian (``False``).
+        Whether RA, Dec are in degrees (``True``) or radians (``False``).
 
     dtype : numpy.dtype, default=None
         :class:`numpy.dtype` for returned array.
