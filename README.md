@@ -30,7 +30,6 @@ An example of configuration file is provided in [config](https://github.com/cosm
 data-fn, randoms-fn are input data and random file names to override those in configuration file.
 The same holds for output files output-data-fn, output-randoms-fn.
 
-
 ## In progress
 
 Check algorithm details (see notes in docstrings).
@@ -52,22 +51,7 @@ Extra requirements are:
 
 ## Installation
 
-To install the code:
-```
-$>  python setup.py install --user
-```
-Or in development mode (any change to Python code will take place immediately):
-```
-$>  python setup.py develop --user
-```
-
-With Mac OS, if you wish to use clang compiler (instead of gcc), you may encounter an error related to ``-fopenmp`` flag.
-In this case, you can try to export:
-```
-$>  export CC=clang
-```
-Before installing pyrecon. This will set clang OpenMP flags for compilation.
-Note that with Mac OS gcc can point to clang.
+See [pyrecon docs](https://pyrecon.readthedocs.io/en/latest/user/building.html).
 
 ## License
 

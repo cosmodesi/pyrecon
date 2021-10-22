@@ -266,6 +266,10 @@ void read_cic(const FLOAT* mesh, const int* nmesh, const FLOAT* positions, FLOAT
     int ix0 = (int) pos[0];
     int iy0 = (int) pos[1];
     int iz0 = (int) pos[2];
+    if (ix0<0 || ix0>=nmesh[0] || iy0<0 || iy0>=nmesh[1] || iz0<0 || iz0>=nmesh[2]) {
+      printf("Index out of range: (ix,iy,iz) = (%d,%d,%d) for (%.3f,%.3f,%.3f)\n",ix0,iy0,iz0,pos[0],pos[1],pos[2]);
+      exit(-1);
+    }
     FLOAT dx = pos[0] - ix0;
     FLOAT dy = pos[1] - iy0;
     FLOAT dz = pos[2] - iz0;

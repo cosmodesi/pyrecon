@@ -10,7 +10,7 @@ Base reconstruction class
   :show-inheritance:
 
 MultiGridReconstruction
---------------------------
+-----------------------
 
 .. automodule:: pyrecon.multigrid
   :members:

@@ -251,32 +251,41 @@ class MeshInfo(BaseClass):
             If not provided, see ``positions``.
 
         cellsize : array, float, default=None
-            Physical size of mesh cells. If not ``None``, mesh size ``nmesh``
-            is set as ``boxsize/cellsize``.
+            Physical size of mesh cells.
+            If not ``None``, and mesh size ``nmesh`` is not ``None``, used to set ``boxsize`` as ``nmesh * cellsize``.
+            If ``nmesh`` is ``None``, it is set as (the nearest integer(s) to) ``boxsize/cellsize``.
 
         nmesh : array, int, default=256
             Mesh size, i.e. number of mesh nodes along each axis.
 
         positions : array of shape (N,3), default=None
-            If ``boxsize`` or ``boxcenter`` is ``None``, use these positions
-            to determine box size and / or boxcenter.
+            If ``boxsize`` and / or ``boxcenter`` is ``None``, use these positions
+            to determine ``boxsize`` and / or ``boxcenter``.
 
         boxpad : float, default=1.5
-            If ``boxsize`` is ``None`` (in which case ``positions`` are used),
-            take ``boxpad`` times the smallest box enclosing ``positions`` as ``boxsize``.
+            When ``boxsize`` is determined from ``positions``, take ``boxpad`` times the smallest box enclosing ``positions`` as ``boxsize``.
         """
         if value is not None:
             nmesh = value.shape
 
         if boxsize is None or boxcenter is None:
+            if positions is None:
+                raise ValueError('boxsize and boxcenter must be specified if positions are not provided')
             pos_min, pos_max = positions.min(axis=0), positions.max(axis=0)
             delta = abs(pos_max - pos_min)
             if boxcenter is None: boxcenter = 0.5 * (pos_min + pos_max)
-            if boxsize is None: boxsize = delta.max() * boxpad
-            if (boxsize < delta).any(): raise ValueError('boxsize too small to contain all data.')
+            if boxsize is None:
+                if cellsize is not None and nmesh is not None:
+                    boxsize = nmesh * cellsize
+                else:
+                    boxsize = delta.max() * boxpad
+            if (boxsize < delta).any(): raise ValueError('boxsize too small to contain all data')
 
-        if nmesh is None and cellsize is not None:
-            nmesh = np.rint(boxsize/cellsize).astype(int)
+        if nmesh is None:
+            if cellsize is not None:
+                nmesh = np.rint(boxsize/cellsize).astype(int)
+            else:
+                raise ValueError('nmesh (or cellsize) must be specified')
 
         self.boxsize = boxsize
         self.boxcenter = boxcenter
