@@ -5,10 +5,9 @@ import subprocess
 import numpy as np
 import fitsio
 
-from pyrecon import IterativeFFTReconstruction
-
-#from pyrecon import MultiGridReconstruction
 from pyrecon.iterativefft import OriginalIterativeFFTReconstruction, IterativeFFTReconstruction
+from pyrecon.utils import distance
+from test_multigrid import get_random_catalog
 
 # here path to reference Julian's code: https://github.com/julianbautista/eboss_clustering/blob/master/python
 sys.path.insert(0,'../../../../reconstruction/eboss_clustering/python')
@@ -17,8 +16,28 @@ from cosmo import CosmoSimple
 from recon import Recon
 
 
-def distance(pos):
-    return np.sum(pos**2,axis=-1)**0.5
+def test_los():
+    boxsize = 1000.
+    boxcenter = [boxsize/2]*3
+    data = get_random_catalog(boxsize=boxsize,seed=42)
+    randoms = get_random_catalog(boxsize=boxsize,seed=84)
+    recon = IterativeFFTReconstruction(f=0.8,bias=2.,los='x',nthreads=4,boxcenter=boxcenter,boxsize=boxsize,nmesh=64,dtype='f8')
+    recon.assign_data(data['Position'],data['Weight'])
+    recon.assign_randoms(randoms['Position'],randoms['Weight'])
+    recon.set_density_contrast()
+    recon.run()
+    shifts_global = recon.read_shifts(data['Position'],with_rsd=True)
+    offset = 1e8
+    boxcenter[0] += offset
+    data['Position'][:,0] += offset
+    randoms['Position'][:,0] += offset
+    recon = IterativeFFTReconstruction(f=0.8,bias=2.,nthreads=4,boxcenter=boxcenter,boxsize=boxsize,nmesh=64,dtype='f8')
+    recon.assign_data(data['Position'],data['Weight'])
+    recon.assign_randoms(randoms['Position'],randoms['Weight'])
+    recon.set_density_contrast()
+    recon.run()
+    shifts_local = recon.read_shifts(data['Position'],with_rsd=True)
+    assert np.allclose(shifts_local,shifts_global,rtol=1e-3,atol=1e-3)
 
 
 def test_iterative_fft(data_fn, randoms_fn):
@@ -107,6 +126,7 @@ if __name__ == '__main__':
     from pyrecon.utils import setup_logging
 
     setup_logging()
+    test_los()
     # Uncomment to compute catalogs needed for these tests
     #utils.setup()
 

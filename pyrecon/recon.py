@@ -43,8 +43,12 @@ class BaseReconstruction(BaseClass):
 
     bias : float
         Galaxy bias.
+
+    los : array
+        If ``None``, local (varying) line-of-sight.
+        Else line-of-sight (unit) 3-vector.
     """
-    def __init__(self, f=0., bias=1., ran_min=0.75, smoothing_radius=15., **kwargs):
+    def __init__(self, f=0., bias=1., los=None, **kwargs):
         """
         Initialize :class:`BaseReconstruction`.
 
@@ -56,15 +60,19 @@ class BaseReconstruction(BaseClass):
         bias : float
             Galaxy bias.
 
+        los : string, array
+            If ``los`` is ``None`` or "local", use local (varying) line-of-sight.
+            Else, may be "x", "y" or "z", for one of the cartesian axes.
+            Else, a 3-vector.
+
         kwargs : dict
             Arguments to build :attr:`mesh_data`, :attr:`mesh_randoms` (see :class:`RealMesh`).
         """
         self.set_cosmo(f=f,bias=bias)
         self.mesh_data = RealMesh(**kwargs)
         self.mesh_randoms = RealMesh(**kwargs)
+        self.set_los(los)
         self.log_info('Using mesh {}.'.format(self.mesh_data))
-        self.ran_min = ran_min
-        self.smoothing_radius = smoothing_radius
 
     @property
     def beta(self):
@@ -93,6 +101,26 @@ class BaseReconstruction(BaseClass):
         self.f = f
         self.bias = bias
 
+    def set_los(self, los=None):
+        """
+        Set line-of-sight.
+
+        Parameters
+        ----------
+        los : string, array
+            If ``los`` is ``None`` or "local", use local (varying) line-of-sight.
+            Else, may be "x", "y" or "z", for one of the cartesian axes.
+            Else, a 3-vector.
+        """
+        if los in [None, 'local']:
+            self.los = None
+        elif los in ['x', 'y', 'z']:
+            self.los = np.zeros(3, dtype=self.mesh_data.dtype)
+            self.los['xyz'.index(los)] = 1.
+        else:
+            los = np.array(los, dtype=self.mesh_data.dtype)
+            self.los = los/utils.distance(los)
+
     def assign_data(self, positions, weights=None):
         """
         Assign (paint) data to :attr:`mesh_data`.
@@ -106,11 +134,11 @@ class BaseReconstruction(BaseClass):
         weights : array of shape (N,), default=None
             Weights; default to 1.
         """
-        self.mesh_data.assign_cic(positions,weights=weights)
+        self.mesh_data.assign_cic(positions, weights=weights)
 
     def assign_randoms(self, positions, weights=None):
         """Same as :meth:`assign_data`, but for random objects."""
-        self.mesh_randoms.assign_cic(positions,weights=weights)
+        self.mesh_randoms.assign_cic(positions, weights=weights)
 
     def set_density_contrast(self, **kwargs):
         """

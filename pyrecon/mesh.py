@@ -12,6 +12,11 @@ from . import utils
 from .utils import BaseClass, BaseMetaClass
 
 
+class MeshError(Exception):
+
+    """Exception raised when issue with mesh."""
+
+
 class SetterProperty(object):
     """
     Attribute setter, runs ``func`` when setting a class attribute.
@@ -178,18 +183,18 @@ class BaseMesh(NDArrayLike,BaseClass,metaclass=BaseMetaClass):
                 value = value.astype(self.dtype,copy=False)
             else:
                 value_ = value
-                value = np.empty(shape=self.shape,dtype=self.dtype)
+                value = np.empty(shape=self.shape,dtype=self.dtype,order='C')
                 value[...] = value_
         self.__dict__['value'] = value
 
     def zeros_like(self):
         new = self.deepcopy(copy_value=False)
-        new.value = np.zeros(shape=self.shape,dtype=self.dtype)
+        new.value = np.zeros(shape=self.shape,dtype=self.dtype,order='C')
         return new
 
     def empty_like(self, *args, **kwargs):
         new = self.deepcopy(copy_value=False)
-        new.value = np.empty(shape=self.shape,dtype=self.dtype)
+        new.value = np.empty(shape=self.shape,dtype=self.dtype,order='C')
         return new
 
     def __repr__(self):
@@ -210,7 +215,7 @@ def _make_property(name):
 
     return func
 
-for name in ['boxsize','boxcenter','nmesh','cellsize','ndim']:
+for name in ['boxsize','boxcenter','nmesh','offset','cellsize','ndim']:
     setattr(BaseMesh,name,_make_property(name))
 
 
@@ -270,7 +275,7 @@ class MeshInfo(BaseClass):
 
         if boxsize is None or boxcenter is None:
             if positions is None:
-                raise ValueError('boxsize and boxcenter must be specified if positions are not provided')
+                raise MeshError('boxsize and boxcenter must be specified if positions are not provided')
             pos_min, pos_max = positions.min(axis=0), positions.max(axis=0)
             delta = abs(pos_max - pos_min)
             if boxcenter is None: boxcenter = 0.5 * (pos_min + pos_max)
@@ -279,13 +284,13 @@ class MeshInfo(BaseClass):
                     boxsize = nmesh * cellsize
                 else:
                     boxsize = delta.max() * boxpad
-            if (boxsize < delta).any(): raise ValueError('boxsize too small to contain all data')
+            if (boxsize < delta).any(): raise MeshError('boxsize too small to contain all data')
 
         if nmesh is None:
             if cellsize is not None:
                 nmesh = np.rint(boxsize/cellsize).astype(int)
             else:
-                raise ValueError('nmesh (or cellsize) must be specified')
+                raise MeshError('nmesh (or cellsize) must be specified')
 
         self.boxsize = boxsize
         self.boxcenter = boxcenter
@@ -294,23 +299,28 @@ class MeshInfo(BaseClass):
     @SetterProperty
     def boxsize(self, boxsize):
         # Called when setting :attr:`boxsize`, enforcing array of shape (3,).
-        _boxsize = np.empty(self.ndim,dtype='f8')
+        _boxsize = np.empty(self.ndim,dtype='f8',order='C')
         _boxsize[:] = boxsize
         self.__dict__['boxsize'] = _boxsize
 
     @SetterProperty
     def boxcenter(self, boxcenter):
         # Called when setting :attr:`boxcenter`, enforcing array of shape (3,).
-        _boxcenter = np.empty(self.ndim,dtype='f8')
+        _boxcenter = np.empty(self.ndim,dtype='f8',order='C')
         _boxcenter[:] = boxcenter
         self.__dict__['boxcenter'] = _boxcenter
 
     @SetterProperty
     def nmesh(self, nmesh):
         # Called when setting :attr:`nmesh`, enforcing array of shape (3,).
-        _nmesh = np.empty(self.ndim,dtype='i8')
+        _nmesh = np.empty(self.ndim,dtype='i8',order='C')
         _nmesh[:] = nmesh
         self.__dict__['nmesh'] = _nmesh
+
+    @property
+    def offset(self):
+        """Coordinates of the (0,0,0) corner of the box."""
+        return self.boxcenter - self.boxsize/2.
 
     @property
     def cellsize(self):
@@ -390,7 +400,7 @@ class RealMesh(BaseMesh):
     @property
     def _type_mesh(self):
         # Return ctypes-type for numpy array
-        return ctypeslib.ndpointer(dtype=self._type_float,shape=np.prod(self.nmesh))
+        return ctypeslib.ndpointer(dtype=self._type_float,shape=np.prod(self.nmesh),flags='C')
 
     def set_num_threads(self, nthreads=None):
         """Set number of OpenMP threads."""
@@ -421,17 +431,19 @@ class RealMesh(BaseMesh):
         size = len(positions)
         if weights is None: weights = np.ones_like(positions,shape=size,dtype=self._type_float)
         positions = ((positions - self.boxcenter)/self.boxsize + 0.5)*self.nmesh
-        positions = positions.astype(self._type_float,copy=False).ravel()
-        weights = weights.astype(self._type_float,copy=False).ravel()
+        positions = positions.astype(self._type_float,copy=False).ravel(order='C')
+        weights = weights.astype(self._type_float,copy=False).ravel(order='C')
         if self.value is None:
-            self.value = np.zeros(shape=self.nmesh,dtype=self._type_float)
-        type_positions = ctypeslib.ndpointer(dtype=self._type_float,shape=positions.size)
-        type_weights = ctypeslib.ndpointer(dtype=self._type_float,shape=weights.size)
-        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int,shape=self.ndim)
+            self.value = np.zeros(shape=self.nmesh,dtype=self._type_float,order='C')
+        type_positions = ctypeslib.ndpointer(dtype=self._type_float,shape=positions.size,flags='C')
+        type_weights = ctypeslib.ndpointer(dtype=self._type_float,shape=weights.size,flags='C')
+        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int,shape=self.ndim,flags='C')
         func = self._lib.assign_cic
         func.argtypes = (self._type_mesh,type_nmesh,type_positions,type_weights,ctypes.c_size_t)
+        func.restype = ctypes.c_int
         self.value.shape = -1
-        func(self.value,self.nmesh.astype(ctypes.c_int,copy=False),positions,weights,size)
+        flag = func(self.value,self.nmesh.astype(ctypes.c_int,copy=False),positions,weights,size)
+        if (flag != 0): raise MeshError('Issue with assign_cic')
         self.value.shape = self.shape
 
     def read_cic(self, positions):
@@ -450,14 +462,16 @@ class RealMesh(BaseMesh):
         """
         size = len(positions)
         positions = ((positions - self.boxcenter)/self.boxsize + 0.5)*self.nmesh
-        positions = positions.astype(self._type_float,copy=False).ravel()
-        values = np.empty_like(positions,shape=size)
-        type_positions = ctypeslib.ndpointer(dtype=self._type_float,shape=positions.size)
-        type_values = ctypeslib.ndpointer(dtype=self._type_float,shape=values.size)
-        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int,shape=self.ndim)
+        positions = positions.astype(self._type_float,copy=False).ravel(order='C')
+        values = np.empty_like(positions,shape=size,order='C')
+        type_positions = ctypeslib.ndpointer(dtype=self._type_float,shape=positions.size,flags='C')
+        type_values = ctypeslib.ndpointer(dtype=self._type_float,shape=values.size,flags='C')
+        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int,shape=self.ndim,flags='C')
         func = self._lib.read_cic
         func.argtypes = (self._type_mesh,type_nmesh,type_positions,type_values,ctypes.c_size_t)
-        func(self.value.ravel(),self.nmesh.astype(ctypes.c_int,copy=False),positions,values,size)
+        func.restype = ctypes.c_int
+        flag = func(self.value.ravel(order='C'),self.nmesh.astype(ctypes.c_int,copy=False),positions,values,size)
+        if (flag != 0): raise MeshError('Issue with read_cic')
         return values
 
     def read_finite_difference_cic(self, positions):
@@ -476,14 +490,16 @@ class RealMesh(BaseMesh):
         """
         size = len(positions)
         positions = ((positions - self.boxcenter)/self.boxsize + 0.5)*self.nmesh
-        positions = positions.astype(self._type_float,copy=False).ravel()
-        values = np.empty_like(positions)
-        type_positions = ctypeslib.ndpointer(dtype=self._type_float,shape=positions.size)
-        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int,shape=self.ndim)
-        type_boxsize = ctypeslib.ndpointer(dtype=self._type_float,shape=self.ndim)
+        positions = positions.astype(self._type_float,copy=False).ravel(order='C')
+        values = np.empty_like(positions,order='C')
+        type_positions = ctypeslib.ndpointer(dtype=self._type_float,shape=positions.size,flags='C')
+        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int,shape=self.ndim,flags='C')
+        type_boxsize = ctypeslib.ndpointer(dtype=self._type_float,shape=self.ndim,flags='C')
         func = self._lib.read_finite_difference_cic
         func.argtypes = (self._type_mesh,type_nmesh,type_boxsize,type_positions,type_positions,ctypes.c_size_t)
-        func(self.value.ravel(),self.nmesh.astype(ctypes.c_int,copy=False),self.boxsize.astype(self._type_float,copy=False),positions,values,size)
+        func.restype = ctypes.c_int
+        flag = func(self.value.ravel(order='C'),self.nmesh.astype(ctypes.c_int,copy=False),self.boxsize.astype(self._type_float,copy=False),positions,values,size)
+        if (flag != 0): raise MeshError('Issue with read_finite_difference_cic')
         values.shape = (size,self.ndim)
         return values
 
@@ -505,7 +521,7 @@ class RealMesh(BaseMesh):
         kwargs : dict
             Optional arguments for :meth:`get_fft_engine`.
         """
-        radius_ = np.empty_like(self.boxsize)
+        radius_ = np.empty_like(self.boxsize,order='C')
         radius_[:] = radius
         if method == 'fft':
             engine = self.get_fft_engine(**kwargs)
@@ -515,15 +531,17 @@ class RealMesh(BaseMesh):
             self.value = valuek.to_real(engine=engine).value
             #func = self._lib.smooth_fft_gaussian
             #func.argtypes = (self._type_mesh,type_nmesh,type_boxsize)
-            #func(self.value.ravel(),self.nmesh,radius/self.boxsize)
+            #func(self.value.ravel(order='C'),self.nmesh,radius/self.boxsize)
         else:
             radius = radius_/self.boxsize
-            type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int,shape=self.ndim)
-            type_boxsize = ctypeslib.ndpointer(dtype=self._type_float,shape=self.ndim)
+            type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int,shape=self.ndim,flags='C')
+            type_boxsize = ctypeslib.ndpointer(dtype=self._type_float,shape=self.ndim,flags='C')
             func = self._lib.smooth_gaussian
             func.argtypes = (self._type_mesh,type_nmesh,type_boxsize,self._type_float)
             self.value.shape = -1
-            func(self.value,self.nmesh.astype(ctypes.c_int,copy=False),radius.astype(self._type_float,copy=False),nsigmas)
+            func.restype = ctypes.c_int
+            flag = func(self.value,self.nmesh.astype(ctypes.c_int,copy=False),radius.astype(self._type_float,copy=False),nsigmas)
+            if (flag != 0): raise MeshError('Issue with read_finite_difference_cic')
             self.value.shape = self.shape
 
     def get_fft_engine(self, engine='numpy', **kwargs):
@@ -634,11 +652,11 @@ class ComplexMesh(BaseMesh):
         """
         Return :class:`RealMesh` computed with fast Fourier transforms.
         See :meth:`get_fft_engine` for arguments.
-        Raises a :class:`ValueError` if FFT engine has not same Hermitian symmetry.
+        Raises a :class:`MeshError` if FFT engine has not same Hermitian symmetry.
         """
         engine = self.get_fft_engine(*args,**kwargs)
         if engine.hermitian != self.hermitian:
-            raise ValueError('ComplexMesh has hermitian = {} but provided FFT engine has hermitian = {}'.format(self.hermitian,engine.hermitian))
+            raise MeshError('ComplexMesh has hermitian = {} but provided FFT engine has hermitian = {}'.format(self.hermitian,engine.hermitian))
         return RealMesh(engine.backward(self.value).real,info=self.info,nthreads=self.nthreads,attrs=self.attrs)
 
 
@@ -789,16 +807,16 @@ if HAVE_PYFFTW:
             else:
                 pyfftw.forget_wisdom()
             if self.hermitian:
-                fftw_f = pyfftw.empty_aligned(self.shape,dtype=self.type_real)
+                fftw_f = pyfftw.empty_aligned(self.shape,dtype=self.type_real,order='C')
             else:
-                fftw_f = pyfftw.empty_aligned(self.shape,dtype=self.type_complex)
-            fftw_fk = pyfftw.empty_aligned(self.hshape,dtype=self.type_complex)
+                fftw_f = pyfftw.empty_aligned(self.shape,dtype=self.type_complex,order='C')
+            fftw_fk = pyfftw.empty_aligned(self.hshape,dtype=self.type_complex,order='C')
             self.fftw_forward_object = pyfftw.FFTW(fftw_f,fftw_fk,axes=range(self.ndim),direction='FFTW_FORWARD',threads=self.nthreads)
             self.fftw_backward_object = pyfftw.FFTW(fftw_fk,fftw_f,axes=range(self.ndim),direction='FFTW_BACKWARD',threads=self.nthreads)
 
         def forward(self, fun):
             """Return forward transform of ``fun``."""
-            output_array = pyfftw.empty_aligned(self.hshape,dtype=self.type_complex)
+            output_array = pyfftw.empty_aligned(self.hshape,dtype=self.type_complex,order='C')
             if self.hermitian:
                 fun = fun.astype(self.type_real,copy=False)
             else:
@@ -808,9 +826,9 @@ if HAVE_PYFFTW:
         def backward(self, fun):
             """Return backward transform of ``fun``, which is destroyed."""
             if self.hermitian:
-                output_array = pyfftw.empty_aligned(self.shape,dtype=self.type_real)
+                output_array = pyfftw.empty_aligned(self.shape,dtype=self.type_real,order='C')
             else:
-                output_array = pyfftw.empty_aligned(self.shape,dtype=self.type_complex)
+                output_array = pyfftw.empty_aligned(self.shape,dtype=self.type_complex,order='C')
             return self.fftw_backward_object(input_array=fun,output_array=output_array,normalise_idft=True)
 
 
@@ -837,4 +855,4 @@ def get_fft_engine(engine, *args, **kwargs):
         return FFTWEngine(*args, **kwargs)
     if isinstance(engine,BaseFFTEngine):
         return engine
-    raise ValueError('FFT engine {} is unknown'.format(engine))
+    raise MeshError('FFT engine {} is unknown'.format(engine))

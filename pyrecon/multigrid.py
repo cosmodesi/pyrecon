@@ -95,15 +95,21 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         ndim = 3
         type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int,shape=ndim)
         type_boxsize = ctypeslib.ndpointer(dtype=self._type_float,shape=ndim)
+        type_pointer = ctypes.POINTER(self._type_float)
         func.argtypes = (self.mesh_delta._type_mesh,self.mesh_delta._type_mesh,
                         type_nmesh,type_boxsize,type_boxsize,
-                        self._type_float,self._type_float,ctypes.c_int,ctypes.c_int)
+                        self._type_float,self._type_float,ctypes.c_int,ctypes.c_int,
+                        type_pointer if self.los is None else type_boxsize)
         self.mesh_phi = self.mesh_delta.zeros_like()
         self.mesh_phi.value.shape = -1
+        if self.los is None:
+            los = type_pointer()
+        else:
+            los = self.los.astype(self._type_float,copy=False)
         self.log_info('Computing displacement potential.')
-        func(self.mesh_delta.value.ravel(),self.mesh_phi.value,
+        func(self.mesh_delta.value.ravel(order='C'),self.mesh_phi.value,
             self.mesh_delta.nmesh.astype(ctypes.c_int,copy=False),self.mesh_delta.boxsize.astype(self._type_float,copy=False),self.mesh_delta.boxcenter.astype(self._type_float,copy=False),
-            self.beta,jacobi_damping_factor,jacobi_niterations,vcycle_niterations)
+            self.beta,jacobi_damping_factor,jacobi_niterations,vcycle_niterations,los)
         self.mesh_phi.value.shape = self.mesh_delta.shape
 
     def read_shifts(self, positions, with_rsd=True):
@@ -113,7 +119,10 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         """
         shifts = self.mesh_phi.read_finite_difference_cic(positions)
         if with_rsd:
-            los = positions/utils.distance(positions)[:,None]
+            if self.los is None:
+                los = positions/utils.distance(positions)[:,None]
+            else:
+                los = self.los
             shifts += self.f*np.sum(shifts*los,axis=-1)[:,None]*los
         return shifts
 

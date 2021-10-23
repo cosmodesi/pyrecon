@@ -130,9 +130,12 @@ class OriginalIterativeFFTReconstruction(BaseReconstruction):
         psis = []
         ndim = len(k)
         for iaxis in range(ndim):
+            # no need to compute psi on axis where los is 0
+            if not return_psi and self.los is not None and self.los[iaxis] == 0:
+                shifts[:,iaxis] = 0.
+                continue
             sl = [None]*ndim; sl[iaxis] = slice(None)
             tmp = deltak*1j*k[iaxis][tuple(sl)]
-
             psi = tmp.to_real(engine=self.fft_engine)
             # Reading shifts at reconstructed data real-space positions
             shifts[:,iaxis] = psi.read_cic(self._positions_rec_data)
@@ -140,7 +143,10 @@ class OriginalIterativeFFTReconstruction(BaseReconstruction):
 
         #self.log_info('A few displacements values:')
         #for s in shifts[:3]: self.log_info('{}'.format(s))
-        los = self._positions_data/utils.distance(self._positions_data)[:,None]
+        if self.los is None:
+            los = self._positions_data/utils.distance(self._positions_data)[:,None]
+        else:
+            los = self.los
         # Comments in Julian's code:
         # For first loop need to approximately remove RSD component from psi to speed up calculation
         # See Burden 2015: 1504.02591v2, eq. 12 (flat sky approximation)
@@ -151,7 +157,13 @@ class OriginalIterativeFFTReconstruction(BaseReconstruction):
         # these positions are then used in next determination of psi,
         # assumed to not have RSD.
         # The iterative procedure then uses the new positions as if they'd been read in from the start
-        self._positions_rec_data = self._positions_data - self.f*np.sum(shifts*los,axis=-1)[:,None]*los
+        _positions_rec_data = self._positions_data - self.f*np.sum(shifts*los,axis=-1)[:,None]*los
+        diff = _positions_rec_data - self.mesh_delta.offset
+        if self.los is None and np.any((diff < 0) | (diff > self.mesh_delta.boxsize - self.mesh_delta.cellsize)):
+            self.log_warning('Some particles are out-of-bounds.')
+        self._positions_rec_data = diff % self.mesh_delta.boxsize + self.mesh_delta.offset
+        #if self.los is not None:
+        #    self._positions_rec_data %= self.mesh_delta.boxsize
         self._iter += 1
         if return_psi:
             return psis
@@ -186,10 +198,12 @@ class OriginalIterativeFFTReconstruction(BaseReconstruction):
                 return self._positions_data - self._positions_rec_data + read_cic(self._positions_rec_data)
             return read_cic(self._positions_rec_data)
 
-        los = positions/utils.distance(positions)[:,None]
         shifts = read_cic(positions)
         if with_rsd:
-            los = positions/utils.distance(positions)[:,None]
+            if self.los is None:
+                los = positions/utils.distance(positions)[:,None]
+            else:
+                los = self.los
             shifts += self.f*np.sum(shifts*los,axis=-1)[:,None]*los
         return shifts
 

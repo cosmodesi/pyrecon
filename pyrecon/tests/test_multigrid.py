@@ -6,13 +6,12 @@ import numpy as np
 import fitsio
 
 from pyrecon.multigrid import OriginalMultiGridReconstruction, MultiGridReconstruction
-from pyrecon.utils import cartesian_to_sky, DistanceToRedshift
+from pyrecon.utils import distance, cartesian_to_sky, DistanceToRedshift
 
 
-def get_random_catalog(seed=None):
-    size = 100000
+def get_random_catalog(size=100000, boxsize=1000., seed=None):
     rng = np.random.RandomState(seed=seed)
-    positions = np.array([rng.uniform(500.,1000.,size) for i in range(3)]).T
+    positions = np.array([rng.uniform(0.,1.,size) for i in range(3)]).T*boxsize
     weights = rng.uniform(0.5,1.,size)
     return {'Position':positions,'Weight':weights}
 
@@ -28,11 +27,48 @@ def test_random():
     #recon.run()
     recon.f = recon.beta
     #print(recon.read_shifts(data['Position']))
-    assert np.all(recon.read_shifts(data['Position']) < 1.)
+    assert np.all(recon.read_shifts(data['Position']) < 2.)
 
 
-def distance(pos):
-    return np.sum(pos**2,axis=-1)**0.5
+def test_dtype():
+    data = get_random_catalog(seed=42)
+    randoms = get_random_catalog(seed=84)
+    recon_f4 = MultiGridReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=64,dtype='f4')
+    recon_f4.assign_data(data['Position'],data['Weight'])
+    recon_f4.assign_randoms(randoms['Position'],randoms['Weight'])
+    recon_f4.set_density_contrast()
+    recon_f4.run()
+    recon_f8 = MultiGridReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=64,dtype='f8')
+    recon_f8.assign_data(data['Position'],data['Weight'])
+    recon_f8.assign_randoms(randoms['Position'],randoms['Weight'])
+    recon_f8.set_density_contrast()
+    recon_f8.run()
+    assert not np.all(recon_f4.mesh_phi == recon_f8.mesh_phi)
+    assert np.allclose(recon_f4.mesh_phi,recon_f8.mesh_phi,rtol=1e-2,atol=1e-2)
+
+
+def test_los():
+    boxsize = 1000.
+    boxcenter = [boxsize/2]*3
+    data = get_random_catalog(boxsize=boxsize,seed=42)
+    randoms = get_random_catalog(boxsize=boxsize,seed=84)
+    recon = MultiGridReconstruction(f=0.8,bias=2.,los='x',nthreads=4,boxcenter=boxcenter,boxsize=boxsize,nmesh=64,dtype='f8')
+    recon.assign_data(data['Position'],data['Weight'])
+    recon.assign_randoms(randoms['Position'],randoms['Weight'])
+    recon.set_density_contrast()
+    recon.run()
+    shifts_global = recon.read_shifts(data['Position'],with_rsd=True)
+    offset = 1e8
+    boxcenter[0] += offset
+    data['Position'][:,0] += offset
+    randoms['Position'][:,0] += offset
+    recon = MultiGridReconstruction(f=0.8,bias=2.,nthreads=4,boxcenter=boxcenter,boxsize=boxsize,nmesh=64,dtype='f8')
+    recon.assign_data(data['Position'],data['Weight'])
+    recon.assign_randoms(randoms['Position'],randoms['Weight'])
+    recon.set_density_contrast()
+    recon.run()
+    shifts_local = recon.read_shifts(data['Position'],with_rsd=True)
+    assert np.allclose(shifts_local,shifts_global,rtol=1e-3,atol=1e-3)
 
 
 def compute_ref(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
@@ -206,6 +242,8 @@ if __name__ == '__main__':
     script_output_randoms_fn = os.path.join(catalog_dir,'script_randoms_rec.fits')
 
     test_random()
+    test_dtype()
+    test_los()
     test_recon(data_fn,randoms_fn,output_data_fn,output_randoms_fn)
     compute_ref(data_fn,randoms_fn,ref_output_data_fn,ref_output_randoms_fn)
     compare_ref(data_fn,output_data_fn,ref_output_data_fn)

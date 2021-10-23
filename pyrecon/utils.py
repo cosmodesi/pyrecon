@@ -149,7 +149,7 @@ def cartesian_to_sky(position, wrap=True, degree=True):
 
     Parameters
     ----------
-    position : array of shape (N,3)
+    position : array of shape (N, 3)
         Position in cartesian coordinates.
 
     wrap : bool, default=True
@@ -170,7 +170,7 @@ def cartesian_to_sky(position, wrap=True, degree=True):
         Declination.
     """
     dist = distance(position)
-    ra = np.arctan2(position[:,1],position[:,0])
+    ra = np.arctan2(position[:,1], position[:,0])
     if wrap: ra %= 2.*np.pi
     dec = np.arcsin(position[:,2]/dist)
     conversion = np.pi/180. if degree else 1.
@@ -183,13 +183,13 @@ def sky_to_cartesian(dist, ra, dec, degree=True, dtype=None):
 
     Parameters
     ----------
-    dist : array
+    dist : array of shape (N,)
         Distance.
 
-    ra : array
+    ra : array of shape (N,)
         Right Ascension.
 
-    dec : array
+    dec : array of shape (N,)
         Declination.
 
     degree : default=True
@@ -200,8 +200,8 @@ def sky_to_cartesian(dist, ra, dec, degree=True, dtype=None):
 
     Returns
     -------
-    position : array
-        position in cartesian coordinates; of shape (len(dist),3).
+    position : array of shape (N,)
+        Position in cartesian coordinates.
     """
     conversion = 1.
     if degree: conversion = np.pi/180.

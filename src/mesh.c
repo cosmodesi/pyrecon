@@ -23,7 +23,7 @@ int get_num_threads()
 }
 
 
-void assign_cic(FLOAT* mesh, const int* nmesh, const FLOAT* positions, const FLOAT* weights, size_t npositions) {
+int assign_cic(FLOAT* mesh, const int* nmesh, const FLOAT* positions, const FLOAT* weights, size_t npositions) {
   // Assign positions (weights) to mesh
   // Asumes periodic boundaries
   // Positions must be in [0,nmesh-1]
@@ -37,7 +37,7 @@ void assign_cic(FLOAT* mesh, const int* nmesh, const FLOAT* positions, const FLO
     int iz0 = (int) pos[2];
     if (ix0<0 || ix0>=nmesh[0] || iy0<0 || iy0>=nmesh[1] || iz0<0 || iz0>=nmesh[2]) {
       printf("Index out of range: (ix,iy,iz) = (%d,%d,%d) for (%.3f,%.3f,%.3f)\n",ix0,iy0,iz0,pos[0],pos[1],pos[2]);
-      exit(-1);
+      return -1;
     }
     FLOAT dx = pos[0] - ix0;
     FLOAT dy = pos[1] - iy0;
@@ -56,10 +56,11 @@ void assign_cic(FLOAT* mesh, const int* nmesh, const FLOAT* positions, const FLO
     mesh[ixp+iyp+iz0] += dx*dy*(1-dz)*weight;
     mesh[ixp+iyp+izp] += dx*dy*dz*weight;
   }
+  return 0;
 }
 
 
-void convolve(FLOAT* mesh, const int* nmesh, const FLOAT* kernel, const int* nkernel) {
+int convolve(FLOAT* mesh, const int* nmesh, const FLOAT* kernel, const int* nkernel) {
   // Performs a Gaussian smoothing using brute-force convolution.
   // Asumes periodic boundaries
   FLOAT sumw = 0;
@@ -79,7 +80,7 @@ void convolve(FLOAT* mesh, const int* nmesh, const FLOAT* kernel, const int* nke
     if (nkernel[idim] % 2 == 0) {
       printf("Kernel size must be odd");
       free(ss);
-      exit(-1);
+      return -1;
     }
   }
   #pragma omp parallel for shared(mesh,ss,kernel)
@@ -106,10 +107,11 @@ void convolve(FLOAT* mesh, const int* nmesh, const FLOAT* kernel, const int* nke
     }
   }
   free(ss);
+  return 0;
 }
 
 
-void smooth_gaussian(FLOAT* mesh, const int* nmesh, const FLOAT* smoothing_radius, const FLOAT nsigmas) {
+int smooth_gaussian(FLOAT* mesh, const int* nmesh, const FLOAT* smoothing_radius, const FLOAT nsigmas) {
   // Performs a Gaussian smoothing using brute-force convolution.
   // Now set up the smoothing stencil.
   // The number of grid points to search: >= nsigmas * smoothing_radius.
@@ -134,6 +136,7 @@ void smooth_gaussian(FLOAT* mesh, const int* nmesh, const FLOAT* smoothing_radiu
   }
   convolve(mesh,nmesh,kernel,nkernel);
   free(kernel);
+  return 0;
 }
 
 /*
@@ -178,7 +181,7 @@ void smooth_fft_gaussian(FLOAT *mesh, const int* nmesh, const FLOAT* smoothing_r
 */
 
 
-void read_finite_difference_cic(const FLOAT* mesh, const int* nmesh, const FLOAT* boxsize, const FLOAT* positions, FLOAT* shifts, size_t npositions) {
+int read_finite_difference_cic(const FLOAT* mesh, const int* nmesh, const FLOAT* boxsize, const FLOAT* positions, FLOAT* shifts, size_t npositions) {
   // Computes the displacement field from mesh using second-order accurate
   // finite difference and shifts the data and randoms.
   // The displacements are pulled from the grid onto the positions of the
@@ -189,8 +192,10 @@ void read_finite_difference_cic(const FLOAT* mesh, const int* nmesh, const FLOAT
   const int nmeshyz = nmesh[2]*nmesh[1];
   FLOAT cell[NDIM];
   for (int idim=0; idim<NDIM; idim++) cell[idim] = 2.0*boxsize[idim]/nmesh[idim];
+  int flag = 0;
   #pragma omp parallel for shared(mesh,positions,shifts)
   for (size_t ii=0; ii<npositions; ii++) {
+    if (flag) continue;
     // This is written out in gory detail both to make it easier to
     // see what's going on and to encourage the compiler to optimize
     // and vectorize the code as much as possible.
@@ -198,6 +203,11 @@ void read_finite_difference_cic(const FLOAT* mesh, const int* nmesh, const FLOAT
     int ix0 = (int) pos[0];
     int iy0 = (int) pos[1];
     int iz0 = (int) pos[2];
+    if (ix0<0 || ix0>=nmesh[0] || iy0<0 || iy0>=nmesh[1] || iz0<0 || iz0>=nmesh[2]) {
+      printf("Index out of range: (ix,iy,iz) = (%d,%d,%d) for (%.3f,%.3f,%.3f)\n",ix0,iy0,iz0,pos[0],pos[1],pos[2]);
+      flag = 1;
+      continue;
+    }
     FLOAT dx = pos[0] - ix0;
     FLOAT dy = pos[1] - iy0;
     FLOAT dz = pos[2] - iz0;
@@ -253,22 +263,27 @@ void read_finite_difference_cic(const FLOAT* mesh, const int* nmesh, const FLOAT
     sh[1] = py/cell[1];
     sh[2] = pz/cell[2];
   }
+  if (flag) return -1;
+  return 0;
 }
 
 
-void read_cic(const FLOAT* mesh, const int* nmesh, const FLOAT* positions, FLOAT* shifts, size_t npositions) {
+int read_cic(const FLOAT* mesh, const int* nmesh, const FLOAT* positions, FLOAT* shifts, size_t npositions) {
   // Positions must be in [0,nmesh-1]
   const int nmeshz = nmesh[2];
   const int nmeshyz = nmesh[2]*nmesh[1];
-  #pragma omp parallel for shared(mesh,positions,shifts)
+  int flag = 0;
+  #pragma omp parallel for shared(mesh,positions,shifts,flag)
   for (size_t ii=0; ii<npositions; ii++) {
+    if (flag) continue;
     const FLOAT *pos = &(positions[ii*NDIM]);
     int ix0 = (int) pos[0];
     int iy0 = (int) pos[1];
     int iz0 = (int) pos[2];
     if (ix0<0 || ix0>=nmesh[0] || iy0<0 || iy0>=nmesh[1] || iz0<0 || iz0>=nmesh[2]) {
       printf("Index out of range: (ix,iy,iz) = (%d,%d,%d) for (%.3f,%.3f,%.3f)\n",ix0,iy0,iz0,pos[0],pos[1],pos[2]);
-      exit(-1);
+      flag = 1;
+      continue;
     }
     FLOAT dx = pos[0] - ix0;
     FLOAT dy = pos[1] - iy0;
@@ -289,4 +304,6 @@ void read_cic(const FLOAT* mesh, const int* nmesh, const FLOAT* positions, FLOAT
     px += mesh[ixp+iyp+izp]*dx*dy*dz;
     shifts[ii] = px;
   }
+  if (flag) return -1;
+  return 0;
 }
