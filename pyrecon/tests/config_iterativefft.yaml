@@ -28,6 +28,7 @@ cosmology:
   bias: 2.0
   f: 0.8
   Omega_m: 0.3
+  los: local
 
 mesh:
   nmesh: 128

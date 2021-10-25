@@ -11,7 +11,8 @@ With Python, a typical reconstruction run is (e.g. for MultiGridReconstruction; 
 ```
 from pyrecon import MultiGridReconstruction
 
-recon = MultiGridReconstruction(f=0.8,bias=2.0,nmesh=512,boxsize=1000.,boxcenter=2000.)
+# line-of-sight "los" can be 'local' (default) or an axis, 'x', 'y', 'z', or a 3-vector.
+recon = MultiGridReconstruction(f=0.8,bias=2.0,los='local',nmesh=512,boxsize=1000.,boxcenter=2000.)
 recon.assign_data(positions_data,weights_data)
 recon.assign_randoms(positions_randoms,weights_randoms)
 recon.set_density_contrast()

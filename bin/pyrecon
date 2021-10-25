@@ -112,7 +112,7 @@ def main(args=None):
         config['output']['randoms_fn'] = opt.output_randoms_fn
 
     ReconstructionAlgorithm = getattr(pyrecon,config['algorithm'].pop('name'))
-    config_cosmo = {name:value for name,value in config['cosmology'].items() if name in ['f','bias']}
+    config_cosmo = {name:value for name,value in config['cosmology'].items() if name in ['f','bias','los']}
     convention = config['algorithm'].pop('convention')
     nthreads = config['algorithm'].pop('nthreads',None)
     allowed = ['recsym','reciso']

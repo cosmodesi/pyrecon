@@ -35,6 +35,7 @@ cosmology:
   bias: 1.4                                                                     # galaxy bias
   f: 0.87                                                                       # growth rate
   Omega_m: 0.3                                                                  # for rdz <=> cartesian position conversion
+  los: 'local'                                                                  # line-of-sight can be 'local' (default) or an axis ('x', 'y', 'z') or a 3-vector.
 
 mesh:
   nmesh: 512                                                                    # mesh size (int or list of 3 ints)
