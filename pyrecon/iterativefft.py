@@ -67,8 +67,8 @@ class OriginalIterativeFFTReconstruction(BaseReconstruction):
         self._size_randoms += len(positions)
 
     def set_density_contrast(self, ran_min=0.01, smoothing_radius=15.):
-        """
-        Set :math:`mesh_delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
+        r"""
+        Set :math:`\delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
 
         Note
         ----
@@ -83,13 +83,17 @@ class OriginalIterativeFFTReconstruction(BaseReconstruction):
         """
         self.ran_min = ran_min
         self.smoothing_radius = smoothing_radius
+        if not self.has_randoms:
+            self.mesh_delta = self.mesh_data/np.mean(self.mesh_data) - 1.
+            self.mesh_delta /= self.bias
+            return
         alpha = np.sum(self._weights_data)*1./self._sum_randoms
         self.mesh_delta = self.mesh_data - alpha*self.mesh_randoms
         mask = self.mesh_randoms > ran_min * self._sum_randoms/self._size_randoms
         self.mesh_delta[mask] /= (self.bias*alpha*self.mesh_randoms[mask])
         self.mesh_delta[~mask] = 0.
 
-    def run(self, niterations=3, **kwargs):
+    def run(self, niterations=3):
         """
         Run reconstruction, i.e. compute reconstructed data real-space positions (:attr:`_positions_rec_data`)
         and Zeldovich displacements fields :attr:`psi`.
@@ -102,7 +106,7 @@ class OriginalIterativeFFTReconstruction(BaseReconstruction):
         self._iter = 0
         # Gaussian smoothing before density contrast calculation
         self.mesh_data.smooth_gaussian(self.smoothing_radius,method='fft',engine=self.fft_engine)
-        self.mesh_randoms.smooth_gaussian(self.smoothing_radius,method='fft',engine=self.fft_engine)
+        if self.has_randoms: self.mesh_randoms.smooth_gaussian(self.smoothing_radius,method='fft',engine=self.fft_engine)
         self._positions_rec_data = self._positions_data.copy()
         for iter in range(niterations):
             self.psi = self._iterate(return_psi=iter==niterations-1)

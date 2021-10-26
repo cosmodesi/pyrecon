@@ -112,7 +112,8 @@ def main(args=None):
         config['output']['randoms_fn'] = opt.output_randoms_fn
 
     ReconstructionAlgorithm = getattr(pyrecon,config['algorithm'].pop('name'))
-    config_cosmo = {name:value for name,value in config['cosmology'].items() if name in ['f','bias','los']}
+    config_cosmo = {name:value for name,value in config['cosmology'].items() if name in ['f','bias']}
+    config_cosmo['los'] = config['algorithm'].pop('los',None)
     convention = config['algorithm'].pop('convention')
     nthreads = config['algorithm'].pop('nthreads',None)
     allowed = ['recsym','reciso']
@@ -173,6 +174,7 @@ def main(args=None):
     weights = {}
     input_format = {}
     keep_input_columns = {}
+    has_randoms = True
     for name in ['data','randoms']:
         # first get format, xyz or rdz
         input_format[name] = None
@@ -196,7 +198,15 @@ def main(args=None):
             raise ConfigError('Unkown input format {}. Choices are {}'.format(allowed_formats))
         position_columns = make_list(position_columns)
 
-        fn = os.path.join(config['input'].get('dir',''),config['input']['{}_fn'.format(name)])
+        key_fn = '{}_fn'.format(name)
+        if config['input'].get(key_fn, None) is None:
+            if name == 'randoms':
+                logger.info('No randoms provided, assuming uniform randoms.')
+                has_randoms = False
+                break
+            else:
+                raise ConfigError('Please provide data catalog.')
+        fn = os.path.join(config['input'].get('dir',''),config['input'][key_fn])
         mask_str = config['input'].get('mask_{}'.format(name),config['input'].get('mask',None))
         mask_str, mask_columns = decode_eval_str(mask_str)
         weight_str, weight_columns = decode_eval_str(mask_str)
@@ -266,9 +276,9 @@ def main(args=None):
 
         catalogs[name] = catalog
 
-    recon = ReconstructionAlgorithm(**config_cosmo,**config['mesh'],positions=positions['randoms'],nthreads=nthreads)
+    recon = ReconstructionAlgorithm(**config_cosmo,**config['mesh'],positions=positions['randoms'] if has_randoms else None,nthreads=nthreads)
     recon.assign_data(positions['data'],weights['data'])
-    recon.assign_randoms(positions['randoms'],weights['randoms'])
+    if has_randoms: recon.assign_randoms(positions['randoms'],weights['randoms'])
     recon.set_density_contrast(**config['delta'])
     recon.run(**config['algorithm'])
 
@@ -277,9 +287,12 @@ def main(args=None):
         positions_rec['data'] = positions['data'] - recon.read_shifts('data')
     else:
         positions_rec['data'] = positions['data'] - recon.read_shifts(positions['data'])
-    positions_rec['randoms'] = positions['randoms'] - recon.read_shifts(positions['randoms'],with_rsd=convention.lower() == 'recsym')
+    if has_randoms:
+        positions_rec['randoms'] = positions['randoms'] - recon.read_shifts(positions['randoms'],with_rsd=convention.lower() == 'recsym')
 
-    for name in ['data','randoms']:
+    names = ['data']
+    if has_randoms: names += ['randoms']
+    for name in names:
         catalog = catalogs[name]
         columns = list(keep_input_columns[name])
         for rec,positions_ in zip(['','_rec'],[positions[name],positions_rec[name]]):

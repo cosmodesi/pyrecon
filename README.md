@@ -14,13 +14,16 @@ from pyrecon import MultiGridReconstruction
 # line-of-sight "los" can be 'local' (default) or an axis, 'x', 'y', 'z', or a 3-vector.
 recon = MultiGridReconstruction(f=0.8,bias=2.0,los='local',nmesh=512,boxsize=1000.,boxcenter=2000.)
 recon.assign_data(positions_data,weights_data)
+# you can skip the following line if you assume uniform selection function (randoms)
 recon.assign_randoms(positions_randoms,weights_randoms)
 recon.set_density_contrast()
 recon.run()
+# if you are using IterativeFFTReconstruction, displacements are to be taken at the reconstructed data real-space positions;
+# in this case, do: positions_rec_data = positions_data - recon.read_shifts('data')
 positions_rec_data = positions_data - recon.read_shifts(positions_data)
 # RecSym = remove large scale RSD from randoms
 positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms)
-# Or RecIso
+# or RecIso
 # positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms,with_rsd=False)
 ```
 Also provided a script to run reconstruction as a standalone:

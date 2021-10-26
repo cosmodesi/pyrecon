@@ -140,9 +140,13 @@ class BaseReconstruction(BaseClass):
         """Same as :meth:`assign_data`, but for random objects."""
         self.mesh_randoms.assign_cic(positions, weights=weights)
 
+    @property
+    def has_randoms(self):
+        return self.mesh_randoms.value is not None
+
     def set_density_contrast(self, **kwargs):
-        """
-        Set :math:`mesh_delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`;
+        r"""
+        Set :math:`\delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`;
         to be re-implemented in your algorithm.
         Eventually we will probably converge on a base method for all reconstructions.
         """

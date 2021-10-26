@@ -31,8 +31,8 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         self._lib = ctypes.CDLL(self._path_lib.format(self.mesh_data._precision),mode=ctypes.RTLD_LOCAL)
 
     def set_density_contrast(self, ran_min=0.75, smoothing_radius=15., **kwargs):
-        """
-        Set :math:`mesh_delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
+        r"""
+        Set :math:`\delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
 
         Note
         ----
@@ -50,6 +50,11 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         kwargs : dict
             Optional arguments for :meth:`RealMesh.smooth_gaussian`.
         """
+        if not self.has_randoms:
+            self.mesh_delta = self.mesh_data/np.mean(self.mesh_data) - 1.
+            self.mesh_delta /= self.bias
+            self.mesh_delta.smooth_gaussian(smoothing_radius,**kwargs)
+            return
         # Martin's notes:
         # We remove any points which have too few randoms for a decent
         # density estimate -- this is "fishy", but it tames some of the
@@ -132,8 +137,8 @@ class MultiGridReconstruction(OriginalMultiGridReconstruction):
     """Any update / test / improvement upon original algorithm."""
 
     def set_density_contrast(self, ran_min=0.75, smoothing_radius=15., **kwargs):
-        """
-        Set :math:`mesh_delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
+        r"""
+        Set :math:`\delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
 
         Note
         ----
@@ -151,6 +156,11 @@ class MultiGridReconstruction(OriginalMultiGridReconstruction):
         kwargs : dict
             Optional arguments for :meth:`RealMesh.smooth_gaussian`.
         """
+        if not self.has_randoms:
+            self.mesh_delta = self.mesh_data/np.mean(self.mesh_data) - 1.
+            self.mesh_delta /= self.bias
+            self.mesh_delta.smooth_gaussian(smoothing_radius,**kwargs)
+            return
         # Martin's notes:
         # We remove any points which have too few randoms for a decent
         # density estimate -- this is "fishy", but it tames some of the

@@ -199,6 +199,7 @@ class BaseMesh(NDArrayLike,BaseClass,metaclass=BaseMetaClass):
 
     def __repr__(self):
         info = ['{}={}'.format(name,getattr(self.info,name)) for name in self.info._attrs]
+        info += ['dtype={}'.format(self.dtype)]
         return '{}({})'.format(self.__class__.__name__,', '.join(info))
 
     def deepcopy(self, copy_value=True):

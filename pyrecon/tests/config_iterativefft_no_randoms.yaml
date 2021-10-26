@@ -1,26 +1,21 @@
 input:
   dir: ./_catalogs
-  xyz: Position
+  xyz: RSDPosition
   #rdz: [RA, DEC, Z]
-  data_fn: data.fits
-  randoms_fn: randoms.fits
-  weight: ${Weight}
+  data_fn: box_data.fits
 
 output:
   dir: ./_catalogs
-  data_fn: data_rec_script.fits
-  randoms_fn: randoms_rec_script.fits
-  xyz: Position
+  data_fn: script_box_data_rec.fits
   xyz_rec: Position_rec
-  rdz_rec: [ra_rec, dec_rec, z_rec]
-  columns: [NZ, Weight]
+  columns: [RSDPosition]
 
 algorithm:
-  name: MultiGridReconstruction
+  name: IterativeFFTReconstruction
   #name: IterativeFFTReconstruction
   convention: RecSym
   nthreads: 4
-  los: local
+  los: x
   # other algorithm-related parameters
 
 delta:
@@ -29,8 +24,9 @@ delta:
 cosmology:
   bias: 2.0
   f: 0.8
-  Omega_m: 0.3
 
 mesh:
+  boxsize: 800.
+  boxcenter: 400.
   nmesh: 128
   dtype: f8

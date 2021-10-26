@@ -25,9 +25,21 @@ def test_random():
     recon.set_density_contrast()
     recon.run(jacobi_niterations=1,vcycle_niterations=1)
     #recon.run()
-    recon.f = recon.beta
     #print(recon.read_shifts(data['Position']))
-    assert np.all(recon.read_shifts(data['Position']) < 2.)
+    assert np.all(np.abs(recon.read_shifts(data['Position'])) < 2.)
+
+
+def test_no_nrandoms():
+    boxsize = 1000.
+    data = get_random_catalog(boxsize=boxsize,seed=42)
+    recon = MultiGridReconstruction(f=0.8,bias=2.,los='x',nthreads=4,boxcenter=boxsize/2.,boxsize=boxsize,nmesh=8,dtype='f8')
+    recon.assign_data(data['Position'],data['Weight'])
+    assert not recon.has_randoms
+    recon.set_density_contrast()
+    assert np.allclose(np.mean(recon.mesh_delta), 0.)
+    recon.run(jacobi_niterations=1,vcycle_niterations=1)
+    #recon.run()
+    assert np.all(np.abs(recon.read_shifts(data['Position'])) < 2.)
 
 
 def test_dtype():
@@ -45,6 +57,25 @@ def test_dtype():
     recon_f8.run()
     assert not np.all(recon_f4.mesh_phi == recon_f8.mesh_phi)
     assert np.allclose(recon_f4.mesh_phi,recon_f8.mesh_phi,rtol=1e-2,atol=1e-2)
+
+
+def test_dtype():
+    data = get_random_catalog(seed=42)
+    randoms = get_random_catalog(seed=84)
+    recon_f4 = MultiGridReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=64,dtype='f4')
+    recon_f4.assign_data(data['Position'],data['Weight'])
+    recon_f4.assign_randoms(randoms['Position'],randoms['Weight'])
+    recon_f4.set_density_contrast()
+    recon_f4.run()
+    shifts_f4 = recon_f4.read_shifts(data['Position'],with_rsd=True)
+    recon_f8 = MultiGridReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=64,dtype='f8')
+    recon_f8.assign_data(data['Position'],data['Weight'])
+    recon_f8.assign_randoms(randoms['Position'],randoms['Weight'])
+    recon_f8.set_density_contrast()
+    recon_f8.run()
+    shifts_f8 = recon_f8.read_shifts(data['Position'],with_rsd=True)
+    assert not np.all(shifts_f4 == shifts_f8)
+    assert np.allclose(shifts_f4,shifts_f8,rtol=1e-2,atol=1e-2)
 
 
 def test_los():
@@ -159,6 +190,7 @@ def compare_ref(data_fn, output_data_fn, ref_output_data_fn):
     print('rel test - ref',np.max(distance(output_positions-ref_output_positions)/distance(ref_output_positions-positions)))
     print('test',np.mean(distance(output_positions-positions)))
     print('ref',np.mean(distance(ref_output_positions-positions)))
+    assert np.allclose(output_positions,ref_output_positions,rtol=1e-7,atol=1e-7)
 
 
 def test_script(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
@@ -166,7 +198,7 @@ def test_script(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
     catalog_dir = '_catalogs'
     command = 'pyrecon config_multigrid.yaml --data-fn {} --randoms-fn {} --output-data-fn {} --output-randoms-fn {}'.format(
                 os.path.relpath(data_fn,catalog_dir),os.path.relpath(randoms_fn,catalog_dir),
-                os.path.relpath(script_output_data_fn,catalog_dir),os.path.relpath(script_output_randoms_fn,catalog_dir))
+                os.path.relpath(output_data_fn,catalog_dir),os.path.relpath(output_randoms_fn,catalog_dir))
     subprocess.call(command,shell=True)
     data = fitsio.read(data_fn,columns=['Position','Weight'])
     randoms = fitsio.read(randoms_fn,columns=['Position','Weight'])
@@ -187,6 +219,33 @@ def test_script(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
     #print(ref_positions_rec_data,data['Position_rec'],ref_positions_rec_data-data['Position_rec'])
     assert np.allclose(ref_positions_rec_data,data['Position_rec'])
     assert np.allclose(ref_positions_rec_randoms,randoms['Position_rec'])
+
+
+def test_script_no_randoms(data_fn, output_data_fn):
+
+    catalog_dir = '_catalogs'
+    command = 'pyrecon config_multigrid_no_randoms.yaml --data-fn {} --output-data-fn {}'.format(
+                os.path.relpath(data_fn,catalog_dir),os.path.relpath(output_data_fn,catalog_dir))
+    subprocess.call(command,shell=True)
+    data = fitsio.read(data_fn)
+    boxsize = 800
+    boxcenter = boxsize/2.
+    recon = MultiGridReconstruction(nthreads=4,los='x',boxcenter=boxcenter,boxsize=boxsize,nmesh=128,dtype='f8')
+    recon.set_cosmo(f=0.8,bias=2.)
+    recon.assign_data(data['RSDPosition'])
+    recon.set_density_contrast()
+    recon.run()
+
+    ref_positions_rec_data = data['RSDPosition'] - recon.read_shifts(data['RSDPosition'])
+    #velocityoffset = recon.read_shifts(data['RSDPosition'],with_rsd=True) - recon.read_shifts(data['RSDPosition'],with_rsd=False)
+    #print(velocityoffset)
+    #print(data['VelocityOffset'])
+    #assert np.all(np.abs(velocityoffset[:,0] - data['VelocityOffset'][:,0]) < np.abs(data['VelocityOffset'][:,0]))
+
+    data = fitsio.read(output_data_fn,columns=['Position_rec'])
+
+    #print(ref_positions_rec_data,data['Position_rec'],ref_positions_rec_data-data['Position_rec'])
+    assert np.allclose(ref_positions_rec_data,data['Position_rec'])
 
 
 def compute_power(*list_data_randoms):
@@ -220,28 +279,54 @@ def compute_power(*list_data_randoms):
     plt.show()
 
 
+def compute_power_no_randoms(list_data, list_positions):
+
+    from matplotlib import pyplot as plt
+    from nbodykit.lab import FITSCatalog, FFTPower
+
+    for linestyle,data_fn,position in zip(['-','--'],list_data,list_positions):
+
+        data = FITSCatalog(data_fn)
+        BoxSize = 800.
+        Nmesh = 128
+        ells = (0,2,4)
+        mesh = data.to_mesh(position=position,BoxSize=BoxSize,Nmesh=Nmesh,resampler='tsc',interlaced=True,compensated=True)
+        power = FFTPower(mesh,mode='2d',poles=ells,kmin=0.,dk=0.01,los=[1,0,0])
+        poles = power.poles
+
+        for ill,ell in enumerate(ells):
+            pk = poles['power_{:d}'.format(ell)] - power.attrs['shotnoise'] if ell == 0 else poles['power_{:d}'.format(ell)]
+            plt.plot(poles['k'],poles['k']*pk,color='C{:d}'.format(ill),linestyle=linestyle)
+
+    plt.xlabel('$k$ [$h/\mathrm{Mpc}$]')
+    plt.ylabel('$kP(k)$ [$(\mathrm{Mpc}/h)^{2}$]')
+    plt.show()
+
+
 if __name__ == '__main__':
 
     #with MemoryMonitor() as mem:
     #    for i in range(2):
     #        test_random()
     import utils
-    from utils import data_fn, randoms_fn, catalog_dir, MemoryMonitor
+    from utils import box_data_fn, data_fn, randoms_fn, catalog_dir, MemoryMonitor
     from pyrecon.utils import setup_logging
 
     setup_logging()
     # Uncomment to compute catalogs needed for these tests
-    #utils.setup()
+    utils.setup()
 
     recon_code = os.path.join(os.path.abspath(os.path.dirname(__file__)),'_codes','recon')
     output_data_fn = os.path.join(catalog_dir,'data_rec.fits')
     output_randoms_fn = os.path.join(catalog_dir,'randoms_rec.fits')
     ref_output_data_fn = os.path.join(catalog_dir,'ref_data_rec.fits')
     ref_output_randoms_fn = os.path.join(catalog_dir,'ref_randoms_rec.fits')
+    script_output_box_data_fn = os.path.join(catalog_dir,'script_box_data_rec.fits')
     script_output_data_fn = os.path.join(catalog_dir,'script_data_rec.fits')
     script_output_randoms_fn = os.path.join(catalog_dir,'script_randoms_rec.fits')
-
+    
     test_random()
+    test_no_nrandoms()
     test_dtype()
     test_los()
     test_recon(data_fn,randoms_fn,output_data_fn,output_randoms_fn)
@@ -249,6 +334,8 @@ if __name__ == '__main__':
     compare_ref(data_fn,output_data_fn,ref_output_data_fn)
     compare_ref(randoms_fn,output_randoms_fn,ref_output_randoms_fn)
     test_script(data_fn,randoms_fn,script_output_data_fn,script_output_randoms_fn)
+    test_script_no_randoms(box_data_fn, script_output_box_data_fn)
+    #compute_power_no_randoms([script_output_box_data_fn]*2, ['RSDPosition','Position_rec'])
     #compute_power((data_fn,randoms_fn),(output_data_fn,output_randoms_fn))
     #compute_power((data_fn,randoms_fn),(ref_output_data_fn,ref_output_randoms_fn))
     #compute_power((ref_output_data_fn,ref_output_randoms_fn),(output_data_fn,output_randoms_fn))
