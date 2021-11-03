@@ -5,26 +5,28 @@
 **pyrecon** is a package to perform reconstruction within Python, using different algorithms, so far:
 
   - MultiGridReconstruction, based on Martin J. White's code https://github.com/martinjameswhite/recon_code
-  - IterativeFFTReconstruction, based on Julian E. Bautista's code https://github.com/julianbautista/eboss_clustering/blob/master/python/recon.py
+  - IterativeFFTParticleReconstruction, based on Julian E. Bautista's code https://github.com/julianbautista/eboss_clustering/blob/master/python/recon.py
+  - IterativeFFTReconstruction, iterative algorithm of Burden et al. 2015 (https://arxiv.org/abs/1504.02591) at the field-level (as opposed to IterativeFFTParticleReconstruction)
+  - PlaneParallelFFTReconstruction, base algorithm of Eisenstein et al. 2007 (https://arxiv.org/pdf/astro-ph/0604362.pdf), in the plane-parallel approximation.
 
 With Python, a typical reconstruction run is (e.g. for MultiGridReconstruction; the same works for other algorithms):
 ```
 from pyrecon import MultiGridReconstruction
 
-# line-of-sight "los" can be 'local' (default) or an axis, 'x', 'y', 'z', or a 3-vector.
-recon = MultiGridReconstruction(f=0.8,bias=2.0,los='local',nmesh=512,boxsize=1000.,boxcenter=2000.)
-recon.assign_data(positions_data,weights_data)
+# line-of-sight "los" can be 'local' (default) or an axis, 'x', 'y', 'z', or a 3-vector
+recon = MultiGridReconstruction(f=0.8, bias=2.0, los='local', nmesh=512, boxsize=1000., boxcenter=2000.)
+recon.assign_data(positions_data, weights_data) # positions_data are a (N, 3) array of Cartesian positions, weights a (N,) array
 # you can skip the following line if you assume uniform selection function (randoms)
-recon.assign_randoms(positions_randoms,weights_randoms)
+recon.assign_randoms(positions_randoms, weights_randoms)
 recon.set_density_contrast()
 recon.run()
-# if you are using IterativeFFTReconstruction, displacements are to be taken at the reconstructed data real-space positions;
+# if you are using IterativeFFTParticleReconstruction, displacements are to be taken at the reconstructed data real-space positions;
 # in this case, do: positions_rec_data = positions_data - recon.read_shifts('data')
 positions_rec_data = positions_data - recon.read_shifts(positions_data)
 # RecSym = remove large scale RSD from randoms
 positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms)
 # or RecIso
-# positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms,with_rsd=False)
+# positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms, with_rsd=False)
 ```
 Also provided a script to run reconstruction as a standalone:
 ```

@@ -11,8 +11,7 @@ output:
   columns: [RSDPosition]
 
 algorithm:
-  name: IterativeFFTReconstruction
-  #name: IterativeFFTReconstruction
+  name: IterativeFFTParticleReconstruction
   convention: RecSym
   nthreads: 4
   los: x

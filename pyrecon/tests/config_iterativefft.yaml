@@ -16,7 +16,7 @@ output:
   columns: [NZ, Weight]
 
 algorithm:
-  name: IterativeFFTReconstruction
+  name: IterativeFFTParticleReconstruction
   convention: RecSym
   nthreads: 4
   los: local

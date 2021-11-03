@@ -200,7 +200,7 @@ def sky_to_cartesian(dist, ra, dec, degree=True, dtype=None):
 
     Returns
     -------
-    position : array of shape (N,)
+    position : array of shape (N, 3)
         Position in cartesian coordinates.
     """
     conversion = 1.

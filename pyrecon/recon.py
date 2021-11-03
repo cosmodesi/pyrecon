@@ -6,6 +6,11 @@ from .mesh import RealMesh
 from .utils import BaseClass
 
 
+class ReconstructionError(Exception):
+
+    """Error raised when issue with reconstruction."""
+
+
 class BaseReconstruction(BaseClass):
     """
     Base template reconstruction class.
@@ -60,9 +65,9 @@ class BaseReconstruction(BaseClass):
         bias : float
             Galaxy bias.
 
-        los : string, array
-            If ``los`` is ``None`` or "local", use local (varying) line-of-sight.
-            Else, may be "x", "y" or "z", for one of the cartesian axes.
+        los : string, array, default=None
+            If ``los`` is ``None`` or 'local', use local (varying) line-of-sight.
+            Else, may be 'x', 'y' or 'z', for one of the Cartesian axes.
             Else, a 3-vector.
 
         kwargs : dict
@@ -108,8 +113,8 @@ class BaseReconstruction(BaseClass):
         Parameters
         ----------
         los : string, array
-            If ``los`` is ``None`` or "local", use local (varying) line-of-sight.
-            Else, may be "x", "y" or "z", for one of the cartesian axes.
+            If ``los`` is ``None`` or 'local', use local (varying) line-of-sight.
+            Else, may be 'x', 'y' or 'z', for one of the Cartesian axes.
             Else, a 3-vector.
         """
         if los in [None, 'local']:

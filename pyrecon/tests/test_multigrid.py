@@ -50,23 +50,6 @@ def test_dtype():
     recon_f4.assign_randoms(randoms['Position'],randoms['Weight'])
     recon_f4.set_density_contrast()
     recon_f4.run()
-    recon_f8 = MultiGridReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=64,dtype='f8')
-    recon_f8.assign_data(data['Position'],data['Weight'])
-    recon_f8.assign_randoms(randoms['Position'],randoms['Weight'])
-    recon_f8.set_density_contrast()
-    recon_f8.run()
-    assert not np.all(recon_f4.mesh_phi == recon_f8.mesh_phi)
-    assert np.allclose(recon_f4.mesh_phi,recon_f8.mesh_phi,rtol=1e-2,atol=1e-2)
-
-
-def test_dtype():
-    data = get_random_catalog(seed=42)
-    randoms = get_random_catalog(seed=84)
-    recon_f4 = MultiGridReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=64,dtype='f4')
-    recon_f4.assign_data(data['Position'],data['Weight'])
-    recon_f4.assign_randoms(randoms['Position'],randoms['Weight'])
-    recon_f4.set_density_contrast()
-    recon_f4.run()
     shifts_f4 = recon_f4.read_shifts(data['Position'],with_rsd=True)
     recon_f8 = MultiGridReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=64,dtype='f8')
     recon_f8.assign_data(data['Position'],data['Weight'])
@@ -206,7 +189,6 @@ def test_script(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
     recon.set_cosmo(f=0.8,bias=2.)
     recon.assign_data(data['Position'],data['Weight'])
     recon.assign_randoms(randoms['Position'],randoms['Weight'])
-
     recon.set_density_contrast()
     recon.run()
 
@@ -314,7 +296,7 @@ if __name__ == '__main__':
 
     setup_logging()
     # Uncomment to compute catalogs needed for these tests
-    utils.setup()
+    #utils.setup()
 
     recon_code = os.path.join(os.path.abspath(os.path.dirname(__file__)),'_codes','recon')
     output_data_fn = os.path.join(catalog_dir,'data_rec.fits')
@@ -324,7 +306,7 @@ if __name__ == '__main__':
     script_output_box_data_fn = os.path.join(catalog_dir,'script_box_data_rec.fits')
     script_output_data_fn = os.path.join(catalog_dir,'script_data_rec.fits')
     script_output_randoms_fn = os.path.join(catalog_dir,'script_randoms_rec.fits')
-    
+
     test_random()
     test_no_nrandoms()
     test_dtype()

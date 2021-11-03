@@ -53,7 +53,7 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         if not self.has_randoms:
             self.mesh_delta = self.mesh_data/np.mean(self.mesh_data) - 1.
             self.mesh_delta /= self.bias
-            self.mesh_delta.smooth_gaussian(smoothing_radius,**kwargs)
+            self.mesh_delta.smooth_gaussian(smoothing_radius, **kwargs)
             return
         # Martin's notes:
         # We remove any points which have too few randoms for a decent
@@ -78,7 +78,7 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         # regions with delta != 0.
         mask = self.mesh_delta != 0.
         self.mesh_delta[mask] -= np.mean(self.mesh_delta[mask])
-        self.mesh_delta.smooth_gaussian(smoothing_radius,**kwargs)
+        self.mesh_delta.smooth_gaussian(smoothing_radius, **kwargs)
 
     def run(self, jacobi_damping_factor=0.4, jacobi_niterations=5, vcycle_niterations=6):
         """

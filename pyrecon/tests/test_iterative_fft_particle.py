@@ -5,7 +5,7 @@ import subprocess
 import numpy as np
 import fitsio
 
-from pyrecon.iterativefft import OriginalIterativeFFTReconstruction, IterativeFFTReconstruction
+from pyrecon.iterative_fft_particle import OriginalIterativeFFTParticleReconstruction, IterativeFFTParticleReconstruction
 from pyrecon.utils import distance
 from test_multigrid import get_random_catalog
 
@@ -19,7 +19,7 @@ from recon import Recon
 def test_no_nrandoms():
     boxsize = 1000.
     data = get_random_catalog(boxsize=boxsize,seed=42)
-    recon = IterativeFFTReconstruction(f=0.8,bias=2.,los='x',nthreads=4,boxcenter=boxsize/2.,boxsize=boxsize,nmesh=8,dtype='f8')
+    recon = IterativeFFTParticleReconstruction(f=0.8,bias=2.,los='x',nthreads=4,boxcenter=boxsize/2.,boxsize=boxsize,nmesh=8,dtype='f8')
     recon.assign_data(data['Position'],data['Weight'])
     assert not recon.has_randoms
     recon.set_density_contrast()
@@ -31,13 +31,13 @@ def test_no_nrandoms():
 def test_dtype():
     data = get_random_catalog(seed=42)
     randoms = get_random_catalog(seed=84)
-    recon_f4 = IterativeFFTReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=64,dtype='f4')
+    recon_f4 = IterativeFFTParticleReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=64,dtype='f4')
     recon_f4.assign_data(data['Position'],data['Weight'])
     recon_f4.assign_randoms(randoms['Position'],randoms['Weight'])
     recon_f4.set_density_contrast()
     recon_f4.run()
     shifts_f4 = recon_f4.read_shifts(data['Position'],with_rsd=True)
-    recon_f8 = IterativeFFTReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=64,dtype='f8')
+    recon_f8 = IterativeFFTParticleReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=64,dtype='f8')
     recon_f8.assign_data(data['Position'],data['Weight'])
     recon_f8.assign_randoms(randoms['Position'],randoms['Weight'])
     recon_f8.set_density_contrast()
@@ -52,7 +52,7 @@ def test_los():
     boxcenter = [boxsize/2]*3
     data = get_random_catalog(boxsize=boxsize,seed=42)
     randoms = get_random_catalog(boxsize=boxsize,seed=84)
-    recon = IterativeFFTReconstruction(f=0.8,bias=2.,los='x',nthreads=4,boxcenter=boxcenter,boxsize=boxsize,nmesh=64,dtype='f8')
+    recon = IterativeFFTParticleReconstruction(f=0.8,bias=2.,los='x',nthreads=4,boxcenter=boxcenter,boxsize=boxsize,nmesh=64,dtype='f8')
     recon.assign_data(data['Position'],data['Weight'])
     recon.assign_randoms(randoms['Position'],randoms['Weight'])
     recon.set_density_contrast()
@@ -62,7 +62,7 @@ def test_los():
     boxcenter[0] += offset
     data['Position'][:,0] += offset
     randoms['Position'][:,0] += offset
-    recon = IterativeFFTReconstruction(f=0.8,bias=2.,nthreads=4,boxcenter=boxcenter,boxsize=boxsize,nmesh=64,dtype='f8')
+    recon = IterativeFFTParticleReconstruction(f=0.8,bias=2.,nthreads=4,boxcenter=boxcenter,boxsize=boxsize,nmesh=64,dtype='f8')
     recon.assign_data(data['Position'],data['Weight'])
     recon.assign_randoms(randoms['Position'],randoms['Weight'])
     recon.set_density_contrast()
@@ -110,7 +110,7 @@ def test_iterative_fft(data_fn, randoms_fn):
     print('')
     print('#'*50)
     print('')
-    recon = OriginalIterativeFFTReconstruction(f=recon_ref.f,bias=recon_ref.bias,boxsize=boxsize,boxcenter=boxcenter,nmesh=nmesh,fft_engine='numpy',nthreads=nthreads)
+    recon = OriginalIterativeFFTParticleReconstruction(f=recon_ref.f,bias=recon_ref.bias,boxsize=boxsize,boxcenter=boxcenter,nmesh=nmesh,fft_engine='numpy',nthreads=nthreads)
     recon.assign_data(data['Position'],data['Weight'])
     recon.assign_randoms(randoms['Position'],randoms['Weight'])
     recon.set_density_contrast(smoothing_radius=smooth)
@@ -132,7 +132,7 @@ def test_script(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
     subprocess.call(command,shell=True)
     data = fitsio.read(data_fn,columns=['Position','Weight'])
     randoms = fitsio.read(randoms_fn,columns=['Position','Weight'])
-    recon = IterativeFFTReconstruction(nthreads=4,positions=randoms['Position'],nmesh=128,dtype='f8')
+    recon = IterativeFFTParticleReconstruction(nthreads=4,positions=randoms['Position'],nmesh=128,dtype='f8')
     recon.set_cosmo(f=0.8,bias=2.)
     recon.assign_data(data['Position'],data['Weight'])
     recon.assign_randoms(randoms['Position'],randoms['Weight'])
@@ -160,7 +160,7 @@ def test_script_no_randoms(data_fn, output_data_fn):
     data = fitsio.read(data_fn)
     boxsize = 800
     boxcenter = boxsize/2.
-    recon = IterativeFFTReconstruction(nthreads=4,los='x',boxcenter=boxcenter,boxsize=boxsize,nmesh=128,dtype='f8')
+    recon = IterativeFFTParticleReconstruction(nthreads=4,los='x',boxcenter=boxcenter,boxsize=boxsize,nmesh=128,dtype='f8')
     recon.set_cosmo(f=0.8,bias=2.)
     recon.assign_data(data['RSDPosition'])
     recon.set_density_contrast()

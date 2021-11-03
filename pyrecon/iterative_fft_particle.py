@@ -6,7 +6,7 @@ from .recon import BaseReconstruction
 from . import utils
 
 
-class OriginalIterativeFFTReconstruction(BaseReconstruction):
+class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
     """
     Exact re-implementation of Bautista et al. 2018 (https://arxiv.org/pdf/1712.08064.pdf) algorithm
     at https://github.com/julianbautista/eboss_clustering/blob/master/python/recon.py.
@@ -15,7 +15,7 @@ class OriginalIterativeFFTReconstruction(BaseReconstruction):
     """
     def __init__(self, fft_engine='numpy', fft_wisdom=None, **kwargs):
         """
-        Initialize :class:`IterativeFFTReconstruction`.
+        Initialize :class:`IterativeFFTParticleReconstruction`.
 
         Parameters
         ----------
@@ -28,11 +28,11 @@ class OriginalIterativeFFTReconstruction(BaseReconstruction):
         kwargs : dict
             See :class:`BaseReconstruction` for parameters.
         """
-        super(OriginalIterativeFFTReconstruction,self).__init__(**kwargs)
+        super(OriginalIterativeFFTParticleReconstruction,self).__init__(**kwargs)
         kwargs = {}
-        if fft_wisdom is not None: kwargs['wisdom'] = 'fft_wisdom'
+        if fft_wisdom is not None: kwargs['wisdom'] = fft_wisdom
         kwargs['hermitian'] = False
-        self.fft_engine = self.mesh_data.get_fft_engine(fft_engine,**kwargs)
+        self.fft_engine = self.mesh_data.get_fft_engine(fft_engine, **kwargs)
 
     def assign_data(self, positions, weights=None):
         """
@@ -52,7 +52,7 @@ class OriginalIterativeFFTReconstruction(BaseReconstruction):
 
     def assign_randoms(self, positions, weights=None):
         """
-        Assign (paint) data to :attr:`mesh_data`.
+        Assign (paint) randoms to :attr:`mesh_randoms`.
         Keeps track of sum of weights (for :meth:`set_density_contrast`).
         See :meth:`BaseReconstruction.assign_randoms` for parameters.
         """
@@ -61,7 +61,7 @@ class OriginalIterativeFFTReconstruction(BaseReconstruction):
         if self.mesh_randoms.value is None:
             self._sum_randoms = 0.
             self._size_randoms = 0
-        #super(OriginalIterativeFFTReconstruction,self).assign_randoms(positions,weights=weights)
+        #super(OriginalIterativeFFTParticleReconstruction,self).assign_randoms(positions,weights=weights)
         self.mesh_randoms.assign_cic(positions,weights=weights)
         self._sum_randoms += np.sum(weights)
         self._size_randoms += len(positions)
@@ -96,7 +96,7 @@ class OriginalIterativeFFTReconstruction(BaseReconstruction):
     def run(self, niterations=3):
         """
         Run reconstruction, i.e. compute reconstructed data real-space positions (:attr:`_positions_rec_data`)
-        and Zeldovich displacements fields :attr:`psi`.
+        and Zeldovich displacements fields :attr:`mesh_psi`.
 
         Parameters
         ----------
@@ -109,7 +109,7 @@ class OriginalIterativeFFTReconstruction(BaseReconstruction):
         if self.has_randoms: self.mesh_randoms.smooth_gaussian(self.smoothing_radius,method='fft',engine=self.fft_engine)
         self._positions_rec_data = self._positions_data.copy()
         for iter in range(niterations):
-            self.psi = self._iterate(return_psi=iter==niterations-1)
+            self.mesh_psi = self._iterate(return_psi=iter==niterations-1)
 
     def _iterate(self, return_psi=False):
         self.log_info('Running iteration {:d}.'.format(self._iter))
@@ -117,30 +117,27 @@ class OriginalIterativeFFTReconstruction(BaseReconstruction):
         if self._iter > 0:
             self.mesh_data = self.mesh_delta.copy(value=None)
             # Painting reconstructed data real-space positions
-            super(OriginalIterativeFFTReconstruction,self).assign_data(self._positions_rec_data,weights=self._weights_data) # super in order not to save positions_rec_data
+            super(OriginalIterativeFFTParticleReconstruction,self).assign_data(self._positions_rec_data,weights=self._weights_data) # super in order not to save positions_rec_data
             # Gaussian smoothing before density contrast calculation
             self.mesh_data.smooth_gaussian(self.smoothing_radius,method='fft',engine=self.fft_engine)
 
         self.set_density_contrast(ran_min=self.ran_min)
         del self.mesh_data
-        deltak = self.mesh_delta.to_complex(engine=self.fft_engine)
-        k = deltak.freq()
-        norm2 = sum(k_**2 for k_ in utils.broadcast_arrays(*k))
-        norm2[0,0,0] = 1.
-        deltak /= norm2
-        deltak[0,0,0] = 0.
+        delta_k = self.mesh_delta.to_complex(engine=self.fft_engine)
+        k = utils.broadcast_arrays(*delta_k.coords())
+        k2 = sum(kk**2 for kk in k)
+        k2[0,0,0] = 1.
+        delta_k /= k2
+        delta_k[0,0,0] = 0.
         self.log_info('Computing displacement field.')
         shifts = np.empty_like(self._positions_rec_data)
         psis = []
-        ndim = len(k)
-        for iaxis in range(ndim):
+        for iaxis in range(delta_k.ndim):
             # no need to compute psi on axis where los is 0
             if not return_psi and self.los is not None and self.los[iaxis] == 0:
                 shifts[:,iaxis] = 0.
                 continue
-            sl = [None]*ndim; sl[iaxis] = slice(None)
-            tmp = deltak*1j*k[iaxis][tuple(sl)]
-            psi = tmp.to_real(engine=self.fft_engine)
+            psi = (delta_k*1j*k[iaxis]).to_real(engine=self.fft_engine)
             # Reading shifts at reconstructed data real-space positions
             shifts[:,iaxis] = psi.read_cic(self._positions_rec_data)
             if return_psi: psis.append(psi)
@@ -152,8 +149,8 @@ class OriginalIterativeFFTReconstruction(BaseReconstruction):
         else:
             los = self.los
         # Comments in Julian's code:
-        # For first loop need to approximately remove RSD component from psi to speed up calculation
-        # See Burden 2015: 1504.02591v2, eq. 12 (flat sky approximation)
+        # For first loop need to approximately remove RSD component from psi to speed up convergence
+        # See Burden et al. 2015: 1504.02591v2, eq. 12 (flat sky approximation)
         if self._iter == 0:
             shifts -= self.beta/(1+self.beta)*np.sum(shifts*los,axis=-1)[:,None]*los
         # Comments in Julian's code:
@@ -193,7 +190,7 @@ class OriginalIterativeFFTReconstruction(BaseReconstruction):
         """
         def read_cic(positions):
             shifts = np.empty_like(positions)
-            for iaxis,psi in enumerate(self.psi):
+            for iaxis,psi in enumerate(self.mesh_psi):
                 shifts[:,iaxis] = psi.read_cic(positions)
             return shifts
 
@@ -213,6 +210,6 @@ class OriginalIterativeFFTReconstruction(BaseReconstruction):
 
 
 
-class IterativeFFTReconstruction(OriginalIterativeFFTReconstruction):
+class IterativeFFTParticleReconstruction(OriginalIterativeFFTParticleReconstruction):
 
     """Any update / test / improvement upon original algorithm."""

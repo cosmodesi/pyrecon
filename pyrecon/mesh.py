@@ -403,6 +403,13 @@ class RealMesh(BaseMesh):
         # Return ctypes-type for numpy array
         return ctypeslib.ndpointer(dtype=self._type_float,shape=np.prod(self.nmesh),flags='C')
 
+    def coords(self):
+        """Return array of coordinates along each axis."""
+        toret = []
+        for idim,(n,o,d) in enumerate(zip(self.nmesh,self.offset,self.boxsize/self.nmesh)):
+            toret.append(o + d*np.arange(n))
+        return tuple(toret)
+
     def set_num_threads(self, nthreads=None):
         """Set number of OpenMP threads."""
         if nthreads is not None:
@@ -527,7 +534,7 @@ class RealMesh(BaseMesh):
         if method == 'fft':
             engine = self.get_fft_engine(**kwargs)
             valuek = self.to_complex(engine=engine)
-            k2 = sum(-0.5*(r*k)**2 for r,k in zip(radius_,utils.broadcast_arrays(*valuek.freq())))
+            k2 = sum(-0.5*(r*k)**2 for r,k in zip(radius_,utils.broadcast_arrays(*valuek.coords())))
             valuek *= np.exp(k2)
             self.value = valuek.to_real(engine=engine).value
             #func = self._lib.smooth_fft_gaussian
@@ -634,7 +641,7 @@ class ComplexMesh(BaseMesh):
         """Fundamental frequency of the mesh along each axis."""
         return 2.*np.pi/self.boxsize
 
-    def freq(self):
+    def coords(self):
         """Return array of frequency (wavenumbers) along each axis."""
         toret = []
         for idim,(n,d) in enumerate(zip(self.nmesh,self.boxsize/self.nmesh)):

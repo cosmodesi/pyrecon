@@ -16,7 +16,7 @@ import numpy as np
 import yaml
 
 import pyrecon
-from pyrecon import __version__, setup_logging, utils, IterativeFFTReconstruction
+from pyrecon import __version__, setup_logging, utils, IterativeFFTParticleReconstruction
 
 
 ascii_art = r"""
@@ -283,7 +283,7 @@ def main(args=None):
     recon.run(**config['algorithm'])
 
     positions_rec = {}
-    if type(recon) is IterativeFFTReconstruction:
+    if type(recon) is IterativeFFTParticleReconstruction:
         positions_rec['data'] = positions['data'] - recon.read_shifts('data')
     else:
         positions_rec['data'] = positions['data'] - recon.read_shifts(positions['data'])
