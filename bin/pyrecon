@@ -122,7 +122,11 @@ def main(args=None):
 
     def get_comoving_distance():
         from astropy.cosmology import FlatLambdaCDM
-        cosmo = FlatLambdaCDM(H0=70,Om0=config['cosmology']['Omega_m'])
+        Omega_m = config['cosmology'].get('Omega_m', None)
+        if Omega_m is None:
+            raise ConfigError('Provide Omega_m for redshift -> distance conversion.')
+        # we do not care about H0, since we work with Mpc/h
+        cosmo = FlatLambdaCDM(H0=70,Om0=Omega_m)
 
         def comoving_distance(z):
             return cosmo.comoving_distance(z).value*cosmo.h
@@ -168,15 +172,43 @@ def main(args=None):
             if col not in columns: columns.append(col)
         return toret, columns
 
+    allowed_selection_functions = ['uniform', 'randoms', '']
+    selection_function = config['delta'].pop('selection_function', '').lower()
+    if selection_function not in allowed_selection_functions:
+        raise ConfigError('Unkown input selection function {}. Choices are {}'.format(selection_function, allowed_selection_functions))
+    # first check what we have in input/output
+    input_fns, output_fns = {}, {}
+    for name in ['data','randoms']:
+        tmp_fn = config['input'].get('{}_fn'.format(name), None)
+        if tmp_fn is None:
+            if name == 'randoms':
+                if selection_function == 'randoms':
+                    raise ConfigError('Please provide randoms catalog.')
+                if not selection_function:
+                    logger.info('No randoms provided.')
+                    selection_function = 'uniform'
+            else:
+                raise ConfigError('Please provide data catalog.')
+        else:
+            input_fns[name] = tmp_fn
+        tmp_fn = config['output'].get('{}_fn'.format(name), None)
+        if tmp_fn is not None:
+            if name not in input_fns:
+                raise ConfigError('Cannot output {} catalog if not provided as input.'.format(name))
+            output_fns[name] = tmp_fn
+    if not selection_function:
+        selection_function = 'randoms'
+    logger.info('Using {} selection function.'.format(selection_function))
+
     allowed_formats = ['rdz','xyz']
     catalogs = {}
     positions = {}
     weights = {}
     input_format = {}
     keep_input_columns = {}
-    has_randoms = True
-    for name in ['data','randoms']:
-        # first get format, xyz or rdz
+
+    for name in input_fns:
+        # first get format, xyz or rdz, from e.g. xyz_data, rdz_randoms
         input_format[name] = None
         for format in allowed_formats:
             cols = config['input'].get('{}_{}'.format(format,name),None)
@@ -185,6 +217,7 @@ def main(args=None):
                     raise ConfigError('Cannot use two different input formats')
                 input_format[name] = format
                 position_columns = cols
+        # fallback on non-differenciation between data and randoms
         if input_format[name] is None:
             for format in allowed_formats:
                 cols = config['input'].get(format,None)
@@ -195,18 +228,10 @@ def main(args=None):
                     position_columns = cols
         format = input_format[name]
         if format is None:
-            raise ConfigError('Unkown input format {}. Choices are {}'.format(allowed_formats))
+            raise ConfigError('Unkown input format. Choices are {}'.format(allowed_formats))
         position_columns = make_list(position_columns)
 
-        key_fn = '{}_fn'.format(name)
-        if config['input'].get(key_fn, None) is None:
-            if name == 'randoms':
-                logger.info('No randoms provided, assuming uniform randoms.')
-                has_randoms = False
-                break
-            else:
-                raise ConfigError('Please provide data catalog.')
-        fn = os.path.join(config['input'].get('dir',''),config['input'][key_fn])
+        fn = os.path.join(config['input'].get('dir',''), input_fns[name])
         mask_str = config['input'].get('mask_{}'.format(name),config['input'].get('mask',None))
         mask_str, mask_columns = decode_eval_str(mask_str)
         weight_str, weight_columns = decode_eval_str(mask_str)
@@ -254,7 +279,7 @@ def main(args=None):
             distance = comoving_distance(catalog[position_columns[2]])
             positions[name] = utils.sky_to_cartesian(distance,catalog[position_columns[0]],catalog[position_columns[1]])
 
-        else:
+        else: # format == 'xyz'
             if len(position_columns) == 3:
                 positions[name] = np.array([catalog[col] for col in position_columns]).T
                 if not config['output'].get('cartesian',None):
@@ -276,9 +301,9 @@ def main(args=None):
 
         catalogs[name] = catalog
 
-    recon = ReconstructionAlgorithm(**config_cosmo,**config['mesh'],positions=positions['randoms'] if has_randoms else None,nthreads=nthreads)
+    recon = ReconstructionAlgorithm(**config_cosmo,**config['mesh'],positions=positions['randoms'] if selection_function == 'randoms' else None,nthreads=nthreads)
     recon.assign_data(positions['data'],weights['data'])
-    if has_randoms: recon.assign_randoms(positions['randoms'],weights['randoms'])
+    if selection_function == 'randoms': recon.assign_randoms(positions['randoms'],weights['randoms'])
     recon.set_density_contrast(**config['delta'])
     recon.run(**config['algorithm'])
 
@@ -287,12 +312,10 @@ def main(args=None):
         positions_rec['data'] = positions['data'] - recon.read_shifts('data')
     else:
         positions_rec['data'] = positions['data'] - recon.read_shifts(positions['data'])
-    if has_randoms:
+    if 'randoms' in output_fns:
         positions_rec['randoms'] = positions['randoms'] - recon.read_shifts(positions['randoms'],with_rsd=convention.lower() == 'recsym')
 
-    names = ['data']
-    if has_randoms: names += ['randoms']
-    for name in names:
+    for name in output_fns:
         catalog = catalogs[name]
         columns = list(keep_input_columns[name])
         for rec,positions_ in zip(['','_rec'],[positions[name],positions_rec[name]]):
@@ -323,7 +346,7 @@ def main(args=None):
                     columns += position_columns
         columns = remove_duplicates(columns)
 
-        fn = os.path.join(config['output'].get('dir',''),config['output']['{}_fn'.format(name)])
+        fn = os.path.join(config['output'].get('dir',''), output_fns[name])
         logger.info('Saving {} catalog to {}.'.format(name,fn))
         is_written = False
         for file_format,exts in extensions.items():
@@ -351,4 +374,5 @@ def main(args=None):
 
 
 if __name__ == '__main__':
+
     main()

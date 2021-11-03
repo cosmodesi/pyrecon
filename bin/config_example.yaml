@@ -31,6 +31,7 @@ algorithm:
 
 delta:
   smoothing_radius: 15                                                          # smoothing radius for reconstruction
+  selection_function: 'randoms'                                                 # selection function, either from 'randoms', or 'uniform' (no input randoms required)
 
 cosmology:
   bias: 1.4                                                                     # galaxy bias

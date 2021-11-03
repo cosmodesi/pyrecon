@@ -3,12 +3,14 @@ input:
   xyz: RSDPosition
   #rdz: [RA, DEC, Z]
   data_fn: box_data.fits
+  #randoms_fn: box_data.fits
 
 output:
   dir: ./_catalogs
   data_fn: script_box_data_rec.fits
   xyz_rec: Position_rec
   columns: [RSDPosition]
+  columns_randoms: [Position]
 
 algorithm:
   name: MultiGridReconstruction
@@ -20,6 +22,7 @@ algorithm:
 
 delta:
   smoothing_radius: 15
+  #selection_function: uniform
 
 cosmology:
   bias: 2.0
