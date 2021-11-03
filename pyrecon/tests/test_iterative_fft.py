@@ -22,7 +22,7 @@ def test_iterative_fft(data_fn, randoms_fn):
     recon.run(niterations=3)
 
     data['Position_rec'] = data['Position'] - recon.read_shifts(data['Position'])
-    randoms['Position_rec'] = randoms['Position'] - recon.read_shifts(randoms['Position'], with_rsd=False)
+    randoms['Position_rec'] = randoms['Position'] - recon.read_shifts(randoms['Position'], field='disp')
 
     from matplotlib import pyplot as plt
     from nbodykit.lab import ArrayCatalog, FKPCatalog, ConvolvedFFTPower

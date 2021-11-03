@@ -48,7 +48,7 @@ A typical reconstruction run is (e.g. for MultiGridReconstruction; the same work
   # RecSym = remove large scale RSD from randoms
   positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms)
   # or RecIso
-  # positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms, with_rsd=False)
+  # positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms, field='disp')
 
 
 **************

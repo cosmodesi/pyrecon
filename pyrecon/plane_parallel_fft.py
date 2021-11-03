@@ -38,7 +38,7 @@ class PlaneParallelFFTReconstruction(BaseReconstruction):
 
     def set_los(self, los=None):
         """
-        Set line-of-sight.
+        Set line of sight.
 
         Parameters
         ----------
@@ -47,7 +47,7 @@ class PlaneParallelFFTReconstruction(BaseReconstruction):
             Else, a 3-vector.
         """
         if los is None:
-            raise ReconstructionError('A (global) line-of-sight must be provided')
+            raise ReconstructionError('A (global) line of sight must be provided')
         if los in ['x', 'y', 'z']:
             self.los = np.zeros(3, dtype=self.mesh_data.dtype)
             self.los['xyz'.index(los)] = 1.
@@ -55,40 +55,13 @@ class PlaneParallelFFTReconstruction(BaseReconstruction):
             los = np.array(los, dtype=self.mesh_data.dtype)
             self.los = los/utils.distance(los)
 
-    def set_density_contrast(self, ran_min=0.75, smoothing_radius=15., **kwargs):
-        r"""
-        Set :math:`\delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
-
-        Parameters
-        ----------
-        ran_min : float, default=0.01
-            :attr:`mesh_randoms` points below this threshold times mean random weights have their density contrast set to 0.
-
-        smoothing_radius : float, default=15
-            Smoothing scale, see :meth:`RealMesh.smooth_gaussian`.
-
-        kwargs : dict
-            Optional arguments for :meth:`RealMesh.smooth_gaussian`.
-        """
-        if not self.has_randoms:
-            self.mesh_delta = self.mesh_data/np.mean(self.mesh_data) - 1.
-            self.mesh_delta /= self.bias
-            self.mesh_delta.smooth_gaussian(smoothing_radius, **kwargs)
-            return
-        alpha = np.sum(self.mesh_data)/np.sum(self.mesh_randoms)
-        self.mesh_delta = self.mesh_data - alpha*self.mesh_randoms
-        mask = self.mesh_randoms > ran_min
-        self.mesh_delta[mask] /= (self.bias*alpha*self.mesh_randoms[mask])
-        self.mesh_delta[~mask] = 0.
-        self.mesh_delta.smooth_gaussian(smoothing_radius, **kwargs)
-
     def run(self):
-        """Run reconstruction, i.e. compute Zeldovich displacements fields :attr:`mesh_psi`."""
+        """Run reconstruction, i.e. compute Zeldovich displacement fields :attr:`mesh_psi`."""
 
         delta_k = self.mesh_delta.to_complex(engine=self.fft_engine)
         k = utils.broadcast_arrays(*delta_k.coords())
         k2 = sum(k_**2 for k_ in k)
-        k2[0,0,0] = 1.
+        k2[0,0,0] = 1. # to avoid dividing by 0
         delta_k /= k2
         mu2 = sum(kk * ll for ll,kk in zip(k, self.los))/k2**0.5
         psis = []
@@ -97,22 +70,3 @@ class PlaneParallelFFTReconstruction(BaseReconstruction):
             psi = tmp.to_real(engine=self.fft_engine)
             psis.append(psi)
         self.mesh_psi = psis
-
-    def read_shifts(self, positions, with_rsd=True):
-        """
-        Read Zeldovich displacement at input positions.
-
-        Parameters
-        ----------
-        positions : array of shape (N,3), string
-            Cartesian positions.
-
-        with_rsd : bool, default=True
-            Whether (``True``) or not (``False``) to include RSD in the shifts.
-        """
-        shifts = np.empty_like(positions)
-        for iaxis,psi in enumerate(self.mesh_psi):
-            shifts[:,iaxis] = psi.read_cic(positions)
-        if with_rsd:
-            shifts += self.f*np.sum(shifts*self.los,axis=-1)[:,None]*self.los
-        return shifts

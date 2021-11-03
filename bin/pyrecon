@@ -114,11 +114,11 @@ def main(args=None):
     ReconstructionAlgorithm = getattr(pyrecon,config['algorithm'].pop('name'))
     config_cosmo = {name:value for name,value in config['cosmology'].items() if name in ['f','bias']}
     config_cosmo['los'] = config['algorithm'].pop('los',None)
-    convention = config['algorithm'].pop('convention')
+    convention = config['algorithm'].pop('convention').lower()
     nthreads = config['algorithm'].pop('nthreads',None)
-    allowed = ['recsym','reciso']
-    if not convention.lower() in allowed:
-        raise ConfigError('Unkown convention {}. Choices are {}'.format(allowed))
+    allowed_conventions = ['recsym','reciso']
+    if not convention in allowed_conventions:
+        raise ConfigError('Unknown convention {}. Choices are {}'.format(convention, allowed_conventions))
 
     def get_comoving_distance():
         from astropy.cosmology import FlatLambdaCDM
@@ -126,7 +126,7 @@ def main(args=None):
         if Omega_m is None:
             raise ConfigError('Provide Omega_m for redshift -> distance conversion.')
         # we do not care about H0, since we work with Mpc/h
-        cosmo = FlatLambdaCDM(H0=70,Om0=Omega_m)
+        cosmo = FlatLambdaCDM(H0=70, Om0=Omega_m)
 
         def comoving_distance(z):
             return cosmo.comoving_distance(z).value*cosmo.h
@@ -175,7 +175,7 @@ def main(args=None):
     allowed_selection_functions = ['uniform', 'randoms', '']
     selection_function = config['delta'].pop('selection_function', '').lower()
     if selection_function not in allowed_selection_functions:
-        raise ConfigError('Unkown input selection function {}. Choices are {}'.format(selection_function, allowed_selection_functions))
+        raise ConfigError('Unknown input selection function {}. Choices are {}'.format(selection_function, allowed_selection_functions))
     # first check what we have in input/output
     input_fns, output_fns = {}, {}
     for name in ['data','randoms']:
@@ -228,7 +228,7 @@ def main(args=None):
                     position_columns = cols
         format = input_format[name]
         if format is None:
-            raise ConfigError('Unkown input format. Choices are {}'.format(allowed_formats))
+            raise ConfigError('Unknown input format. Choices are {}'.format(allowed_formats))
         position_columns = make_list(position_columns)
 
         fn = os.path.join(config['input'].get('dir',''), input_fns[name])
@@ -309,11 +309,11 @@ def main(args=None):
 
     positions_rec = {}
     if type(recon) is IterativeFFTParticleReconstruction:
-        positions_rec['data'] = positions['data'] - recon.read_shifts('data')
+        positions_rec['data'] = positions['data'] - recon.read_shifts('data', field='disp+rsd')
     else:
-        positions_rec['data'] = positions['data'] - recon.read_shifts(positions['data'])
+        positions_rec['data'] = positions['data'] - recon.read_shifts(positions['data'], field='disp+rsd')
     if 'randoms' in output_fns:
-        positions_rec['randoms'] = positions['randoms'] - recon.read_shifts(positions['randoms'],with_rsd=convention.lower() == 'recsym')
+        positions_rec['randoms'] = positions['randoms'] - recon.read_shifts(positions['randoms'], field='disp+rsd' if convention == 'recsym' else 'disp')
 
     for name in output_fns:
         catalog = catalogs[name]

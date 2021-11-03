@@ -126,9 +126,8 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         delta_k = self.mesh_delta.to_complex(engine=self.fft_engine)
         k = utils.broadcast_arrays(*delta_k.coords())
         k2 = sum(kk**2 for kk in k)
-        k2[0,0,0] = 1.
+        k2[0,0,0] = 1. # to avoid dividing by 0
         delta_k /= k2
-        delta_k[0,0,0] = 0.
         self.log_info('Computing displacement field.')
         shifts = np.empty_like(self._positions_rec_data)
         psis = []
@@ -169,9 +168,9 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         if return_psi:
             return psis
 
-    def read_shifts(self, positions, with_rsd=True):
+    def read_shifts(self, positions, field='disp+rsd'):
         """
-        Read Zeldovich displacement at input positions.
+        Read displacement at input positions.
 
         Note
         ----
@@ -185,29 +184,49 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             Pass string 'data' if you wish to get the displacements for the input data positions.
             Note that in this case, shifts are read at the reconstructed data real-space positions.
 
-        with_rsd : bool, default=True
-            Whether (``True``) or not (``False``) to include RSD in the shifts.
+        field : string, default='disp+rsd'
+            Either 'disp' (Zeldovich displacement), 'rsd' (RSD displacement), or 'disp+rsd' (Zeldovich + RSD displacement).
+
+        Returns
+        -------
+        shifts : array of shape (N, 3)
+            Displacements.
         """
+        field = field.lower()
+        allowed_fields = ['disp', 'rsd', 'disp+rsd']
+        if field not in allowed_fields:
+            raise ReconstructionError('Unknown field {}. Choices are {}'.format(field, allowed_fields))
+
         def read_cic(positions):
             shifts = np.empty_like(positions)
             for iaxis,psi in enumerate(self.mesh_psi):
                 shifts[:,iaxis] = psi.read_cic(positions)
             return shifts
 
-        if isinstance(positions,str) and positions == 'data':
-            if with_rsd:
-                return self._positions_data - self._positions_rec_data + read_cic(self._positions_rec_data)
-            return read_cic(self._positions_rec_data)
+        if isinstance(positions, str) and positions == 'data':
+            shifts = read_cic(self._positions_rec_data)
+            if field == 'disp':
+                return shifts
+            rsd = self._positions_data - self._positions_rec_data
+            if field == 'rsd':
+                return rsd
+            # field == 'disp+rsd'
+            shifts += rsd
+            return shifts
 
         shifts = read_cic(positions)
-        if with_rsd:
-            if self.los is None:
-                los = positions/utils.distance(positions)[:,None]
-            else:
-                los = self.los
-            shifts += self.f*np.sum(shifts*los,axis=-1)[:,None]*los
+        if field == 'disp':
+            return shifts
+        if self.los is None:
+            los = positions/utils.distance(positions)[:,None]
+        else:
+            los = self.los
+        rsd = self.f*np.sum(shifts*los,axis=-1)[:,None]*los
+        if field == 'rsd':
+            return rsd
+        # field == 'disp+rsd'
+        shifts += rsd
         return shifts
-
 
 
 class IterativeFFTParticleReconstruction(OriginalIterativeFFTParticleReconstruction):

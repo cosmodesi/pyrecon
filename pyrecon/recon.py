@@ -4,6 +4,7 @@ import numpy as np
 
 from .mesh import RealMesh
 from .utils import BaseClass
+from . import utils
 
 
 class ReconstructionError(Exception):
@@ -17,7 +18,6 @@ class BaseReconstruction(BaseClass):
     Reconstruction algorithms should extend this class, by (at least) implementing:
 
     - :meth:`run`
-    - :meth:`read_shifts`
 
     A standard reconstruction would be:
 
@@ -149,21 +149,64 @@ class BaseReconstruction(BaseClass):
     def has_randoms(self):
         return self.mesh_randoms.value is not None
 
-    def set_density_contrast(self, **kwargs):
+    def set_density_contrast(self, ran_min=0.75, smoothing_radius=15., **kwargs):
         r"""
-        Set :math:`\delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`;
-        to be re-implemented in your algorithm.
+        Set :math:`\delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
         Eventually we will probably converge on a base method for all reconstructions.
+
+        Note
+        ----
+        This method follows Martin's reconstruction code: we are not satisfied with the ``ran_min`` prescription.
+        At least ``ran_min`` should depend on random weights. See also Martin's notes below.
+
+        Parameters
+        ----------
+        ran_min : float, default=0.75
+            :attr:`mesh_randoms` points below this threshold have their density contrast set to 0.
+
+        smoothing_radius : float, default=15
+            Smoothing scale, see :meth:`RealMesh.smooth_gaussian`.
+
+        kwargs : dict
+            Optional arguments for :meth:`RealMesh.smooth_gaussian`.
         """
-        raise NotImplementedError('Implement method "set_density_contrast" in your "{}"-inherited algorithm'.format(self.__class__.___name__))
+        if not self.has_randoms:
+            self.mesh_delta = self.mesh_data/np.mean(self.mesh_data) - 1.
+            self.mesh_delta /= self.bias
+            self.mesh_delta.smooth_gaussian(smoothing_radius,**kwargs)
+            return
+        # Martin's notes:
+        # We remove any points which have too few randoms for a decent
+        # density estimate -- this is "fishy", but it tames some of the
+        # worst swings due to 1/eps factors. Better would be an interpolation
+        # or a pre-smoothing (or many more randoms).
+        mask = self.mesh_randoms >= ran_min
+        alpha = np.sum(self.mesh_data[mask])/np.sum(self.mesh_randoms[mask])
+        # Following two lines are how things are done in original code - does not seem exactly correct so commented out
+        #self.mesh_data[(self.mesh_randoms > 0) & (self.mesh_randoms < ran_min)] = 0.
+        #alpha = np.sum(self.mesh_data)/np.sum(self.mesh_randoms[mask])
+        self.mesh_data[mask] /= alpha*self.mesh_randoms[mask]
+        self.mesh_delta = self.mesh_data
+        del self.mesh_data
+        del self.mesh_randoms
+        self.mesh_delta -= 1
+        self.mesh_delta[~mask] = 0.
+        self.mesh_delta /= self.bias
+        # At this stage also remove the mean, so the source is genuinely mean 0.
+        # So as to not disturb the
+        # padding regions, we only compute and subtract the mean for the
+        # regions with delta != 0.
+        mask = self.mesh_delta != 0.
+        self.mesh_delta[mask] -= np.mean(self.mesh_delta[mask])
+        self.mesh_delta.smooth_gaussian(smoothing_radius,**kwargs)
 
     def run(self, *args, **kwargs):
         """Run reconstruction; to be implemented in your algorithm."""
         raise NotImplementedError('Implement method "run" in your "{}"-inherited algorithm'.format(self.__class__.___name__))
 
-    def read_shifts(self, positions, with_rsd=True):
+    def read_shifts(self, positions, field='disp+rsd'):
         """
-        Read Zeldovich displacements; to be implemented in your algorithm.
+        Read displacement at input positions.
         To get reconstructed positions, given reconstruction instance ``recon``:
 
         .. code-block:: python
@@ -172,14 +215,37 @@ class BaseReconstruction(BaseClass):
             # RecSym = remove large scale RSD from randoms
             positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms)
             # Or RecIso
-            # positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms,with_rsd=False)
+            # positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms, field='disp')
 
         Parameters
         ----------
-        positions : array of shape (N,3)
+        positions : array of shape (N, 3)
             Cartesian positions.
 
-        with_rsd : bool, default=True
-            Whether (``True``) or not (``False``) to include RSD in the shifts.
+        field : string, default='disp+rsd'
+            Either 'disp' (Zeldovich displacement), 'rsd' (RSD displacement), or 'disp+rsd' (Zeldovich + RSD displacement).
+
+        Returns
+        -------
+        shifts : array of shape (N, 3)
+            Displacements.
         """
-        raise NotImplementedError('Implement method "read_shifts" in your "{}"-inherited algorithm'.format(self.__class__.___name__))
+        field = field.lower()
+        allowed_fields = ['disp', 'rsd', 'disp+rsd']
+        if field not in allowed_fields:
+            raise ReconstructionError('Unknown field {}. Choices are {}'.format(field, allowed_fields))
+        shifts = np.empty_like(positions)
+        for iaxis,psi in enumerate(self.mesh_psi):
+            shifts[:,iaxis] = psi.read_cic(positions)
+        if field == 'disp':
+            return shifts
+        if self.los is None:
+            los = positions/utils.distance(positions)[:,None]
+        else:
+            los = self.los
+        rsd = self.f*np.sum(shifts*los,axis=-1)[:,None]*los
+        if field == 'rsd':
+            return rsd
+        # field == 'disp+rsd'
+        shifts += rsd
+        return shifts

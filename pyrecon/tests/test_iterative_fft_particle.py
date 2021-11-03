@@ -36,13 +36,13 @@ def test_dtype():
     recon_f4.assign_randoms(randoms['Position'],randoms['Weight'])
     recon_f4.set_density_contrast()
     recon_f4.run()
-    shifts_f4 = recon_f4.read_shifts(data['Position'],with_rsd=True)
+    shifts_f4 = recon_f4.read_shifts(data['Position'],field='disp+rsd')
     recon_f8 = IterativeFFTParticleReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=64,dtype='f8')
     recon_f8.assign_data(data['Position'],data['Weight'])
     recon_f8.assign_randoms(randoms['Position'],randoms['Weight'])
     recon_f8.set_density_contrast()
     recon_f8.run()
-    shifts_f8 = recon_f8.read_shifts(data['Position'],with_rsd=True)
+    shifts_f8 = recon_f8.read_shifts(data['Position'],field='disp+rsd')
     assert not np.all(shifts_f4 == shifts_f8)
     assert np.allclose(shifts_f4,shifts_f8,rtol=1e-2,atol=1e-2)
 
@@ -57,7 +57,7 @@ def test_los():
     recon.assign_randoms(randoms['Position'],randoms['Weight'])
     recon.set_density_contrast()
     recon.run()
-    shifts_global = recon.read_shifts(data['Position'],with_rsd=True)
+    shifts_global = recon.read_shifts(data['Position'],field='disp+rsd')
     offset = 1e8
     boxcenter[0] += offset
     data['Position'][:,0] += offset
@@ -67,7 +67,7 @@ def test_los():
     recon.assign_randoms(randoms['Position'],randoms['Weight'])
     recon.set_density_contrast()
     recon.run()
-    shifts_local = recon.read_shifts(data['Position'],with_rsd=True)
+    shifts_local = recon.read_shifts(data['Position'],field='disp+rsd')
     assert np.allclose(shifts_local,shifts_global,rtol=1e-3,atol=1e-3)
 
 
@@ -116,7 +116,7 @@ def test_iterative_fft(data_fn, randoms_fn):
     recon.set_density_contrast(smoothing_radius=smooth)
     recon.run(niterations=niter)
     shifts_data = recon.read_shifts('data')
-    shifts_randoms = recon.read_shifts(randoms['Position'],with_rsd=False)
+    shifts_randoms = recon.read_shifts(randoms['Position'],field='disp')
     #print(np.abs(np.diff(shifts_data-shifts_data_ref)).max(),np.abs(np.diff(shifts_randoms-shifts_randoms_ref)).max())
     print('abs test - ref',np.max(distance(shifts_data-shifts_data_ref)))
     print('rel test - ref',np.max(distance(shifts_data-shifts_data_ref)/distance(shifts_data_ref)))

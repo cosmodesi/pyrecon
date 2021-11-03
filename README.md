@@ -26,7 +26,7 @@ positions_rec_data = positions_data - recon.read_shifts(positions_data)
 # RecSym = remove large scale RSD from randoms
 positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms)
 # or RecIso
-# positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms, with_rsd=False)
+# positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms, field='disp')
 ```
 Also provided a script to run reconstruction as a standalone:
 ```

@@ -50,13 +50,13 @@ def test_dtype():
     recon_f4.assign_randoms(randoms['Position'],randoms['Weight'])
     recon_f4.set_density_contrast()
     recon_f4.run()
-    shifts_f4 = recon_f4.read_shifts(data['Position'],with_rsd=True)
+    shifts_f4 = recon_f4.read_shifts(data['Position'],field='disp+rsd')
     recon_f8 = MultiGridReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=64,dtype='f8')
     recon_f8.assign_data(data['Position'],data['Weight'])
     recon_f8.assign_randoms(randoms['Position'],randoms['Weight'])
     recon_f8.set_density_contrast()
     recon_f8.run()
-    shifts_f8 = recon_f8.read_shifts(data['Position'],with_rsd=True)
+    shifts_f8 = recon_f8.read_shifts(data['Position'],field='disp+rsd')
     assert not np.all(shifts_f4 == shifts_f8)
     assert np.allclose(shifts_f4,shifts_f8,rtol=1e-2,atol=1e-2)
 
@@ -71,7 +71,7 @@ def test_los():
     recon.assign_randoms(randoms['Position'],randoms['Weight'])
     recon.set_density_contrast()
     recon.run()
-    shifts_global = recon.read_shifts(data['Position'],with_rsd=True)
+    shifts_global = recon.read_shifts(data['Position'],field='disp+rsd')
     offset = 1e8
     boxcenter[0] += offset
     data['Position'][:,0] += offset
@@ -81,7 +81,7 @@ def test_los():
     recon.assign_randoms(randoms['Position'],randoms['Weight'])
     recon.set_density_contrast()
     recon.run()
-    shifts_local = recon.read_shifts(data['Position'],with_rsd=True)
+    shifts_local = recon.read_shifts(data['Position'],field='disp+rsd')
     assert np.allclose(shifts_local,shifts_global,rtol=1e-3,atol=1e-3)
 
 
@@ -157,7 +157,7 @@ def test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
                     start = islab*size//nslabs
                     stop = (islab+1)*size//nslabs
                     data = ffin.read(rows=range(start,stop))
-                    shifts = recon.read_shifts(data['Position'],with_rsd=True)
+                    shifts = recon.read_shifts(data['Position'],field='disp+rsd')
                     print('RMS',(np.mean(np.sum(shifts**2,axis=-1))/3)**0.5)
                     data['Position'] -= shifts
                     if islab == 0: ffout.write(data)
@@ -219,7 +219,7 @@ def test_script_no_randoms(data_fn, output_data_fn):
     recon.run()
 
     ref_positions_rec_data = data['RSDPosition'] - recon.read_shifts(data['RSDPosition'])
-    #velocityoffset = recon.read_shifts(data['RSDPosition'],with_rsd=True) - recon.read_shifts(data['RSDPosition'],with_rsd=False)
+    #velocityoffset = recon.read_shifts(data['RSDPosition'],field='disp+rsd') - recon.read_shifts(data['RSDPosition'], field='disp')
     #print(velocityoffset)
     #print(data['VelocityOffset'])
     #assert np.all(np.abs(velocityoffset[:,0] - data['VelocityOffset'][:,0]) < np.abs(data['VelocityOffset'][:,0]))
