@@ -38,12 +38,13 @@ class custom_build(build):
         #lib_dir = os.path.join(os.path.abspath(self.build_lib),'pyrecon','lib')
         os.environ.setdefault('LIBDIR',lib_dir)
         library_dir = sysconfig.get_config_var('LIBDIR')
-        os.environ.setdefault('OMPFLAG','-fopenmp -L{}'.format(library_dir))
 
         compiler = find_compiler()
         if compiler == 'clang':
             os.environ.setdefault('CC','clang')
-            os.environ.setdefault('OMPFLAG','-Xclang -fopenmp -L{}'.format(library_dir))
+            os.environ.setdefault('OMPFLAG','-Xclang -fopenmp -L{} -lomp'.format(library_dir))
+        else:
+            os.environ.setdefault('OMPFLAG','-fopenmp -L{} -lgomp'.format(library_dir))
 
         def compile():
             subprocess.call('make',shell=True,cwd=src_dir)
