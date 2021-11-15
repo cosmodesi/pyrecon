@@ -203,8 +203,7 @@ def sky_to_cartesian(dist, ra, dec, degree=True, dtype=None):
     position : array of shape (N, 3)
         Position in cartesian coordinates.
     """
-    conversion = 1.
-    if degree: conversion = np.pi/180.
+    conversion = np.pi/180. if degree else 1.
     position = [None]*3
     cos_dec = np.cos(dec*conversion)
     position[0] = cos_dec*np.cos(ra*conversion)

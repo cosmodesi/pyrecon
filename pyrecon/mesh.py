@@ -238,7 +238,7 @@ class MeshInfo(BaseClass):
     """
     _attrs = ['boxsize','boxcenter','nmesh']
 
-    def __init__(self, value=None, boxsize=None, boxcenter=None, cellsize=None, nmesh=256, positions=None, boxpad=1.5):
+    def __init__(self, value=None, boxsize=None, boxcenter=None, cellsize=None, nmesh=None, positions=None, boxpad=1.5):
         """
         Initalize :class:`MeshInfo`.
 
@@ -261,7 +261,7 @@ class MeshInfo(BaseClass):
             If not ``None``, and mesh size ``nmesh`` is not ``None``, used to set ``boxsize`` as ``nmesh * cellsize``.
             If ``nmesh`` is ``None``, it is set as (the nearest integer(s) to) ``boxsize/cellsize``.
 
-        nmesh : array, int, default=256
+        nmesh : array, int, default=None
             Mesh size, i.e. number of mesh nodes along each axis.
 
         positions : array of shape (N,3), default=None
@@ -278,7 +278,7 @@ class MeshInfo(BaseClass):
             if positions is None:
                 raise MeshError('boxsize and boxcenter must be specified if positions are not provided')
             pos_min, pos_max = positions.min(axis=0), positions.max(axis=0)
-            delta = abs(pos_max - pos_min)
+            delta = np.abs(pos_max - pos_min)
             if boxcenter is None: boxcenter = 0.5 * (pos_min + pos_max)
             if boxsize is None:
                 if cellsize is not None and nmesh is not None:

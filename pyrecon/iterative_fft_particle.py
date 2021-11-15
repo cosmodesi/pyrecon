@@ -215,18 +215,25 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             return shifts
 
         shifts = read_cic(positions)
+
         if field == 'disp':
             return shifts
+
         if self.los is None:
             los = positions/utils.distance(positions)[:,None]
         else:
             los = self.los
         rsd = self.f*np.sum(shifts*los,axis=-1)[:,None]*los
+
         if field == 'rsd':
             return rsd
+
         # field == 'disp+rsd'
-        shifts += rsd
-        return shifts
+        # we follow convention of original algorithm: remove RSD first,
+        # then remove Zeldovich displacement
+        shifts = read_cic(positions - rsd)
+
+        return shifts + rsd
 
 
 class IterativeFFTParticleReconstruction(OriginalIterativeFFTParticleReconstruction):

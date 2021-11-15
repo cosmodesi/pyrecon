@@ -65,4 +65,7 @@ See [pyrecon docs](https://pyrecon.readthedocs.io/en/latest/user/building.html).
 
 ## Credits
 
-Martin J. White and Julian E. Bautista for their codes, Pedro Rangel Caetano for inspiration for the script bin/recon.
+- Martin J. White for https://github.com/martinjameswhite/recon_code
+- Julian E. Bautista for https://github.com/julianbautista/eboss_clustering/blob/master/python/recon.py
+- Pedro Rangel Caetano for inspiration for the script bin/recon
+- Sesh Nadathur for careful checks against Revolver https://github.com/seshnadathur/Revolver/blob/main/python_tools/recon.py

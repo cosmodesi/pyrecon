@@ -1,6 +1,7 @@
 import os
 import sys
 import subprocess
+import time
 
 import numpy as np
 import fitsio
@@ -103,6 +104,9 @@ def test_iterative_fft(data_fn, randoms_fn):
     recon_ref.apply_shifts_full()
     shifts_data_ref = np.array([getattr(recon_ref.dat,x) - getattr(recon_ref.dat,'new{}'.format(x)) for x in 'xyz']).T
     shifts_randoms_ref = np.array([getattr(recon_ref.ran,x) - getattr(recon_ref.ran,'new{}'.format(x)) for x in 'xyz']).T
+    recon_ref.apply_shifts_rsd()
+    recon_ref.apply_shifts_full()
+    shifts_randoms_rsd_ref = np.array([getattr(recon_ref.ran,x) - getattr(recon_ref.ran,'new{}'.format(x)) for x in 'xyz']).T
     #recon_ref.summary()
     boxsize = recon_ref.binsize*recon_ref.nbins
     boxcenter = np.array([getattr(recon_ref,'{}min'.format(x)) for x in 'xyz']) + boxsize/2.
@@ -115,12 +119,15 @@ def test_iterative_fft(data_fn, randoms_fn):
     recon.assign_randoms(randoms['Position'],randoms['Weight'])
     recon.set_density_contrast(smoothing_radius=smooth)
     recon.run(niterations=niter)
-    shifts_data = recon.read_shifts('data')
+    shifts_data = recon.read_shifts('data',field='disp+rsd')
     shifts_randoms = recon.read_shifts(randoms['Position'],field='disp')
+    shifts_randoms_rsd = recon.read_shifts(randoms['Position'],field='disp+rsd')
     #print(np.abs(np.diff(shifts_data-shifts_data_ref)).max(),np.abs(np.diff(shifts_randoms-shifts_randoms_ref)).max())
     print('abs test - ref',np.max(distance(shifts_data-shifts_data_ref)))
     print('rel test - ref',np.max(distance(shifts_data-shifts_data_ref)/distance(shifts_data_ref)))
     assert np.allclose(shifts_data,shifts_data_ref,rtol=1e-7,atol=1e-7)
+    assert np.allclose(shifts_randoms,shifts_randoms_ref,rtol=1e-7,atol=1e-7)
+    assert np.allclose(shifts_randoms_rsd,shifts_randoms_rsd_ref,rtol=1e-7,atol=1e-7)
 
 
 def test_script(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
