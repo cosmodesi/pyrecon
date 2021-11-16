@@ -140,7 +140,7 @@ def test_revolver(data_fn, randoms_fn=None):
     parms.f = 0.8
     parms.bias = 1.4
     parms.verbose = False
-    parms.nbins = 128
+    parms.nbins = 256
     isbox = parms.is_box = randoms_fn is None
     parms.nthreads = 4
     boxsize = 800.
@@ -177,6 +177,7 @@ def test_revolver(data_fn, randoms_fn=None):
                      dist=randoms['Distance'], weight=randoms['Weight'], size=len(randoms['Position']), box_length=boxsize)
 
     from python_tools.recon import Recon as Revolver
+    t0 = time.time()
     recon_ref = Revolver(datacat, ran=rancat, parms=parms)
     #if isbox:
     #    recon_ref.ran = recon_ref.cat  # fudge to prevent error in call to apply_shifts_full
@@ -185,6 +186,7 @@ def test_revolver(data_fn, randoms_fn=None):
 
     # save the full shifted version of the catalogue
     recon_ref.apply_shifts_full()
+    print('Revolver completed in {:.2f} s'.format(time.time() - t0), flush=True)
     if isbox:
         shifts_data_ref = np.array([getattr(recon_ref.cat,x) - getattr(recon_ref.cat,'new{}'.format(x)) for x in 'xyz']).T % boxsize
         #shifts_data_ref = np.array([getattr(recon_ref.cat,'new{}'.format(x)) for x in 'xyz']).T
@@ -200,10 +202,23 @@ def test_revolver(data_fn, randoms_fn=None):
         boxsize = recon_ref.binsize*recon_ref.nbins
         boxcenter = np.array([getattr(recon_ref,'{}min'.format(x)) for x in 'xyz']) + boxsize/2.
 
+    def load_wisdom(wisdom_fn):
+        import json
+        with open(wisdom_fn, 'r') as file:
+            wisdom = json.load(file)
+            return tuple(w.encode('utf-8') for w in wisdom)
+
+    wisdom_fn = 'wisdom.128.4'
+    wisdom = load_wisdom(wisdom_fn)
+    import pyfftw
+    pyfftw.import_wisdom(wisdom)
+
     print('')
     print('#'*50)
     print('')
-    recon = OriginalIterativeFFTParticleReconstruction(f=recon_ref.f,bias=recon_ref.bias,boxsize=boxsize,boxcenter=boxcenter,nmesh=recon_ref.nbins,los=los,fft_engine='numpy',nthreads=recon_ref.nthreads)
+    t0 = time.time()
+    recon = OriginalIterativeFFTParticleReconstruction(f=recon_ref.f,bias=recon_ref.bias,boxsize=boxsize,boxcenter=boxcenter,nmesh=recon_ref.nbins,los=los,
+                                                       fft_engine='fftw',fft_wisdom=wisdom,nthreads=recon_ref.nthreads)
     recon.assign_data(data['Position'],data['Weight'])
     if not isbox:
         recon.assign_randoms(randoms['Position'],randoms['Weight'])
@@ -215,6 +230,7 @@ def test_revolver(data_fn, randoms_fn=None):
     else:
         shifts_data = recon.read_shifts('data',field='disp+rsd')
         shifts_randoms = recon.read_shifts(randoms['Position'],field='disp')
+    print('pyrecon completed in {:.2f} s'.format(time.time() - t0), flush=True)
     #print(np.abs(np.diff(shifts_data-shifts_data_ref)).max(),np.abs(np.diff(shifts_randoms-shifts_randoms_ref)).max())
 
     print(shifts_data_ref.min(), shifts_data_ref.max())

@@ -27,6 +27,20 @@
 // Modified:	20-Apr-2015
 //
 
+/*
+int get_num_threads()
+{
+  //Calculate number of threads
+  int num_threads=0;
+#pragma omp parallel
+  {
+#pragma omp atomic
+    num_threads++;
+  }
+  return num_threads;
+}
+*/
+
 
 void jacobi(FLOAT *v, const FLOAT *f, const int* nmesh, const FLOAT* boxsize, const FLOAT* boxcenter, const FLOAT beta, const FLOAT damping_factor, const int niterations, const FLOAT* los) {
   // Does an update using damped Jacobi. This, and in residual below,
@@ -339,6 +353,7 @@ void vcycle(FLOAT* v, const FLOAT* f, const int* nmesh, const FLOAT* boxsize, co
 FLOAT* fmg(FLOAT* f1h, FLOAT* v1h, const int* nmesh, const FLOAT* boxsize, const FLOAT* boxcenter, const FLOAT beta,
           const FLOAT jacobi_damping_factor, const int jacobi_niterations, const int vcycle_niterations, const FLOAT* los) {
   // The full multigrid cycle, also done recursively.
+  //printf("NUMTHREADS %d\n", get_num_threads());
   const size_t size = nmesh[0]*nmesh[1]*nmesh[2];
   _Bool recurse = 1;
   for (int idim=0; idim<NDIM; idim++) recurse &= (nmesh[idim] > 4 && (nmesh[idim] % 2 == 0));

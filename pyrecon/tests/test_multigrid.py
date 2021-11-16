@@ -144,7 +144,9 @@ def test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
 
     recon.set_density_contrast()
     #print(np.max(recon.mesh_delta))
+    t0 = time.time()
     recon.run()
+    print('run completed in {:.4f} s'.format(time.time() - t0))
     #print(np.std(recon.mesh_phi))
     #recon.f = recon.beta
 

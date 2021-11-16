@@ -220,7 +220,6 @@ for name in ['boxsize','boxcenter','nmesh','offset','cellsize','ndim']:
     setattr(BaseMesh,name,_make_property(name))
 
 
-
 class MeshInfo(BaseClass):
     """
     Class holding mesh information.
@@ -704,7 +703,7 @@ class BaseFFTEngine(object):
         shape : list, tuple
             Array shape.
 
-        nthreads : int
+        nthreads : int, default=None
             Number of threads.
 
         type_complex : string, np.dtype, default=None
@@ -773,71 +772,70 @@ class NumpyFFTEngine(BaseFFTEngine):
         return np.fft.ifftn(fun).astype(self.type_complex,copy=False)
 
 
-try:
-    import pyfftw
-    HAVE_PYFFTW = True
-except ImportError:
-    HAVE_PYFFTW = False
+try: import pyfftw
+except ImportError: pyfftw = None
 
 
-if HAVE_PYFFTW:
+class FFTWEngine(BaseFFTEngine):
 
-    class FFTWEngine(BaseFFTEngine):
+    """FFT engine based on :mod:`pyfftw`."""
 
-        """FFT engine based on :mod:`pyfftw`."""
+    def __init__(self, shape, nthreads=None, wisdom=None, **kwargs):
+        """
+        Initialize :mod:`pyfftw` engine.
 
-        def __init__(self, shape, nthreads=None, wisdom=None, **kwargs):
-            """
-            Initialize :mod:`pyfftw` engine.
+        Parameters
+        ----------
+        shape : list, tuple
+            Array shape.
 
-            Parameters
-            ----------
-            shape : list, tuple
-                Array shape.
+        nthreads : int
+            Number of threads.
 
-            nthreads : int
-                Number of threads.
+        wisdom : string, tuple
+            :mod:`pyfftw` wisdom, used to accelerate further FFTs.
+            If a string, should be a path to the save FFT wisdom (with :func:`numpy.save`).
+            If a tuple, directly corresponds to the wisdom.
 
-            wisdom : string, tuple
-                :mod:`pyfftw` wisdom, used to accelerate further FFTs.
-                If a string, should be a path to the save FFT wisdom (with :func:`numpy.save`).
-                If a tuple, directly corresponds to the wisdom.
+        kwargs : dict
+            Optional arguments for :class:`BaseFFTEngine`.
+        """
+        if pyfftw is None:
+            raise NotImplementedError('Install pyfftw to use {}'.format(self.__class__.__name__))
+        super(FFTWEngine,self).__init__(shape,nthreads=nthreads,**kwargs)
 
-            kwargs : dict
-                Optional arguments for :class:`BaseFFTEngine`.
-            """
-            super(FFTWEngine,self).__init__(shape,**kwargs)
+        if isinstance(wisdom, str):
+            wisdom = tuple(np.load(wisdom))
+        if wisdom is not None:
+            pyfftw.import_wisdom(wisdom)
+        else:
+            pyfftw.forget_wisdom()
+        if self.hermitian:
+            fftw_f = pyfftw.empty_aligned(self.shape,dtype=self.type_real,order='C')
+        else:
+            fftw_f = pyfftw.empty_aligned(self.shape,dtype=self.type_complex,order='C')
+        fftw_fk = pyfftw.empty_aligned(self.hshape,dtype=self.type_complex,order='C')
+        self.fftw_forward_object = pyfftw.FFTW(fftw_f,fftw_fk,axes=range(self.ndim),direction='FFTW_FORWARD',threads=self.nthreads)
+        self.fftw_backward_object = pyfftw.FFTW(fftw_fk,fftw_f,axes=range(self.ndim),direction='FFTW_BACKWARD',threads=self.nthreads)
 
-            if isinstance(wisdom, str):
-                wisdom = tuple(np.load(wisdom))
-            if wisdom is not None:
-                pyfftw.import_wisdom(wisdom)
-            else:
-                pyfftw.forget_wisdom()
-            if self.hermitian:
-                fftw_f = pyfftw.empty_aligned(self.shape,dtype=self.type_real,order='C')
-            else:
-                fftw_f = pyfftw.empty_aligned(self.shape,dtype=self.type_complex,order='C')
-            fftw_fk = pyfftw.empty_aligned(self.hshape,dtype=self.type_complex,order='C')
-            self.fftw_forward_object = pyfftw.FFTW(fftw_f,fftw_fk,axes=range(self.ndim),direction='FFTW_FORWARD',threads=self.nthreads)
-            self.fftw_backward_object = pyfftw.FFTW(fftw_fk,fftw_f,axes=range(self.ndim),direction='FFTW_BACKWARD',threads=self.nthreads)
+    def forward(self, fun):
+        """Return forward transform of ``fun``."""
+        output_array = pyfftw.empty_aligned(self.hshape,dtype=self.type_complex,order='C')
+        if self.hermitian:
+            fun = fun.astype(self.type_real,copy=False)
+        else:
+            fun = fun.astype(self.type_complex,copy=False)
+        return self.fftw_forward_object(input_array=fun,output_array=output_array,normalise_idft=True)
 
-        def forward(self, fun):
-            """Return forward transform of ``fun``."""
-            output_array = pyfftw.empty_aligned(self.hshape,dtype=self.type_complex,order='C')
-            if self.hermitian:
-                fun = fun.astype(self.type_real,copy=False)
-            else:
-                fun = fun.astype(self.type_complex,copy=False)
-            return self.fftw_forward_object(input_array=fun,output_array=output_array,normalise_idft=True)
+    def backward(self, fun):
+        """Return backward transform of ``fun``, which is destroyed."""
+        if self.hermitian:
+            output_array = pyfftw.empty_aligned(self.shape,dtype=self.type_real,order='C')
+        else:
+            output_array = pyfftw.empty_aligned(self.shape,dtype=self.type_complex,order='C')
+        return self.fftw_backward_object(input_array=fun,output_array=output_array,normalise_idft=True)
 
-        def backward(self, fun):
-            """Return backward transform of ``fun``, which is destroyed."""
-            if self.hermitian:
-                output_array = pyfftw.empty_aligned(self.shape,dtype=self.type_real,order='C')
-            else:
-                output_array = pyfftw.empty_aligned(self.shape,dtype=self.type_complex,order='C')
-            return self.fftw_backward_object(input_array=fun,output_array=output_array,normalise_idft=True)
+
 
 
 def get_fft_engine(engine, *args, **kwargs):
