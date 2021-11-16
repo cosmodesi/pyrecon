@@ -22,6 +22,7 @@
 **/_build
 **/bak*
 **/lib
+**/wisdom*
 
 # Unit test / coverage reports
 **/.coverage

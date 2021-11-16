@@ -2,6 +2,7 @@ import os
 import sys
 import subprocess
 import time
+import importlib
 
 import numpy as np
 import fitsio
@@ -10,11 +11,6 @@ from pyrecon.iterative_fft_particle import OriginalIterativeFFTParticleReconstru
 from pyrecon.utils import distance
 from test_multigrid import get_random_catalog
 
-# here path to reference Julian's code: https://github.com/julianbautista/eboss_clustering/blob/master/python
-sys.path.insert(0,'../../../../reconstruction/eboss_clustering/python')
-import cosmo
-from cosmo import CosmoSimple
-from recon import Recon
 
 
 def test_no_nrandoms():
@@ -73,6 +69,10 @@ def test_los():
 
 
 def test_iterative_fft(data_fn, randoms_fn):
+    # here path to reference Julian's code: https://github.com/julianbautista/eboss_clustering/blob/master/python (python setup.py build_ext --inplace)
+    sys.path.insert(0,'../../../../reconstruction/eboss_clustering/python')
+    from cosmo import CosmoSimple
+    from recon import Recon
     nmesh = 128
     smooth = 15.
     f = 0.81
@@ -128,6 +128,103 @@ def test_iterative_fft(data_fn, randoms_fn):
     assert np.allclose(shifts_data,shifts_data_ref,rtol=1e-7,atol=1e-7)
     assert np.allclose(shifts_randoms,shifts_randoms_ref,rtol=1e-7,atol=1e-7)
     assert np.allclose(shifts_randoms_rsd,shifts_randoms_rsd_ref,rtol=1e-7,atol=1e-7)
+
+
+def test_revolver(data_fn, randoms_fn=None):
+
+    # here path to reference Julian's code: https://github.com/seshnadathur/Revolver (python python_tools/setup.py build_ext --inplace)
+    sys.path.insert(0,'../../../../reconstruction/Revolver')
+    spec = importlib.util.spec_from_file_location("name", '../../../../reconstruction/Revolver/parameters/default_params.py')
+    parms = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(parms)
+    parms.f = 0.8
+    parms.bias = 1.4
+    parms.verbose = False
+    parms.nbins = 128
+    isbox = parms.is_box = randoms_fn is None
+    parms.nthreads = 4
+    boxsize = 800.
+    parms.box_length = boxsize
+    niter = 3
+
+    data = fitsio.read(data_fn)
+    fields = ['Position','Weight']
+    data = {field:data[field] for field in fields}
+
+    if isbox:
+        randoms = data
+    else:
+        randoms = fitsio.read(randoms_fn)
+        randoms = {field:randoms[field] for field in fields}
+
+    for catalog in [data, randoms]:
+        for field in catalog:
+            if catalog[field].dtype.byteorder == '>':
+                catalog[field] = np.array(catalog[field].byteswap().newbyteorder(), dtype='f8')
+        catalog['Distance'] = distance(catalog['Position'])
+
+    class Catalog(object):
+
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+
+    datacat = Catalog(**{axis: data['Position'][:,iaxis] for iaxis,axis in enumerate('xyz')},
+                      **{'new{}'.format(axis): data['Position'][:,iaxis].copy() for iaxis,axis in enumerate('xyz')},
+                      dist=data['Distance'], weight=data['Weight'], size=len(data['Position']), box_length=boxsize)
+
+    rancat = Catalog(**{axis: randoms['Position'][:,iaxis] for iaxis,axis in enumerate('xyz')},
+                     **{'new{}'.format(axis): randoms['Position'][:,iaxis].copy() for iaxis,axis in enumerate('xyz')},
+                     dist=randoms['Distance'], weight=randoms['Weight'], size=len(randoms['Position']), box_length=boxsize)
+
+    from python_tools.recon import Recon as Revolver
+    recon_ref = Revolver(datacat, ran=rancat, parms=parms)
+    #if isbox:
+    #    recon_ref.ran = recon_ref.cat  # fudge to prevent error in call to apply_shifts_full
+    for i in range(niter):
+        recon_ref.iterate(i, debug=True)
+
+    # save the full shifted version of the catalogue
+    recon_ref.apply_shifts_full()
+    if isbox:
+        shifts_data_ref = np.array([getattr(recon_ref.cat,x) - getattr(recon_ref.cat,'new{}'.format(x)) for x in 'xyz']).T % boxsize
+        #shifts_data_ref = np.array([getattr(recon_ref.cat,'new{}'.format(x)) for x in 'xyz']).T
+    else:
+        shifts_data_ref = np.array([getattr(recon_ref.cat,x) - getattr(recon_ref.cat,'new{}'.format(x)) for x in 'xyz']).T
+        shifts_randoms_ref = np.array([getattr(recon_ref.ran,x) - getattr(recon_ref.ran,'new{}'.format(x)) for x in 'xyz']).T
+
+    if isbox:
+        los = 'z'
+        boxcenter = boxsize/2.
+    else:
+        los = None
+        boxsize = recon_ref.binsize*recon_ref.nbins
+        boxcenter = np.array([getattr(recon_ref,'{}min'.format(x)) for x in 'xyz']) + boxsize/2.
+
+    print('')
+    print('#'*50)
+    print('')
+    recon = OriginalIterativeFFTParticleReconstruction(f=recon_ref.f,bias=recon_ref.bias,boxsize=boxsize,boxcenter=boxcenter,nmesh=recon_ref.nbins,los=los,fft_engine='numpy',nthreads=recon_ref.nthreads)
+    recon.assign_data(data['Position'],data['Weight'])
+    if not isbox:
+        recon.assign_randoms(randoms['Position'],randoms['Weight'])
+    recon.set_density_contrast(smoothing_radius=recon_ref.smooth)
+    recon.run(niterations=niter)
+    if isbox:
+        shifts_data = recon.read_shifts('data',field='disp+rsd') % boxsize
+        #shifts_data = (data['Position'] - shifts_data) #% boxsize
+    else:
+        shifts_data = recon.read_shifts('data',field='disp+rsd')
+        shifts_randoms = recon.read_shifts(randoms['Position'],field='disp')
+    #print(np.abs(np.diff(shifts_data-shifts_data_ref)).max(),np.abs(np.diff(shifts_randoms-shifts_randoms_ref)).max())
+
+    print(shifts_data_ref.min(), shifts_data_ref.max())
+    print(shifts_data.min(), shifts_data.max())
+
+    print('abs test - ref',np.max(distance(shifts_data-shifts_data_ref)))
+    print('rel test - ref',np.max(distance(shifts_data-shifts_data_ref)/distance(shifts_data_ref)))
+    assert np.allclose(shifts_data,shifts_data_ref,rtol=1e-7,atol=1e-7)
+    if not parms.is_box:
+        assert np.allclose(shifts_randoms,shifts_randoms_ref,rtol=1e-7,atol=1e-7)
 
 
 def test_script(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
@@ -196,5 +293,7 @@ if __name__ == '__main__':
     test_dtype()
     test_los()
     test_iterative_fft(data_fn,randoms_fn)
+    test_revolver(data_fn,randoms_fn)
+    test_revolver(box_data_fn)
     test_script(data_fn,randoms_fn,script_output_data_fn,script_output_randoms_fn)
     test_script_no_randoms(box_data_fn, script_output_box_data_fn)

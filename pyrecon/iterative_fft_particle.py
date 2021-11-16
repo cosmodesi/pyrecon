@@ -121,7 +121,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             # Gaussian smoothing before density contrast calculation
             self.mesh_data.smooth_gaussian(self.smoothing_radius,method='fft',engine=self.fft_engine)
 
-        self.set_density_contrast(ran_min=self.ran_min)
+        self.set_density_contrast(ran_min=self.ran_min, smoothing_radius=self.smoothing_radius)
         del self.mesh_data
         delta_k = self.mesh_delta.to_complex(engine=self.fft_engine)
         k = utils.broadcast_arrays(*delta_k.coords())
@@ -231,7 +231,12 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         # field == 'disp+rsd'
         # we follow convention of original algorithm: remove RSD first,
         # then remove Zeldovich displacement
-        shifts = read_cic(positions - rsd)
+        real_positions = positions - rsd
+        diff = real_positions - self.mesh_delta.offset
+        if self.los is None and np.any((diff < 0) | (diff > self.mesh_delta.boxsize - self.mesh_delta.cellsize)):
+            self.log_warning('Some particles are out-of-bounds.')
+        real_positions = diff % self.mesh_delta.boxsize + self.mesh_delta.offset
+        shifts = read_cic(real_positions)
 
         return shifts + rsd
 
