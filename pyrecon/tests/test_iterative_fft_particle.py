@@ -140,7 +140,7 @@ def test_revolver(data_fn, randoms_fn=None):
     parms.f = 0.8
     parms.bias = 1.4
     parms.verbose = False
-    parms.nbins = 256
+    parms.nbins = 128
     isbox = parms.is_box = randoms_fn is None
     parms.nthreads = 4
     boxsize = 800.
@@ -210,8 +210,6 @@ def test_revolver(data_fn, randoms_fn=None):
 
     wisdom_fn = 'wisdom.128.4'
     wisdom = load_wisdom(wisdom_fn)
-    import pyfftw
-    pyfftw.import_wisdom(wisdom)
 
     print('')
     print('#'*50)
@@ -219,6 +217,7 @@ def test_revolver(data_fn, randoms_fn=None):
     t0 = time.time()
     recon = OriginalIterativeFFTParticleReconstruction(f=recon_ref.f,bias=recon_ref.bias,boxsize=boxsize,boxcenter=boxcenter,nmesh=recon_ref.nbins,los=los,
                                                        fft_engine='fftw',fft_wisdom=wisdom,nthreads=recon_ref.nthreads)
+    #recon = OriginalIterativeFFTParticleReconstruction(f=recon_ref.f,bias=recon_ref.bias,boxsize=boxsize,boxcenter=boxcenter,nmesh=recon_ref.nbins,los=los,fft_engine='numpy',nthreads=recon_ref.nthreads)
     recon.assign_data(data['Position'],data['Weight'])
     if not isbox:
         recon.assign_randoms(randoms['Position'],randoms['Weight'])

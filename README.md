@@ -14,8 +14,9 @@ With Python, a typical reconstruction run is (e.g. for MultiGridReconstruction; 
 from pyrecon import MultiGridReconstruction
 
 # line-of-sight "los" can be 'local' (default) or an axis, 'x', 'y', 'z', or a 3-vector
+# instead of boxsize and boxcenter, one can provide a (N, 3) array of Cartesian positions: positions=
 recon = MultiGridReconstruction(f=0.8, bias=2.0, los='local', nmesh=512, boxsize=1000., boxcenter=2000.)
-recon.assign_data(positions_data, weights_data) # positions_data are a (N, 3) array of Cartesian positions, weights a (N,) array
+recon.assign_data(positions_data, weights_data) # positions_data is a (N, 3) array of Cartesian positions, weights a (N,) array
 # you can skip the following line if you assume uniform selection function (randoms)
 recon.assign_randoms(positions_randoms, weights_randoms)
 recon.set_density_contrast()

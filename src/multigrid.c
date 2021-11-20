@@ -41,7 +41,6 @@ int get_num_threads()
 }
 */
 
-
 void jacobi(FLOAT *v, const FLOAT *f, const int* nmesh, const FLOAT* boxsize, const FLOAT* boxcenter, const FLOAT beta, const FLOAT damping_factor, const int niterations, const FLOAT* los) {
   // Does an update using damped Jacobi. This, and in residual below,
   // is where the explicit equation we are solving appears.
@@ -50,47 +49,51 @@ void jacobi(FLOAT *v, const FLOAT *f, const int* nmesh, const FLOAT* boxsize, co
   const int nmeshz = nmesh[2];
   const int nmeshyz = nmesh[2]*nmesh[1];
   FLOAT* jac = (FLOAT *) malloc(size*sizeof(FLOAT));
-  FLOAT cell[NDIM], icell2[NDIM];
+  FLOAT cell, cell2[NDIM], icell2[NDIM], offset[NDIM], losn[NDIM];
   for (int idim=0; idim<NDIM; idim++) {
-    cell[idim] = boxsize[idim]/nmesh[idim];
-    icell2[idim] = 1./(cell[idim]*cell[idim]);
+    cell = boxsize[idim]/nmesh[idim];
+    cell2[idim] = cell*cell;
+    icell2[idim] = 1./cell2[idim];
+    offset[idim] = (boxcenter[idim] - boxsize[idim]/2.)/cell;
+    if (los != NULL) losn[idim] = los[idim]/cell;
   }
   for (int iter=0; iter<niterations; iter++) {
-    //#pragma omp parallel for shared(v,f,jac)
+    #pragma omp parallel for shared(v,f,jac)
     for (int ix=0; ix<nmesh[0]; ix++) {
-      FLOAT px = (los == NULL) ? boxcenter[0] + cell[0]*ix - boxsize[0]/2. : los[0];
+      FLOAT px = (los == NULL) ? ix + offset[0] : losn[0];
       size_t ix0 = nmeshyz*ix;
       size_t ixp = nmeshyz*((ix+1) % nmesh[0]);
       size_t ixm = nmeshyz*((ix-1+nmesh[0]) % nmesh[0]);
       for (int iy=0; iy<nmesh[1]; iy++) {
-        FLOAT py = (los == NULL) ? boxcenter[1] + cell[1]*iy - boxsize[1]/2. : los[1];
+        FLOAT py = (los == NULL) ? iy + offset[1] : losn[1];
         size_t iy0 = nmeshz*iy;
         size_t iyp = nmeshz*((iy+1) % nmesh[1]);
         size_t iym = nmeshz*((iy-1+nmesh[1]) % nmesh[1]);
-        for (int iz=0; iz<nmesh[2]; iz++) {
-          FLOAT pz = (los == NULL) ? boxcenter[2] + cell[2]*iz - boxsize[2]/2. : los[2];
-          FLOAT g = beta/(px*px+py*py+pz*pz);
-          size_t iz0 = iz;
-          size_t izp = (iz+1) % nmesh[2];
-          size_t izm = (iz-1+nmesh[2]) % nmesh[2];
+        for (int iz0=0; iz0<nmesh[2]; iz0++) {
+          FLOAT pz = (los == NULL) ? iz0 + offset[2] : losn[2];
+          FLOAT g = beta/(cell2[0]*px*px+cell2[1]*py*py+cell2[2]*pz*pz);
+          FLOAT gpx2 = icell2[0] + g*px*px;
+          FLOAT gpy2 = icell2[1] + g*py*py;
+          FLOAT gpz2 = icell2[2] + g*pz*pz;
+          size_t izp = (iz0+1) % nmesh[2];
+          size_t izm = (iz0-1+nmesh[2]) % nmesh[2];
           size_t ii = ix0 + iy0 + iz0;
           jac[ii] = f[ii]+
-                    (1+g*px*px)*icell2[0]*(v[ixp+iy0+iz0]+v[ixm+iy0+iz0])+
-                    (1+g*py*py)*icell2[1]*(v[ix0+iyp+iz0]+v[ix0+iym+iz0])+
-                    (1+g*pz*pz)*icell2[2]*(v[ix0+iy0+izp]+v[ix0+iy0+izm])+
-                    g*px*py/2/cell[0]/cell[1]*(v[ixp+iyp+iz0]+v[ixm+iym+iz0]
-                                              -v[ixm+iyp+iz0]-v[ixp+iym+iz0])+
-                    g*px*pz/2/cell[0]/cell[2]*(v[ixp+iy0+izp]+v[ixm+iy0+izm]
-                                              -v[ixm+iy0+izp]-v[ixp+iy0+izm])+
-                    g*py*pz/2/cell[1]/cell[2]*(v[ix0+iyp+izp]+v[ix0+iym+izm]
-                                              -v[ix0+iym+izp]-v[ix0+iyp+izm]);
+                    gpx2*(v[ixp+iy0+iz0]+v[ixm+iy0+iz0])+
+                    gpy2*(v[ix0+iyp+iz0]+v[ix0+iym+iz0])+
+                    gpz2*(v[ix0+iy0+izp]+v[ix0+iy0+izm])+
+                    g/2*(px*py*(v[ixp+iyp+iz0]+v[ixm+iym+iz0]
+                               -v[ixm+iyp+iz0]-v[ixp+iym+iz0])+
+                    px*pz*(v[ixp+iy0+izp]+v[ixm+iy0+izm]
+                          -v[ixm+iy0+izp]-v[ixp+iy0+izm])+
+                    py*pz*(v[ix0+iyp+izp]+v[ix0+iym+izm]
+                          -v[ix0+iym+izp]-v[ix0+iyp+izm]));
           if (los == NULL) {
-            jac[ii] += g*px/cell[0]*(v[ixp+iy0+iz0]-v[ixm+iy0+iz0])+
-                       g*py/cell[1]*(v[ix0+iyp+iz0]-v[ix0+iym+iz0])+
-                       g*pz/cell[2]*(v[ix0+iy0+izp]-v[ix0+iy0+izm]);
+            jac[ii] += g*(px*(v[ixp+iy0+iz0]-v[ixm+iy0+iz0])+
+                          py*(v[ix0+iyp+iz0]-v[ix0+iym+iz0])+
+                          pz*(v[ix0+iy0+izp]-v[ix0+iy0+izm]));
           }
-          jac[ii] /= 2*((1+g*px*px)*icell2[0] + (1+g*py*py)*icell2[0] + (1+g*pz*pz)*icell2[0]);
-          //jac[ii] = f[ii];
+          jac[ii] /= 2*(gpx2 + gpy2 + gpz2);
         }
       }
     }
@@ -109,43 +112,48 @@ void residual(const FLOAT* v, const FLOAT* f, FLOAT* r, const int* nmesh, const 
   const size_t size = nmesh[0]*nmesh[1]*nmesh[2];
   const int nmeshz = nmesh[2];
   const int nmeshyz = nmesh[2]*nmesh[1];
-  FLOAT cell[NDIM], icell2[NDIM];
+  FLOAT cell, cell2[NDIM], icell2[NDIM], offset[NDIM], losn[NDIM];
   for (int idim=0; idim<NDIM; idim++) {
-    cell[idim] = boxsize[idim]/nmesh[idim];
-    icell2[idim] = 1./(cell[idim]*cell[idim]);
+    cell = boxsize[idim]/nmesh[idim];
+    cell2[idim] = cell*cell;
+    icell2[idim] = 1./cell2[idim];
+    offset[idim] = (boxcenter[idim] - boxsize[idim]/2.)/cell;
+    if (los != NULL) losn[idim] = los[idim]/cell;
   }
-  //#pragma omp parallel for shared(v,r)
+  #pragma omp parallel for shared(v,r)
   for (int ix=0; ix<nmesh[0]; ix++) {
-    FLOAT px = (los == NULL) ? boxcenter[0] + cell[0]*ix - boxsize[0]/2. : los[0];
+    FLOAT px = (los == NULL) ? ix + offset[0] : losn[0];
     size_t ix0 = nmeshyz*ix;
     size_t ixp = nmeshyz*((ix+1) % nmesh[0]);
     size_t ixm = nmeshyz*((ix-1+nmesh[0]) % nmesh[0]);
     for (int iy=0; iy<nmesh[1]; iy++) {
-      FLOAT py = (los == NULL) ? boxcenter[1] + cell[1]*iy - boxsize[1]/2. : los[1];
+      FLOAT py = (los == NULL) ? iy + offset[1] : losn[1];
       size_t iy0 = nmeshz*iy;
       size_t iyp = nmeshz*((iy+1) % nmesh[1]);
       size_t iym = nmeshz*((iy-1+nmesh[1]) % nmesh[1]);
-      for (int iz=0; iz<nmesh[2]; iz++) {
-        FLOAT pz = (los == NULL) ? boxcenter[2] + cell[2]*iz - boxsize[2]/2. : los[2];
-        FLOAT g = beta/(px*px+py*py+pz*pz);
-        size_t iz0 = iz;
-        size_t izp = (iz+1) % nmesh[2];
-        size_t izm = (iz-1+nmesh[2]) % nmesh[2];
+      for (int iz0=0; iz0<nmesh[2]; iz0++) {
+        FLOAT pz = (los == NULL) ? iz0 + offset[2] : losn[2];
+        FLOAT g = beta/(cell2[0]*px*px+cell2[1]*py*py+cell2[2]*pz*pz);
+        FLOAT gpx2 = icell2[0] + g*px*px;
+        FLOAT gpy2 = icell2[1] + g*py*py;
+        FLOAT gpz2 = icell2[2] + g*pz*pz;
+        size_t izp = (iz0+1) % nmesh[2];
+        size_t izm = (iz0-1+nmesh[2]) % nmesh[2];
         size_t ii = ix0 + iy0 + iz0;
-        r[ii] = 2*((1+g*px*px)*icell2[0] + (1+g*py*py)*icell2[0] + (1+g*pz*pz)*icell2[0])*v[ii] -
-                ((1+g*px*px)*icell2[0]*(v[ixp+iy0+iz0]+v[ixm+iy0+iz0])+
-                (1+g*py*py)*icell2[1]*(v[ix0+iyp+iz0]+v[ix0+iym+iz0])+
-                (1+g*pz*pz)*icell2[2]*(v[ix0+iy0+izp]+v[ix0+iy0+izm])+
-                g*px*py/2/cell[0]/cell[1]*(v[ixp+iyp+iz0]+v[ixm+iym+iz0]
-                                          -v[ixm+iyp+iz0]-v[ixp+iym+iz0])+
-                g*px*pz/2/cell[0]/cell[2]*(v[ixp+iy0+izp]+v[ixm+iy0+izm]
-                                          -v[ixm+iy0+izp]-v[ixp+iy0+izm])+
-                g*py*pz/2/cell[1]/cell[2]*(v[ix0+iyp+izp]+v[ix0+iym+izm]
-                                          -v[ix0+iym+izp]-v[ix0+iyp+izm]));
+        r[ii] = 2*(gpx2 + gpy2 + gpz2)*v[ii] -
+               (gpx2*(v[ixp+iy0+iz0]+v[ixm+iy0+iz0])+
+                gpy2*(v[ix0+iyp+iz0]+v[ix0+iym+iz0])+
+                gpz2*(v[ix0+iy0+izp]+v[ix0+iy0+izm])+
+                g/2*(px*py*(v[ixp+iyp+iz0]+v[ixm+iym+iz0]
+                            -v[ixm+iyp+iz0]-v[ixp+iym+iz0])+
+                     px*pz*(v[ixp+iy0+izp]+v[ixm+iy0+izm]
+                            -v[ixm+iy0+izp]-v[ixp+iy0+izm])+
+                     py*pz*(v[ix0+iyp+izp]+v[ix0+iym+izm]
+                            -v[ix0+iym+izp]-v[ix0+iyp+izm])));
         if (los == NULL) {
-          r[ii] -= g*px/cell[0]*(v[ixp+iy0+iz0]-v[ixm+iy0+iz0])+
-                   g*py/cell[1]*(v[ix0+iyp+iz0]-v[ix0+iym+iz0])+
-                   g*pz/cell[2]*(v[ix0+iy0+izp]-v[ix0+iy0+izm]);
+          r[ii] -= g*(px*(v[ixp+iy0+iz0]-v[ixm+iy0+iz0])+
+                      py*(v[ix0+iyp+iz0]-v[ix0+iym+iz0])+
+                      pz*(v[ix0+iy0+izp]-v[ix0+iy0+izm]));
         }
       }
     }
@@ -154,64 +162,6 @@ void residual(const FLOAT* v, const FLOAT* f, FLOAT* r, const int* nmesh, const 
   #pragma omp parallel for shared(r,f)
   for (size_t ii=0; ii<size; ii++) r[ii] = f[ii] - r[ii];
 }
-
-
-/*
-void residual(const FLOAT* v, const FLOAT* f, FLOAT* r, const int* nmesh, const FLOAT* boxsize, const FLOAT* boxcenter, const FLOAT beta, const FLOAT* los) {
-  // Returns the residual, r=f-Av, keeping track of factors of h = boxsize/nmesh
-  // First compute the operator A on v, keeping track of periodic
-  // boundary conditions and ignoring the 1/h terms.
-  // Note the relative signs here and in jacobi (or gauss_seidel).
-  const size_t size = nmesh[0]*nmesh[1]*nmesh[2];
-  const int nmeshz = nmesh[2];
-  const int nmeshyz = nmesh[2]*nmesh[1];
-  FLOAT cell[NDIM], icell2=0;
-  for (int idim=0; idim<NDIM; idim++) {
-    cell[idim] = boxsize[idim]/nmesh[idim];
-    icell2 += 1./(cell[idim]*cell[idim]);
-  }
-  //#pragma omp parallel for shared(v,r)
-  for (int ix=0; ix<nmesh[0]; ix++) {
-    FLOAT px = boxcenter[0] + cell[0]*ix - boxsize[0]/2.;
-    FLOAT rx = px/cell[0];
-    size_t ix0 = nmeshyz*ix;
-    size_t ixp = nmeshyz*((ix+1) % nmesh[0]);
-    size_t ixm = nmeshyz*((ix-1+nmesh[0]) % nmesh[0]);
-    for (int iy=0; iy<nmesh[1]; iy++) {
-      FLOAT py = boxcenter[1] + cell[1]*iy - boxsize[1]/2.;
-      FLOAT ry = py/cell[1];
-      size_t iy0 = nmeshz*iy;
-      size_t iyp = nmeshz*((iy+1) % nmesh[1]);
-      size_t iym = nmeshz*((iy-1+nmesh[1]) % nmesh[1]);
-      for (int iz=0; iz<nmesh[2]; iz++) {
-        FLOAT pz = boxcenter[2] + cell[2]*iz - boxsize[2]/2.;
-        FLOAT rz = pz/cell[2];
-        FLOAT g = beta/(px*px+py*py+pz*pz);
-        size_t iz0 = iz;
-        size_t izp = (iz+1) % nmesh[2];
-        size_t izm = (iz-1+nmesh[2]) % nmesh[2];
-        size_t ii = ix0 + iy0 + iz0;
-        r[ii] = 2*(icell2 + g*(rx*rx + ry*ry + rz*rz))*v[ii] -
-                  ((1/(cell[0]*cell[0])+g*rx*rx)*(v[ixp+iy0+iz0]+v[ixm+iy0+iz0])+
-                  (1/(cell[1]*cell[1])+g*ry*ry)*(v[ix0+iyp+iz0]+v[ix0+iym+iz0])+
-                  (1/(cell[2]*cell[2])+g*rz*rz)*(v[ix0+iy0+izp]+v[ix0+iy0+izm])+
-                  (g*rx*ry/2)*(v[ixp+iyp+iz0]+v[ixm+iym+iz0]
-                              -v[ixm+iyp+iz0]-v[ixp+iym+iz0])+
-                  (g*rx*rz/2)*(v[ixp+iy0+izp]+v[ixm+iy0+izm]
-                              -v[ixm+iy0+izp]-v[ixp+iy0+izm])+
-                  (g*ry*rz/2)*(v[ix0+iyp+izp]+v[ix0+iym+izm]
-                              -v[ix0+iym+izp]-v[ix0+iyp+izm])+
-                  (g*rx)*(v[ixp+iy0+iz0]-v[ixm+iy0+iz0])+
-                  (g*ry)*(v[ix0+iyp+iz0]-v[ix0+iym+iz0])+
-                  (g*rz)*(v[ix0+iy0+izp]-v[ix0+iy0+izm]));
-      }
-    }
-  }
-  // Now subtract it from f
-  #pragma omp parallel for shared(r,f)
-  for (size_t ii=0; ii<size; ii++) r[ii] = f[ii] - r[ii];
-}
-*/
 
 
 void prolong(const FLOAT* v2h, FLOAT* v1h, const int* nmesh) {
@@ -228,17 +178,16 @@ void prolong(const FLOAT* v2h, FLOAT* v1h, const int* nmesh) {
     int ix0 = nmeshyz*ix;
     int ixp = nmeshyz*((ix+1) % nmesh[0]);
     int i2x0 = nmesh2yz*2*ix;
-    int i2xp = nmesh2yz*(2*ix+1);
+    int i2xp = i2x0 + nmesh2yz;
     for (int iy=0; iy<nmesh[1]; iy++) {
       int iy0 = nmeshz*iy;
       int iyp = nmeshz*((iy+1) % nmesh[1]);
       int i2y0 = nmesh2z*2*iy;
-      int i2yp = nmesh2z*(2*iy+1);
-      for (int iz=0; iz<nmesh[2]; iz++) {
-        int iz0 = iz;
-        int izp = (iz+1) % nmesh[2];
-        int i2z0 = 2*iz;
-        int i2zp = (2*iz + 1);
+      int i2yp = i2y0 + nmesh2z;
+      for (int iz0=0; iz0<nmesh[2]; iz0++) {
+        int izp = (iz0+1) % nmesh[2];
+        int i2z0 = 2*iz0;
+        int i2zp = i2z0 + 1;
         int ii0 = ix0+iy0+iz0;
         v1h[i2x0+i2y0+i2z0] = v2h[ii0];
         v1h[i2xp+i2y0+i2z0] = (v2h[ii0] + v2h[ixp+iy0+iz0])/2;
@@ -282,39 +231,40 @@ void reduce(const FLOAT* v1h, FLOAT* v2h, const int* nmesh) {
       size_t iym = nmeshz*((2*iy-1 + nmesh[1]) % nmesh[1]);
       for (int iz=0; iz<nmesh2[2]; iz++) {
         size_t iz0 = 2*iz;
-        size_t izp = (2*iz+1) % nmesh[2];
-        size_t izm = (2*iz-1 + nmesh[2]) % nmesh[2];
+        size_t izp = (iz0+1) % nmesh[2];
+        size_t izm = (iz0-1 + nmesh[2]) % nmesh[2];
         v2h[nmesh2yz*ix+nmesh2z*iy+iz] = (8*v1h[ix0+iy0+iz0]+
-                                          4*v1h[ixp+iy0+iz0]+
-                                          4*v1h[ixm+iy0+iz0]+
-                                          4*v1h[ix0+iyp+iz0]+
-                                          4*v1h[ix0+iym+iz0]+
-                                          4*v1h[ix0+iy0+izp]+
-                                          4*v1h[ix0+iy0+izm]+
-                                          2*v1h[ixp+iyp+iz0]+
-                                          2*v1h[ixm+iyp+iz0]+
-                                          2*v1h[ixp+iym+iz0]+
-                                          2*v1h[ixm+iym+iz0]+
-                                          2*v1h[ixp+iy0+izp]+
-                                          2*v1h[ixm+iy0+izp]+
-                                          2*v1h[ixp+iy0+izm]+
-                                          2*v1h[ixm+iy0+izm]+
-                                          2*v1h[ix0+iyp+izp]+
-                                          2*v1h[ix0+iym+izp]+
-                                          2*v1h[ix0+iyp+izm]+
-                                          2*v1h[ix0+iym+izm]+
-                                            v1h[ixp+iyp+izp]+
-                                            v1h[ixm+iyp+izp]+
-                                            v1h[ixp+iym+izp]+
-                                            v1h[ixm+iym+izp]+
-                                            v1h[ixp+iyp+izm]+
-                                            v1h[ixm+iyp+izm]+
-                                            v1h[ixp+iym+izm]+
-                                            v1h[ixm+iym+izm])/64.0;
+                                          4*(v1h[ixp+iy0+iz0]+
+                                          v1h[ixm+iy0+iz0]+
+                                          v1h[ix0+iyp+iz0]+
+                                          v1h[ix0+iym+iz0]+
+                                          v1h[ix0+iy0+izp]+
+                                          v1h[ix0+iy0+izm])+
+                                          2*(v1h[ixp+iyp+iz0]+
+                                          v1h[ixm+iyp+iz0]+
+                                          v1h[ixp+iym+iz0]+
+                                          v1h[ixm+iym+iz0]+
+                                          v1h[ixp+iy0+izp]+
+                                          v1h[ixm+iy0+izp]+
+                                          v1h[ixp+iy0+izm]+
+                                          v1h[ixm+iy0+izm]+
+                                          v1h[ix0+iyp+izp]+
+                                          v1h[ix0+iym+izp]+
+                                          v1h[ix0+iyp+izm]+
+                                          v1h[ix0+iym+izm])+
+                                          v1h[ixp+iyp+izp]+
+                                          v1h[ixm+iyp+izp]+
+                                          v1h[ixp+iym+izp]+
+                                          v1h[ixm+iym+izp]+
+                                          v1h[ixp+iyp+izm]+
+                                          v1h[ixm+iyp+izm]+
+                                          v1h[ixp+iym+izm]+
+                                          v1h[ixm+iym+izm])/64.0;
       }
     }
   }
 }
+
 
 
 void vcycle(FLOAT* v, const FLOAT* f, const int* nmesh, const FLOAT* boxsize, const FLOAT* boxcenter, const FLOAT beta, const FLOAT damping_factor, const int niterations, const FLOAT* los) {

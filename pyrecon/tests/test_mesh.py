@@ -1,6 +1,6 @@
 import numpy as np
 
-from pyrecon import RealMesh, MeshInfo, utils
+from pyrecon import RealMesh, ComplexMesh, MeshInfo, utils
 
 
 def test_info():
@@ -102,14 +102,122 @@ def test_hermitian():
     assert np.allclose(mesh_hermitian,mesh_fft)
 
 
+def test_misc():
+
+    for Cls, dtype in zip([RealMesh, ComplexMesh], ['f8', 'c16']):
+        mesh = Cls(value=1., boxsize=1., boxcenter=0., nmesh=(4,3,5), dtype=dtype)
+        value = np.array(mesh.value)
+        arrays = [1. + c for c in mesh.coords()]
+        index_zero = (0,0,0)
+        tmp = sum(utils.broadcast_arrays(*arrays))
+        tmp[index_zero] = 1.
+        for exp in [-2, -1, 1, 2]:
+            ref = value*tmp**exp
+            ref[index_zero] = 0.
+            mesh.value = 1.
+            mesh.prod_sum(arrays, exp=exp)
+            mesh[index_zero] = 0.
+            assert np.allclose(mesh.value, ref)
+
+        #for axis in range(3):
+        #    mesh.value = 1.
+        #    ref = np.apply_along_axis(lambda x: x*arrays[axis], axis, mesh.value)
+        #    mesh.prod_along_axis(arrays[axis], axis=axis)
+        #    assert np.allclose(mesh.value, ref)
+
+
+def test_pyfftw():
+    import time
+    import pyfftw
+
+    nthreads = 4
+    nmesh = (256,)*3
+    niter = 10
+    rho = pyfftw.empty_aligned(nmesh, dtype='complex128')
+    rhok = pyfftw.empty_aligned(nmesh, dtype='complex128')
+
+    fft_obj = pyfftw.FFTW(rho, rhok, axes=[0, 1, 2], threads=nthreads)
+    ifft_obj = pyfftw.FFTW(rhok, rho, axes=[0, 1, 2], threads=nthreads, direction='FFTW_BACKWARD')
+
+    t0 = time.time()
+    for i in range(niter): fft_obj(input_array=rho, output_array=rhok)
+    print('Took {:.3f} s.'.format(time.time() - t0))
+    #ifft_obj(input_array=rhok, output_array=rho)
+
+    rho2 = rho.copy()
+    rhok2 = rhok.copy()
+    t0 = time.time()
+    for i in range(niter): fft_obj(input_array=rho2, output_array=rhok2)
+    print('Took {:.3f} s.'.format(time.time() - t0))
+
+
+def test_timing():
+
+    import os
+    import time
+    nmesh = 400
+    nthreads = 1
+    os.environ['OMP_NUM_THREADS'] = str(nthreads)
+    niter = 10
+
+    mesh = ComplexMesh(1., boxsize=1000., boxcenter=0., nmesh=nmesh, hermitian=False, dtype='c16', nthreads=nthreads)
+    t0 = time.time()
+    for i in range(niter):
+        k = utils.broadcast_arrays(*mesh.coords())
+        k2 = sum(kk**2 for kk in k)
+        k2[0,0,0] = 1. # to avoid dividing by 0
+        mesh /= k2
+    print('Took {:.3f} s.'.format(time.time() - t0))
+
+    mesh = ComplexMesh(1., boxsize=1000., boxcenter=0., nmesh=nmesh, hermitian=False, dtype='c16', nthreads=nthreads)
+    t0 = time.time()
+    for i in range(niter):
+        k = mesh.coords()
+        k2 = [k**2 for k in mesh.coords()]
+        mesh.prod_sum(k2, exp=-1)
+        mesh[0,0,0] = 0.
+    print('Took {:.3f} s.'.format(time.time() - t0))
+
+    import sys
+    sys.path.insert(0,'../../../../reconstruction/Revolver')
+    from python_tools import fastmodules
+    mesh = ComplexMesh(1., boxsize=1000., boxcenter=0., nmesh=nmesh, hermitian=False, dtype='c16', nthreads=nthreads)
+    t0 = time.time()
+    for i in range(niter):
+        k = mesh.coords()[0]
+        fastmodules.divide_k2(mesh.value, mesh.value, k)
+        mesh[0,0,0] = 0.
+    print('Took {:.3f} s.'.format(time.time() - t0))
+
+    bias = 2.
+    mesh = ComplexMesh(1., boxsize=1000., boxcenter=0., nmesh=nmesh, hermitian=False, dtype='c16', nthreads=nthreads)
+    t0 = time.time()
+    for i in range(niter):
+        k = utils.broadcast_arrays(*mesh.coords())[0]
+        k[0,0,0] = 1.
+        mesh.value *= 1j/(bias*k)
+    print('Took {:.3f} s.'.format(time.time() - t0))
+
+    mesh = ComplexMesh(1., boxsize=1000., boxcenter=0., nmesh=nmesh, hermitian=False, dtype='c16', nthreads=nthreads)
+    t0 = time.time()
+    for i in range(niter):
+        k = mesh.coords()[0]
+        k[0] = 1.
+        fastmodules.mult_kx(mesh.value, mesh.value, k, bias)
+    print('Took {:.3f} s.'.format(time.time() - t0))
+
 
 
 
 if __name__ == '__main__':
 
+    #test_pyfftw()
+    #test_timing()
+    #test_misc()
     test_info()
     test_cic()
     test_finite_difference_cic()
     test_smoothing()
     test_fft()
     test_hermitian()
+    test_misc()

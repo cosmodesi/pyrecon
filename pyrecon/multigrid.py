@@ -101,7 +101,7 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int,shape=ndim)
         type_boxsize = ctypeslib.ndpointer(dtype=self._type_float,shape=ndim)
         type_pointer = ctypes.POINTER(self._type_float)
-        func.argtypes = (self.mesh_delta._type_mesh,self.mesh_delta._type_mesh,
+        func.argtypes = (self.mesh_delta._type_float_mesh,self.mesh_delta._type_float_mesh,
                         type_nmesh,type_boxsize,type_boxsize,
                         self._type_float,self._type_float,ctypes.c_int,ctypes.c_int,
                         type_pointer if self.los is None else type_boxsize)

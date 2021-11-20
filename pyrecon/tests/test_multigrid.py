@@ -104,7 +104,10 @@ def compute_ref(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
 
     catalog_dir = os.path.dirname(infn)
     command = '{0} {1} {2} {2} 2 0.81 15'.format(recon_code,*[os.path.basename(infn) for infn in input_fn])
+    t0 = time.time()
+    print(command)
     subprocess.call(command,shell=True,cwd=catalog_dir)
+    print('recon_code completed in {:.2f} s'.format(time.time() - t0), flush=True)
 
     output_fn = [os.path.join(catalog_dir,base) for base in ['data_rec.xyzw','rand_rec.xyzw']]
     for infn,fn,outfn in zip([data_fn,randoms_fn],[output_data_fn,output_randoms_fn],output_fn):
@@ -140,13 +143,11 @@ def test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
                 stop = (islab+1)*size//nslabs
                 data = ff.read(columns=['Position','Weight'],rows=range(start,stop))
                 assign(data['Position'],data['Weight'])
-
-
+    t0 = time.time()
     recon.set_density_contrast()
     #print(np.max(recon.mesh_delta))
-    t0 = time.time()
     recon.run()
-    print('run completed in {:.4f} s'.format(time.time() - t0))
+    print('pyrecon completed in {:.4f} s'.format(time.time() - t0))
     #print(np.std(recon.mesh_phi))
     #recon.f = recon.beta
 
@@ -308,6 +309,11 @@ if __name__ == '__main__':
     script_output_box_data_fn = os.path.join(catalog_dir,'script_box_data_rec.fits')
     script_output_data_fn = os.path.join(catalog_dir,'script_data_rec.fits')
     script_output_randoms_fn = os.path.join(catalog_dir,'script_randoms_rec.fits')
+
+    #compute_ref(data_fn,randoms_fn,ref_output_data_fn,ref_output_randoms_fn)
+    #test_recon(data_fn,randoms_fn,output_data_fn,output_randoms_fn)
+    #compare_ref(data_fn,output_data_fn,ref_output_data_fn)
+    #exit()
 
     test_random()
     test_no_nrandoms()

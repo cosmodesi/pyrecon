@@ -21,6 +21,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         ----------
         fft_engine : string, BaseFFTEngine, default='numpy'
             Engine for fast Fourier transforms. See :class:`BaseFFTEngine`.
+            We strongly recommend using 'fftw' for multithreaded FFTs.
 
         fft_wisdom : string, tuple
             Wisdom for FFTW, if ``fft_engine`` is 'fftw'.
@@ -125,9 +126,12 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         del self.mesh_data
         delta_k = self.mesh_delta.to_complex(engine=self.fft_engine)
         k = utils.broadcast_arrays(*delta_k.coords())
-        k2 = sum(kk**2 for kk in k)
-        k2[0,0,0] = 1. # to avoid dividing by 0
-        delta_k /= k2
+        delta_k.prod_sum([k**2 for k in delta_k.coords()], exp=-1)
+        delta_k[0,0,0] = 0.
+        #k = utils.broadcast_arrays(*delta_k.coords())
+        #k2 = sum(kk**2 for kk in k)
+        #k2[0,0,0] = 1. # to avoid dividing by 0
+        #delta_k /= k2
         self.log_info('Computing displacement field.')
         shifts = np.empty_like(self._positions_rec_data)
         psis = []
@@ -179,9 +183,9 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
 
         Parameters
         ----------
-        positions : array of shape (N,3), string
+        positions : array of shape (N, 3), string
             Cartesian positions.
-            Pass string 'data' if you wish to get the displacements for the input data positions.
+            Pass string 'data' if you wish to get the displacements for the input data positions, passed to :meth:`assign_data`.
             Note that in this case, shifts are read at the reconstructed data real-space positions.
 
         field : string, default='disp+rsd'

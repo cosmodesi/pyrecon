@@ -19,6 +19,7 @@ class PlaneParallelFFTReconstruction(BaseReconstruction):
         ----------
         fft_engine : string, BaseFFTEngine, default='numpy'
             Engine for fast Fourier transforms. See :class:`BaseFFTEngine`.
+            We strongly recommend using 'fftw' for multithreaded FFTs.
 
         fft_wisdom : string, tuple
             Wisdom for FFTW, if ``fft_engine`` is 'fftw'.

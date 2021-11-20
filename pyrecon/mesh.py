@@ -76,8 +76,91 @@ class BaseMesh(NDArrayLike,BaseClass,metaclass=BaseMetaClass):
     ndim : array
         See :class:`MeshInfo`.
     """
-    _attrs = ['info','dtype','nthreads','attrs']
+    _attrs = ['info', 'dtype', 'nthreads', 'attrs']
     _HANDLED_TYPES = (np.ndarray, numbers.Number)
+
+    _path_lib = os.path.join(utils.lib_dir, 'mesh_{}.so')
+
+    def __init__(self, value=None, dtype=None, info=None, nthreads=None, attrs=None, **kwargs):
+        """
+        Initalize :class:`BaseMesh`.
+
+        Parameters
+        ----------
+        value : array, default=None
+            Numpy array holding mesh values, or ``None`` (can set later through ``mesh.value = value``.
+
+        dtype : string, np.dtype, defaut=None
+            Type for :attr:`value` array.
+            If ``None``, defaults to ``np.asarray(value).dtype`` if ``value`` is not ``None``, else 'f8'.
+
+        info : MeshInfo, default=None
+            Mesh information (boxsize, boxcenter, nmesh, etc.),
+            copied and updated with ``kwargs``.
+
+        nthreads : int
+            Number of threads to use in mesh calculations.
+
+        attrs : dict
+            Dictionary of other attributes.
+
+        kwargs : dict
+            Arguments for :class:`MeshInfo`.
+        """
+        if value is not None:
+            value = np.asarray(value)
+            if dtype is None:
+                dtype = value.dtype
+        if info is None:
+            self.info = MeshInfo(value=value, **kwargs)
+        else:
+            self.info = info.copy(**kwargs)
+        self.value = None
+        self.dtype = np.dtype(dtype if dtype is not None else 'f8')
+        self.value = value
+        self.set_num_threads(nthreads)
+        self.attrs = attrs or {}
+
+    @SetterProperty
+    def dtype(self, dtype):
+        """Called when setting :attr:`dtype`, loading the relevant C-library."""
+        self.__dict__['dtype'] = np.dtype(dtype)
+        self.value = self.value
+        self._lib = ctypes.CDLL(self._path_lib.format(self._precision), mode=ctypes.RTLD_LOCAL)
+
+    @property
+    def _precision(self):
+        # Return float if float32, double if float64
+        return self._type_float.__name__[len('c_'):]
+
+    @property
+    def _type_float(self):
+        # Return ctypes-type corresponding to numpy-dtype
+        # Take care of complex type
+        if self.dtype.name.startswith('complex'):
+            dtype = np.dtype('f{:d}'.format(self.dtype.itemsize//2))
+        else:
+            dtype = self.dtype
+        return ctypeslib.as_ctypes_type(dtype)
+
+    @property
+    def _type_float_mesh(self):
+        # Return ctypes-type for numpy array
+        return ctypeslib.ndpointer(dtype=self._type_float, shape=self.size, flags='C')
+
+    def set_num_threads(self, nthreads=None):
+        """Set number of OpenMP threads."""
+        if nthreads is not None:
+            func = self._lib.set_num_threads
+            func.argtypes = (ctypes.c_int,)
+            func(nthreads)
+
+    @property
+    def nthreads(self):
+        """Number of OpenMP threads."""
+        func = self._lib.get_num_threads
+        func.restype = ctypes.c_int
+        return func()
 
     def __mul__(self, other):
         r = self.deepcopy(copy_value=False)
@@ -171,30 +254,25 @@ class BaseMesh(NDArrayLike,BaseClass,metaclass=BaseMetaClass):
         return np.prod(self.shape)
 
     @SetterProperty
-    def dtype(self, dtype):
-        self.__dict__['dtype'] = np.dtype(dtype)
-        self.value = self.value
-
-    @SetterProperty
     def value(self, value):
         if value is not None:
-            if isinstance(value,np.ndarray):
+            if isinstance(value, np.ndarray) and value.size == self.size:
                 value.shape = self.shape
-                value = value.astype(self.dtype,copy=False)
+                value = value.astype(self.dtype, copy=False, order='C')
             else:
                 value_ = value
-                value = np.empty(shape=self.shape,dtype=self.dtype,order='C')
+                value = np.empty(shape=self.shape, dtype=self.dtype, order='C')
                 value[...] = value_
         self.__dict__['value'] = value
 
     def zeros_like(self):
         new = self.deepcopy(copy_value=False)
-        new.value = np.zeros(shape=self.shape,dtype=self.dtype,order='C')
+        new.value = np.zeros(shape=self.shape, dtype=self.dtype, order='C')
         return new
 
     def empty_like(self, *args, **kwargs):
         new = self.deepcopy(copy_value=False)
-        new.value = np.empty(shape=self.shape,dtype=self.dtype,order='C')
+        new.value = np.empty(shape=self.shape, dtype=self.dtype, order='C')
         return new
 
     def __repr__(self):
@@ -235,17 +313,17 @@ class MeshInfo(BaseClass):
     nmesh : array
         Mesh size, i.e. number of mesh nodes along each axis.
     """
-    _attrs = ['boxsize','boxcenter','nmesh']
+    _attrs = ['boxsize', 'boxcenter', 'nmesh']
 
-    def __init__(self, value=None, boxsize=None, boxcenter=None, cellsize=None, nmesh=None, positions=None, boxpad=1.5):
+    def __init__(self, nmesh=None, boxsize=None, boxcenter=None, cellsize=None, value=None, positions=None, boxpad=1.5):
         """
         Initalize :class:`MeshInfo`.
 
         Parameters
         ----------
-        value : array, default=None
-            Only used to get mesh size.
-            If not provided, see ``nmesh``.
+        nmesh : array, int, default=None
+            Mesh size, i.e. number of mesh nodes along each axis.
+            If not provided, see ``value``.
 
         boxsize : float, default=None
             Physical size of the box.
@@ -260,8 +338,8 @@ class MeshInfo(BaseClass):
             If not ``None``, and mesh size ``nmesh`` is not ``None``, used to set ``boxsize`` as ``nmesh * cellsize``.
             If ``nmesh`` is ``None``, it is set as (the nearest integer(s) to) ``boxsize/cellsize``.
 
-        nmesh : array, int, default=None
-            Mesh size, i.e. number of mesh nodes along each axis.
+        value : array, default=None
+            Only used to get mesh size.
 
         positions : array of shape (N,3), default=None
             If ``boxsize`` and / or ``boxcenter`` is ``None``, use these positions
@@ -270,7 +348,7 @@ class MeshInfo(BaseClass):
         boxpad : float, default=1.5
             When ``boxsize`` is determined from ``positions``, take ``boxpad`` times the smallest box enclosing ``positions`` as ``boxsize``.
         """
-        if value is not None:
+        if value is not None and nmesh is None:
             nmesh = value.shape
 
         if boxsize is None or boxcenter is None:
@@ -368,39 +446,9 @@ class RealMesh(BaseMesh):
         kwargs : dict
             Arguments for :class:`MeshInfo`.
         """
-        if value is not None:
-            dtype = value.dtype
-        if info is None:
-            self.info = MeshInfo(value=value,**kwargs)
-        else:
-            self.info = info.copy(**kwargs)
-        self.value = None
-        self.dtype = np.dtype(dtype)
-        self.value = value
-        self.set_num_threads(nthreads)
-        self.attrs = attrs or {}
-
-    @SetterProperty
-    def dtype(self, dtype):
-        """Called when setting :attr:`dtype`, loading the relevant C-library."""
-        self.__dict__['dtype'] = np.dtype(dtype)
-        self.value = self.value
-        self._lib = ctypes.CDLL(self._path_lib.format(self._precision),mode=ctypes.RTLD_LOCAL)
-
-    @property
-    def _precision(self):
-        # Return float if float32, double if float64
-        return self._type_float.__name__[len('c_'):]
-
-    @property
-    def _type_float(self):
-        # Return ctypes-type corresponding to numpy-dtype
-        return ctypeslib.as_ctypes_type(self.dtype)
-
-    @property
-    def _type_mesh(self):
-        # Return ctypes-type for numpy array
-        return ctypeslib.ndpointer(dtype=self._type_float,shape=np.prod(self.nmesh),flags='C')
+        super(RealMesh, self).__init__(value=value, dtype=dtype, info=info, nthreads=nthreads, attrs=attrs, **kwargs)
+        if 'float' not in self.dtype.name:
+            raise MeshError('Provide float dtype')
 
     def coords(self):
         """Return array of coordinates along each axis."""
@@ -408,20 +456,6 @@ class RealMesh(BaseMesh):
         for idim,(n,o,d) in enumerate(zip(self.nmesh,self.offset,self.boxsize/self.nmesh)):
             toret.append(o + d*np.arange(n))
         return tuple(toret)
-
-    def set_num_threads(self, nthreads=None):
-        """Set number of OpenMP threads."""
-        if nthreads is not None:
-            func = self._lib.set_num_threads
-            func.argtypes = (ctypes.c_int,)
-            func(nthreads)
-
-    @property
-    def nthreads(self):
-        """Number of OpenMP threads."""
-        func = self._lib.get_num_threads
-        func.restype = ctypes.c_int
-        return func()
 
     def assign_cic(self, positions, weights=None):
         """
@@ -446,11 +480,12 @@ class RealMesh(BaseMesh):
         type_weights = ctypeslib.ndpointer(dtype=self._type_float,shape=weights.size,flags='C')
         type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int,shape=self.ndim,flags='C')
         func = self._lib.assign_cic
-        func.argtypes = (self._type_mesh,type_nmesh,type_positions,type_weights,ctypes.c_size_t)
+        func.argtypes = (self._type_float_mesh,type_nmesh,type_positions,type_weights,ctypes.c_size_t)
         func.restype = ctypes.c_int
         self.value.shape = -1
         flag = func(self.value,self.nmesh.astype(ctypes.c_int,copy=False),positions,weights,size)
-        if (flag != 0): raise MeshError('Issue with assign_cic')
+        if (flag != 0):
+            raise MeshError('Issue with assign_cic')
         self.value.shape = self.shape
 
     def read_cic(self, positions):
@@ -475,10 +510,11 @@ class RealMesh(BaseMesh):
         type_values = ctypeslib.ndpointer(dtype=self._type_float,shape=values.size,flags='C')
         type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int,shape=self.ndim,flags='C')
         func = self._lib.read_cic
-        func.argtypes = (self._type_mesh,type_nmesh,type_positions,type_values,ctypes.c_size_t)
+        func.argtypes = (self._type_float_mesh,type_nmesh,type_positions,type_values,ctypes.c_size_t)
         func.restype = ctypes.c_int
         flag = func(self.value.ravel(order='C'),self.nmesh.astype(ctypes.c_int,copy=False),positions,values,size)
-        if (flag != 0): raise MeshError('Issue with read_cic')
+        if (flag != 0):
+            raise MeshError('Issue with read_cic')
         return values
 
     def read_finite_difference_cic(self, positions):
@@ -503,10 +539,11 @@ class RealMesh(BaseMesh):
         type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int,shape=self.ndim,flags='C')
         type_boxsize = ctypeslib.ndpointer(dtype=self._type_float,shape=self.ndim,flags='C')
         func = self._lib.read_finite_difference_cic
-        func.argtypes = (self._type_mesh,type_nmesh,type_boxsize,type_positions,type_positions,ctypes.c_size_t)
+        func.argtypes = (self._type_float_mesh,type_nmesh,type_boxsize,type_positions,type_positions,ctypes.c_size_t)
         func.restype = ctypes.c_int
         flag = func(self.value.ravel(order='C'),self.nmesh.astype(ctypes.c_int,copy=False),self.boxsize.astype(self._type_float,copy=False),positions,values,size)
-        if (flag != 0): raise MeshError('Issue with read_finite_difference_cic')
+        if (flag != 0):
+            raise MeshError('Issue with read_finite_difference_cic')
         values.shape = (size,self.ndim)
         return values
 
@@ -537,18 +574,19 @@ class RealMesh(BaseMesh):
             valuek *= np.exp(k2)
             self.value = valuek.to_real(engine=engine).value
             #func = self._lib.smooth_fft_gaussian
-            #func.argtypes = (self._type_mesh,type_nmesh,type_boxsize)
+            #func.argtypes = (self._type_float_mesh,type_nmesh,type_boxsize)
             #func(self.value.ravel(order='C'),self.nmesh,radius/self.boxsize)
         else:
             radius = radius_/self.boxsize
             type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int,shape=self.ndim,flags='C')
             type_boxsize = ctypeslib.ndpointer(dtype=self._type_float,shape=self.ndim,flags='C')
             func = self._lib.smooth_gaussian
-            func.argtypes = (self._type_mesh,type_nmesh,type_boxsize,self._type_float)
+            func.argtypes = (self._type_float_mesh,type_nmesh,type_boxsize,self._type_float)
             self.value.shape = -1
             func.restype = ctypes.c_int
-            flag = func(self.value,self.nmesh.astype(ctypes.c_int,copy=False),radius.astype(self._type_float,copy=False),nsigmas)
-            if (flag != 0): raise MeshError('Issue with read_finite_difference_cic')
+            flag = func(self.value, self.nmesh.astype(ctypes.c_int,copy=False),radius.astype(self._type_float,copy=False),nsigmas)
+            if (flag != 0):
+                raise MeshError('Issue with read_finite_difference_cic')
             self.value.shape = self.shape
 
     def get_fft_engine(self, engine='numpy', **kwargs):
@@ -581,6 +619,35 @@ class RealMesh(BaseMesh):
         engine = self.get_fft_engine(*args,**kwargs)
         return ComplexMesh(engine.forward(self.value),info=self.info,nthreads=self.nthreads,hermitian=engine.hermitian,attrs=self.attrs)
 
+    def prod_sum(self, arrays, exp=1):
+        """
+        Multiply mesh by ``(arrays[0][:,None,None] + arrays[1][None,:,None] + arrays[2][None,None,:]) ** exp``
+
+        Parameters
+        ----------
+        arrays : sequence of 3 float arrays
+            Arrays to multiply mesh by.
+
+        exp : int, default=1
+            Exponent to raise broadcast sum of arrays to.
+        """
+        if len(arrays) != 3:
+            raise MeshError('Provide a sequence of 3 arrays')
+        arrays = list(arrays)
+        arrays = np.concatenate(arrays[::-1], axis=0, dtype=self._type_float) # ::-1 for prod_sum
+        if arrays.size != sum(self.shape):
+            raise MeshError('Length of input arrays must match shape')
+        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int, shape=self.ndim, flags='C')
+        type_arrays = ctypeslib.ndpointer(dtype=self._type_float, shape=arrays.size, flags='C')
+        func = self._lib.prod_sum
+        func.argtypes = (self._type_float_mesh, type_nmesh, type_arrays, ctypes.c_int)
+        func.restype = ctypes.c_int
+        self.value.shape = -1
+        flag = func(self.value, self.nmesh.astype(ctypes.c_int,copy=False), arrays, exp)
+        self.value.shape = self.shape
+        if (flag != 0):
+            raise MeshError('Issue with prod_sum')
+
 
 class ComplexMesh(BaseMesh):
     """
@@ -592,9 +659,9 @@ class ComplexMesh(BaseMesh):
         Whether mesh has Hermitian symmetry, i.e. is real when Fourier transformed.
         In this case, :attr:`shape` is half :attr:`nmesh` on the last axis.
     """
-    _attrs = BaseMesh._attrs + ['hermitian','nthreads']
+    _attrs = BaseMesh._attrs + ['hermitian']
 
-    def __init__(self, value=None,  dtype='c16', info=None, nthreads=None, hermitian=True, attrs=None):
+    def __init__(self, value=None, dtype='c16', info=None, hermitian=True, nthreads=None, attrs=None, **kwargs):
         """
         Initialize :class:`ComplexMesh`.
 
@@ -609,25 +676,23 @@ class ComplexMesh(BaseMesh):
         info : MeshInfo, default=None
             Mesh information (boxsize, boxcenter, nmesh, etc.).
 
-        nthreads : int
-            Number of threads to use in mesh calculations.
-
         hermitian : bool
             Whether mesh has Hermitian symmetry, i.e. is real when Fourier transformed.
             In this case, :attr:`shape` is half :attr:`nmesh` on the last axis.
 
+        nthreads : int
+            Number of threads to use in mesh calculations.
+
         attrs : dict
             Dictionary of other attributes.
+
+        kwargs : dict
+            Arguments for :class:`MeshInfo`.
         """
-        self.info = info
         self.hermitian = hermitian
-        if value is not None:
-            dtype = value.dtype
-        self.value = None
-        self.dtype = np.dtype(dtype)
-        self.value = value
-        self.nthreads = nthreads
-        self.attrs = attrs or {}
+        super(ComplexMesh, self).__init__(value=value, dtype=dtype, info=info, nthreads=nthreads, attrs=attrs, **kwargs)
+        if 'complex' not in self.dtype.name:
+            raise MeshError('Provide complex dtype')
 
     @property
     def shape(self):
@@ -643,7 +708,7 @@ class ComplexMesh(BaseMesh):
     def coords(self):
         """Return array of frequency (wavenumbers) along each axis."""
         toret = []
-        for idim,(n,d) in enumerate(zip(self.nmesh,self.boxsize/self.nmesh)):
+        for idim,(n,d) in enumerate(zip(self.nmesh, self.boxsize/self.nmesh)):
             if (not self.hermitian) or (idim < self.ndim - 1):
                 toret.append(2*np.pi*np.fft.fftfreq(n,d=d))
             else:
@@ -652,8 +717,8 @@ class ComplexMesh(BaseMesh):
 
     def get_fft_engine(self, engine='numpy', **kwargs):
         """Same as :meth:`RealMesh.get_fft_engine`."""
-        kwargs.setdefault('nthreads',self.nthreads)
-        return get_fft_engine(engine,shape=self.nmesh,type_complex=self.dtype,hermitian=self.hermitian,**kwargs)
+        kwargs.setdefault('nthreads', self.nthreads)
+        return get_fft_engine(engine,shape=self.nmesh, type_complex=self.dtype, hermitian=self.hermitian, **kwargs)
 
     def to_real(self, *args, **kwargs):
         """
@@ -664,7 +729,44 @@ class ComplexMesh(BaseMesh):
         engine = self.get_fft_engine(*args,**kwargs)
         if engine.hermitian != self.hermitian:
             raise MeshError('ComplexMesh has hermitian = {} but provided FFT engine has hermitian = {}'.format(self.hermitian,engine.hermitian))
-        return RealMesh(engine.backward(self.value).real,info=self.info,nthreads=self.nthreads,attrs=self.attrs)
+        return RealMesh(engine.backward(self.value).real, info=self.info, nthreads=self.nthreads, attrs=self.attrs)
+
+    def prod_sum(self, arrays, exp=1):
+        """
+        Multiply mesh by ``(arrays[0][:,None,None] + arrays[1][None,:,None] + arrays[2][None,None,:]) ** exp``
+
+        Parameters
+        ----------
+        arrays : sequence of 3 float arrays
+            Arrays to multiply mesh by.
+
+        exp : int, default=1
+            Exponent to raise broadcast sum of arrays to.
+        """
+        if len(arrays) != 3:
+            raise MeshError('Provide a sequence of 3 arrays')
+        arrays = list(arrays)
+        arrays[-1] = np.repeat(arrays[-1], 2)
+        arrays = np.concatenate(arrays[::-1], axis=0, dtype=self._type_float) # ::-1 for prod_sum
+        if arrays.size != sum(self.shape) + self.shape[-1]:
+            raise MeshError('Length of input arrays must match shape')
+        shape = np.asarray(self.shape, dtype=ctypes.c_int)
+        shape[-1] *= 2
+        type_mesh = ctypeslib.ndpointer(dtype=self._type_float, shape=np.prod(shape), flags='C')
+        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int, shape=self.ndim, flags='C')
+        type_arrays = ctypeslib.ndpointer(dtype=self._type_float, shape=arrays.size, flags='C')
+        func = self._lib.prod_sum
+        func.argtypes = (type_mesh, type_nmesh, type_arrays, ctypes.c_int)
+        func.restype = ctypes.c_int
+        #value = np.array(self.value)
+        #print(value.shape, value.size)
+        #value.shape = (value.size,)
+        self.value.shape = -1
+        value = self.value.view(dtype=self._type_float)
+        flag = func(value, shape, arrays, exp)
+        self.value = value.view(dtype=self.dtype)
+        if (flag != 0):
+            raise MeshError('Issue with prod_sum')
 
 
 class BaseFFTEngine(object):
@@ -692,7 +794,6 @@ class BaseFFTEngine(object):
     hermitian : bool
         Whether complex array has Hermitian symmetry, i.e. is real when Fourier transformed.
     """
-
     def __init__(self, shape, nthreads=None, type_complex=None, type_real=None, hermitian=True):
         """
         Initialize FFT engine.
@@ -714,9 +815,10 @@ class BaseFFTEngine(object):
             Type for real values.
             If not provided, use ``type_complex`` instead.
         """
-        if nthreads is not None:
-            os.environ['OMP_NUM_THREADS'] = str(nthreads)
-        self.nthreads = int(os.environ.get('OMP_NUM_THREADS',1))
+        if nthreads is None:
+            self.nthreads = int(os.environ.get('OMP_NUM_THREADS',1))
+        else:
+            self.nthreads = nthreads
         self.shape = tuple(shape)
         if type_complex is not None:
             self.type_complex = np.dtype(type_complex)
@@ -834,8 +936,6 @@ class FFTWEngine(BaseFFTEngine):
         else:
             output_array = pyfftw.empty_aligned(self.shape,dtype=self.type_complex,order='C')
         return self.fftw_backward_object(input_array=fun,output_array=output_array,normalise_idft=True)
-
-
 
 
 def get_fft_engine(engine, *args, **kwargs):

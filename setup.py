@@ -40,11 +40,14 @@ class custom_build(build):
         library_dir = sysconfig.get_config_var('LIBDIR')
 
         compiler = find_compiler()
+        os.environ.setdefault('CC', compiler)
         if compiler == 'clang':
-            os.environ.setdefault('CC','clang')
-            os.environ.setdefault('OMPFLAG','-Xclang -fopenmp -L{} -lomp'.format(library_dir))
+            flags = '-Xclang -fopenmp -L{} -lomp'.format(library_dir)
+        elif compiler in ['cc', 'icc']:
+            flags = '-fopenmp -L{} -lgomp -limf -liomp5'.format(library_dir)
         else:
-            os.environ.setdefault('OMPFLAG','-fopenmp -L{} -lgomp'.format(library_dir))
+            flags = '-fopenmp -L{} -lgomp'.format(library_dir)
+        os.environ.setdefault('OMPFLAG', flags)
 
         def compile():
             subprocess.call('make',shell=True,cwd=src_dir)

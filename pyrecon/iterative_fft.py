@@ -19,6 +19,7 @@ class IterativeFFTReconstruction(BaseReconstruction):
         ----------
         fft_engine : string, BaseFFTEngine, default='numpy'
             Engine for fast Fourier transforms. See :class:`BaseFFTEngine`.
+            We strongly recommend using 'fftw' for multithreaded FFTs.
 
         fft_wisdom : string, tuple
             Wisdom for FFTW, if ``fft_engine`` is 'fftw'.
@@ -55,9 +56,8 @@ class IterativeFFTReconstruction(BaseReconstruction):
         # First compute \delta(k)/k^{2} based on current \delta_{g,\mathrm{real},n} to estimate \phi_{\mathrm{est},n} (eq. 24)
         delta_k = self.mesh_delta_real.to_complex(engine=self.fft_engine)
         k = utils.broadcast_arrays(*delta_k.coords())
-        k2 = sum(k_**2 for k_ in k)
-        k2[0,0,0] = 1. # to avoid dividing by 0
-        delta_k /= k2
+        delta_k.prod_sum([k**2 for k in delta_k.coords()], exp=-1)
+        delta_k[0,0,0] = 0.
         self.mesh_delta_real = self.mesh_delta.deepcopy()
         # Now compute \beta \nabla \cdot (\nabla \phi_{\mathrm{est},n} \cdot \hat{r}) \hat{r}
         # In the plane-parallel case (self.los is a given vector), this is simply \beta IFFT((\hat{k} \cdot \hat{\eta})^{2} \delta(k))
