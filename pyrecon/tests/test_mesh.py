@@ -156,7 +156,7 @@ def test_timing():
     import os
     import time
     nmesh = 400
-    nthreads = 1
+    nthreads = 2
     os.environ['OMP_NUM_THREADS'] = str(nthreads)
     niter = 10
 
@@ -167,7 +167,7 @@ def test_timing():
         k2 = sum(kk**2 for kk in k)
         k2[0,0,0] = 1. # to avoid dividing by 0
         mesh /= k2
-    print('Took {:.3f} s.'.format(time.time() - t0))
+    print('numpy took {:.3f} s.'.format(time.time() - t0))
 
     mesh = ComplexMesh(1., boxsize=1000., boxcenter=0., nmesh=nmesh, hermitian=False, dtype='c16', nthreads=nthreads)
     t0 = time.time()
@@ -176,7 +176,7 @@ def test_timing():
         k2 = [k**2 for k in mesh.coords()]
         mesh.prod_sum(k2, exp=-1)
         mesh[0,0,0] = 0.
-    print('Took {:.3f} s.'.format(time.time() - t0))
+    print('C took {:.3f} s.'.format(time.time() - t0))
 
     import sys
     sys.path.insert(0,'../../../../reconstruction/Revolver')
@@ -187,7 +187,7 @@ def test_timing():
         k = mesh.coords()[0]
         fastmodules.divide_k2(mesh.value, mesh.value, k)
         mesh[0,0,0] = 0.
-    print('Took {:.3f} s.'.format(time.time() - t0))
+    print('fastmodules took {:.3f} s.'.format(time.time() - t0))
 
     bias = 2.
     mesh = ComplexMesh(1., boxsize=1000., boxcenter=0., nmesh=nmesh, hermitian=False, dtype='c16', nthreads=nthreads)
@@ -196,7 +196,16 @@ def test_timing():
         k = utils.broadcast_arrays(*mesh.coords())[0]
         k[0,0,0] = 1.
         mesh.value *= 1j/(bias*k)
-    print('Took {:.3f} s.'.format(time.time() - t0))
+    print('numpy took {:.3f} s.'.format(time.time() - t0))
+
+    bias = 2.
+    mesh = ComplexMesh(1., boxsize=1000., boxcenter=0., nmesh=nmesh, hermitian=False, dtype='c16', nthreads=nthreads)
+    t0 = time.time()
+    for i in range(niter):
+        k = utils.broadcast_arrays(*mesh.coords())[0]
+        k[0,0,0] = 1.
+        mesh.value = mesh.value[...]
+    print('numpy took {:.3f} s.'.format(time.time() - t0))
 
     mesh = ComplexMesh(1., boxsize=1000., boxcenter=0., nmesh=nmesh, hermitian=False, dtype='c16', nthreads=nthreads)
     t0 = time.time()
@@ -204,7 +213,7 @@ def test_timing():
         k = mesh.coords()[0]
         k[0] = 1.
         fastmodules.mult_kx(mesh.value, mesh.value, k, bias)
-    print('Took {:.3f} s.'.format(time.time() - t0))
+    print('fastmodules took {:.3f} s.'.format(time.time() - t0))
 
 
 
@@ -214,6 +223,7 @@ if __name__ == '__main__':
     #test_pyfftw()
     #test_timing()
     #test_misc()
+    #exit()
     test_info()
     test_cic()
     test_finite_difference_cic()

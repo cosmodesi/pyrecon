@@ -8,13 +8,15 @@ LIBDIR ?= ../lib
 
 vpath %.so $(LIBDIR)
 
-%_float.so: %.c $(HEADERFILES)
-	@mkdir -p $(LIBDIR)
-	$(CC) $(OPT) -DFLOAT32 -fPIC -shared $< -o $(LIBDIR)/$@
+%_float.o: %.c $(HEADERFILES)
+	$(CC) $(OPT) -DFLOAT32 -fPIC -O3 -c $< -o $@
 
-%_double.so: %.c $(HEADERFILES)
+%_double.o: %.c $(HEADERFILES)
+	$(CC) $(OPT) -fPIC -O3 -c $< -o $@
+
+%.so: %.o
 	@mkdir -p $(LIBDIR)
-	$(CC) $(OPT) -fPIC -shared $< -o $(LIBDIR)/$@
+	$(CC) $(OPT) -shared $< -o $(LIBDIR)/$@
 
 all: mesh_float.so multigrid_float.so mesh_double.so multigrid_double.so
 

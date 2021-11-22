@@ -127,11 +127,11 @@ def test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
     boxcenter = [1753.8883893991,400.0001954356,400.0003824141]
     recon = OriginalMultiGridReconstruction(nthreads=2,boxsize=boxsize,boxcenter=boxcenter,nmesh=128,dtype='f8')
     recon.set_cosmo(f=0.81,bias=2.)
-    """
-    recon = OriginalMultiGridReconstruction(nthreads=1,positions=fitsio.read(randoms_fn,columns=['Position'])['Position'],nmesh=128,dtype='f4')
-    recon.set_cosmo(f=0.81,bias=2.)
-    print(recon.mesh_data.boxsize,recon.mesh_data.boxcenter)
-    """
+
+    #recon = OriginalMultiGridReconstruction(nthreads=1,positions=fitsio.read(randoms_fn,columns=['Position'])['Position'],nmesh=128,dtype='f4')
+    #recon.set_cosmo(f=0.81,bias=2.)
+    #print(recon.mesh_data.boxsize,recon.mesh_data.boxcenter)
+
     ext = 1
     nslabs = 1
     for fn,assign in zip([data_fn,randoms_fn],[recon.assign_data,recon.assign_randoms]):
@@ -143,9 +143,9 @@ def test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
                 stop = (islab+1)*size//nslabs
                 data = ff.read(columns=['Position','Weight'],rows=range(start,stop))
                 assign(data['Position'],data['Weight'])
-    t0 = time.time()
     recon.set_density_contrast()
     #print(np.max(recon.mesh_delta))
+    t0 = time.time()
     recon.run()
     print('pyrecon completed in {:.4f} s'.format(time.time() - t0))
     #print(np.std(recon.mesh_phi))
@@ -309,11 +309,6 @@ if __name__ == '__main__':
     script_output_box_data_fn = os.path.join(catalog_dir,'script_box_data_rec.fits')
     script_output_data_fn = os.path.join(catalog_dir,'script_data_rec.fits')
     script_output_randoms_fn = os.path.join(catalog_dir,'script_randoms_rec.fits')
-
-    #compute_ref(data_fn,randoms_fn,ref_output_data_fn,ref_output_randoms_fn)
-    #test_recon(data_fn,randoms_fn,output_data_fn,output_randoms_fn)
-    #compare_ref(data_fn,output_data_fn,ref_output_data_fn)
-    #exit()
 
     test_random()
     test_no_nrandoms()
