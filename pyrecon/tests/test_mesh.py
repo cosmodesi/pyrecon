@@ -90,22 +90,22 @@ def test_fft():
     except ImportError: pyfftw = None
     for hermitian in [True, False]:
         for kwargs in [{'engine':'numpy'}] + ([{'engine':'fftw'},{'engine':'fftw','plan':'estimate'}] if pyfftw is not None else []):
-            mesh2 = mesh.to_complex(hermitian=hermitian, **kwargs).to_real()
+            mesh_copy = mesh.value.copy()
+            mesh1 = mesh.to_complex(hermitian=hermitian,**kwargs)
+            assert np.all(mesh.value == mesh_copy)
+            mesh_copy = mesh1.value.copy()
+            mesh2 = mesh1.to_real()
+            assert np.all(mesh1.value == mesh_copy)
             assert np.allclose(mesh2,mesh,atol=1e-5)
 
-    mesh = RealMesh(value=1., boxsize=1000.,boxcenter=0.,nmesh=4,dtype='f8')
+    mesh = RealMesh(value=1.,boxsize=1000.,boxcenter=0.,nmesh=4,dtype='f8')
     cmesh = mesh.to_complex()
     from pyrecon.mesh import NumpyFFTEngine
     assert isinstance(mesh.fft_engine, NumpyFFTEngine)
     if pyfftw is not None:
-        mesh0 = mesh.deepcopy()
         cmesh = mesh.to_complex(engine='fftw', plan='estimate')
-        assert np.allclose(mesh.value, mesh0.value)
-        cmesh0 = cmesh.deepcopy()
-        mesh1 = cmesh.to_real(engine='fftw')
-        assert np.allclose(cmesh.value, cmesh0.value)
         from pyrecon.mesh import FFTWEngine
-        assert isinstance(mesh.fft_engine, FFTWEngine)
+        assert isinstance(cmesh.fft_engine, FFTWEngine)
     fft_engine = cmesh.fft_engine
     cmesh = cmesh + 1
     assert cmesh.fft_engine is fft_engine

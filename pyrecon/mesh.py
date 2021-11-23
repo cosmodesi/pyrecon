@@ -774,7 +774,8 @@ class ComplexMesh(BaseMesh):
         value = self.value
         kwargs = {}
         if isinstance(self.fft_engine, FFTWEngine):
-            value = self._copy_value()
+            if self.fft_engine.hermitian: # input destroyed only when hermitian
+                value = self._copy_value()
             kwargs = {'destroy_input':True}
         toret = RealMesh(self.fft_engine.backward(value, **kwargs).real, info=self.info, nthreads=self.nthreads, attrs=self.attrs)
         toret.fft_engine = self.fft_engine
@@ -1014,7 +1015,7 @@ class FFTWEngine(BaseFFTEngine):
         return toret
 
     def backward(self, fun, destroy_input=True):
-        """Return backward transform of ``fun``; ``destroy_input = True`` to allow destroy ``fun``."""
+        """Return backward transform of ``fun``; ``destroy_input = True`` to allow destroy ``fun`` (in case dimension > 1 and hermitian)."""
         if destroy_input:
             input_array = fun
         else:
