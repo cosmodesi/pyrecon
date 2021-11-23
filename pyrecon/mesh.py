@@ -120,6 +120,7 @@ class BaseMesh(NDArrayLike,BaseClass,metaclass=BaseMetaClass):
         self.value = value
         self.set_num_threads(nthreads)
         self.attrs = attrs or {}
+        self.fft_engine = None
 
     @SetterProperty
     def dtype(self, dtype):
@@ -283,7 +284,38 @@ class BaseMesh(NDArrayLike,BaseClass,metaclass=BaseMetaClass):
     def deepcopy(self, copy_value=True):
         kwargs = {name:getattr(self,name) for name in self._attrs}
         kwargs['info'] = kwargs['info'].deepcopy()
-        return self.__class__(self.value.copy() if copy_value and self.value is not None else self.value,**kwargs)
+        new = self.__class__(self.value.copy() if copy_value and self.value is not None else self.value,**kwargs)
+        new.fft_engine = self.fft_engine
+        return new
+
+    def get_fft_engine(self, engine='numpy', **kwargs):
+        """
+        Return engine for fast Fourier transform.
+
+        Parameters
+        ----------
+        engine : string, BaseFFTEngine, default='numpy'
+            If string, use 'numpy' or 'fftw' (package pyfftw must be installed);
+            else a FFT engine.
+
+        kwargs : dict
+            Options for the FFT engines, used if ``engine`` is a FFT engine name (string).
+            See :class:`NumpyFFTEngine` and :class:`FFTWEngine`.
+
+        Returns
+        -------
+        engine : BaseFFTEngine
+            FFT engine.
+        """
+        kwargs.setdefault('nthreads',self.nthreads)
+        return get_fft_engine(engine,shape=self.shape,type_real=self.dtype,**kwargs)
+
+    def set_fft_engine(self, engine='numpy', **kwargs):
+        """
+        Set engine for fast Fourier transform.
+        See :meth:`get_fft_engine`.
+        """
+        self.fft_engine = self.get_fft_engine(engine=engine, **kwargs)
 
 
 def _make_property(name):
@@ -568,11 +600,11 @@ class RealMesh(BaseMesh):
         radius_ = np.empty_like(self.boxsize,order='C')
         radius_[:] = radius
         if method == 'fft':
-            engine = self.get_fft_engine(**kwargs)
-            valuek = self.to_complex(engine=engine)
+            if kwargs or self.fft_engine is None: self.set_fft_engine(**kwargs)
+            valuek = self.to_complex()
             k2 = sum(-0.5*(r*k)**2 for r,k in zip(radius_,utils.broadcast_arrays(*valuek.coords())))
             valuek *= np.exp(k2)
-            self.value = valuek.to_real(engine=engine).value
+            self.value = valuek.to_real().value
             #func = self._lib.smooth_fft_gaussian
             #func.argtypes = (self._type_float_mesh,type_nmesh,type_boxsize)
             #func(self.value.ravel(order='C'),self.nmesh,radius/self.boxsize)
@@ -589,35 +621,15 @@ class RealMesh(BaseMesh):
                 raise MeshError('Issue with read_finite_difference_cic')
             self.value.shape = self.shape
 
-    def get_fft_engine(self, engine='numpy', **kwargs):
-        """
-        Return engine for fast Fourier transform.
-
-        Parameters
-        ----------
-        engine : string, BaseFFTEngine, default='numpy'
-            If string, use 'numpy' or 'fftw' (package pyfftw must be installed);
-            else a FFT engine.
-
-        kwargs : dict
-            Options for the FFT engines, used if ``engine`` is a FFT engine name (string).
-            See :class:`NumpyFFTEngine` and :class:`FFTWEngine`.
-
-        Returns
-        -------
-        engine : BaseFFTEngine
-            FFT engine.
-        """
-        kwargs.setdefault('nthreads',self.nthreads)
-        return get_fft_engine(engine,shape=self.shape,type_real=self.dtype,**kwargs)
-
     def to_complex(self, *args, **kwargs):
         """
         Return :class:`ComplexMesh` computed with fast Fourier transforms.
         See :meth:`get_fft_engine` for arguments.
         """
-        engine = self.get_fft_engine(*args,**kwargs)
-        return ComplexMesh(engine.forward(self.value),info=self.info,nthreads=self.nthreads,hermitian=engine.hermitian,attrs=self.attrs)
+        if kwargs or self.fft_engine is None: self.set_fft_engine(**kwargs)
+        toret = ComplexMesh(self.fft_engine.forward(self.value),info=self.info,nthreads=self.nthreads,hermitian=self.fft_engine.hermitian,attrs=self.attrs)
+        toret.fft_engine = self.fft_engine
+        return toret
 
     def prod_sum(self, arrays, exp=1):
         """
@@ -718,7 +730,7 @@ class ComplexMesh(BaseMesh):
     def get_fft_engine(self, engine='numpy', **kwargs):
         """Same as :meth:`RealMesh.get_fft_engine`."""
         kwargs.setdefault('nthreads', self.nthreads)
-        return get_fft_engine(engine,shape=self.nmesh, type_complex=self.dtype, hermitian=self.hermitian, **kwargs)
+        return get_fft_engine(engine, shape=self.nmesh, type_complex=self.dtype, hermitian=self.hermitian, **kwargs)
 
     def to_real(self, *args, **kwargs):
         """
@@ -726,10 +738,12 @@ class ComplexMesh(BaseMesh):
         See :meth:`get_fft_engine` for arguments.
         Raises a :class:`MeshError` if FFT engine has not same Hermitian symmetry.
         """
-        engine = self.get_fft_engine(*args,**kwargs)
-        if engine.hermitian != self.hermitian:
-            raise MeshError('ComplexMesh has hermitian = {} but provided FFT engine has hermitian = {}'.format(self.hermitian,engine.hermitian))
-        return RealMesh(engine.backward(self.value).real, info=self.info, nthreads=self.nthreads, attrs=self.attrs)
+        if kwargs or self.fft_engine is None: self.set_fft_engine(**kwargs)
+        if self.fft_engine.hermitian != self.hermitian:
+            raise MeshError('ComplexMesh has hermitian = {} but provided FFT engine has hermitian = {}'.format(self.hermitian,self.fft_engine.hermitian))
+        toret = RealMesh(self.fft_engine.backward(self.value).real, info=self.info, nthreads=self.nthreads, attrs=self.attrs)
+        toret.fft_engine = self.fft_engine
+        return toret
 
     def prod_sum(self, arrays, exp=1):
         """
@@ -882,7 +896,7 @@ class FFTWEngine(BaseFFTEngine):
 
     """FFT engine based on :mod:`pyfftw`."""
 
-    def __init__(self, shape, nthreads=None, wisdom=None, **kwargs):
+    def __init__(self, shape, nthreads=None, wisdom=None, plan='measure', **kwargs):
         """
         Initialize :mod:`pyfftw` engine.
 
@@ -891,13 +905,18 @@ class FFTWEngine(BaseFFTEngine):
         shape : list, tuple
             Array shape.
 
-        nthreads : int
+        nthreads : int, default=None
             Number of threads.
 
-        wisdom : string, tuple
+        wisdom : string, tuple, default=None
             :mod:`pyfftw` wisdom, used to accelerate further FFTs.
             If a string, should be a path to the save FFT wisdom (with :func:`numpy.save`).
             If a tuple, directly corresponds to the wisdom.
+
+        plan : string, default='measure'
+            Choices are ['estimate', 'measure', 'patient', 'exhaustive'].
+            The increasing amount of effort spent during the planning stage to create the fastest possible transform.
+            Usually 'measure' is a good compromise.
 
         kwargs : dict
             Optional arguments for :class:`BaseFFTEngine`.
@@ -905,6 +924,11 @@ class FFTWEngine(BaseFFTEngine):
         if pyfftw is None:
             raise NotImplementedError('Install pyfftw to use {}'.format(self.__class__.__name__))
         super(FFTWEngine,self).__init__(shape,nthreads=nthreads,**kwargs)
+        plan = plan.lower()
+        allowed_plans = ['estimate', 'measure', 'patient', 'exhaustive']
+        if plan not in allowed_plans:
+            raise MeshError('Plan {} unknown'.format(plan))
+        plan = 'FFTW_{}'.format(plan.upper())
 
         if isinstance(wisdom, str):
             wisdom = tuple(np.load(wisdom))
@@ -917,8 +941,8 @@ class FFTWEngine(BaseFFTEngine):
         else:
             fftw_f = pyfftw.empty_aligned(self.shape,dtype=self.type_complex,order='C')
         fftw_fk = pyfftw.empty_aligned(self.hshape,dtype=self.type_complex,order='C')
-        self.fftw_forward_object = pyfftw.FFTW(fftw_f,fftw_fk,axes=range(self.ndim),direction='FFTW_FORWARD',threads=self.nthreads)
-        self.fftw_backward_object = pyfftw.FFTW(fftw_fk,fftw_f,axes=range(self.ndim),direction='FFTW_BACKWARD',threads=self.nthreads)
+        self.fftw_forward_object = pyfftw.FFTW(fftw_f,fftw_fk,axes=range(self.ndim),direction='FFTW_FORWARD',flags=(plan,),threads=self.nthreads)
+        self.fftw_backward_object = pyfftw.FFTW(fftw_fk,fftw_f,axes=range(self.ndim),direction='FFTW_BACKWARD',flags=(plan,),threads=self.nthreads)
 
     def forward(self, fun):
         """Return forward transform of ``fun``."""
@@ -944,21 +968,20 @@ def get_fft_engine(engine, *args, **kwargs):
 
     Parameters
     ----------
-    engine : string
-        Engine name (so far, 'numpy' or 'fftw').
+    engine : BaseFFTEngine, string
+        FFT engine, or one of ['numpy', 'fftw'].
 
     args, kwargs : tuple, dict
         Arguments for FFT engine.
-        See :class:`NumpyFFTEngine` and :class:`FFTWEngine`.
 
     Returns
     -------
     engine : BaseFFTEngine
     """
-    if engine == 'numpy':
-        return NumpyFFTEngine(*args, **kwargs)
-    if engine == 'fftw':
-        return FFTWEngine(*args, **kwargs)
-    if isinstance(engine,BaseFFTEngine):
-        return engine
-    raise MeshError('FFT engine {} is unknown'.format(engine))
+    if isinstance(engine, str):
+        if engine.lower() == 'numpy':
+            return NumpyFFTEngine(*args, **kwargs)
+        if engine.lower() == 'fftw':
+            return FFTWEngine(*args, **kwargs)
+        raise ValueError('FFT engine {} is unknown'.format(engine))
+    return engine

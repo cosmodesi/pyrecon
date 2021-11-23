@@ -140,7 +140,7 @@ def test_revolver(data_fn, randoms_fn=None):
     parms.f = 0.8
     parms.bias = 1.4
     parms.verbose = False
-    parms.nbins = 128
+    parms.nbins = 256
     isbox = parms.is_box = randoms_fn is None
     parms.nthreads = 4
     boxsize = 800.

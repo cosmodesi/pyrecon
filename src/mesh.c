@@ -312,9 +312,6 @@ int read_cic(const FLOAT* mesh, const int* nmesh, const FLOAT* positions, FLOAT*
 int prod_sum(FLOAT* mesh, const int* nmesh, const FLOAT* coords, const int exp) {
   // We expand everything to help compiler
   // Slightly faster than a numpy code
-  // But for some reasons still slower (with one thread) than a naive Cython implementation
-  // (Of course, goes faster starting with 2 or 3 threads)
-  // What am I doing wrong? Anyway, not a big deal
   // NOTE: coords should list arrays to apply along z, y and x, in this order
   const int nmeshx = nmesh[0];
   const int nmeshy = nmesh[1];
@@ -322,7 +319,7 @@ int prod_sum(FLOAT* mesh, const int* nmesh, const FLOAT* coords, const int exp) 
   const int nmeshypz = nmesh[1] + nmesh[2];
   const int nmeshyz = nmesh[2]*nmesh[1];
   if (exp == -1) {
-    #pragma omp parallel for schedule(static) shared(mesh)
+    #pragma omp parallel for shared(mesh)
     for (int ix=0; ix<nmeshx; ix++) {
       for (int iy=0; iy<nmeshy; iy++) {
         FLOAT xy = coords[nmeshz + iy] + coords[nmeshypz + ix];
@@ -332,7 +329,7 @@ int prod_sum(FLOAT* mesh, const int* nmesh, const FLOAT* coords, const int exp) 
     }
   }
   else if (exp == 1) {
-    #pragma omp parallel for schedule(static) shared(mesh)
+    #pragma omp parallel for shared(mesh)
     for (int ix=0; ix<nmeshx; ix++) {
       for (int iy=0; iy<nmeshy; iy++) {
         FLOAT xy = coords[nmeshz + iy] + coords[nmeshypz + ix];
@@ -342,7 +339,7 @@ int prod_sum(FLOAT* mesh, const int* nmesh, const FLOAT* coords, const int exp) 
     }
   }
   else {
-    #pragma omp parallel for schedule(static) shared(mesh)
+    #pragma omp parallel for shared(mesh)
     for (int ix=0; ix<nmeshx; ix++) {
       for (int iy=0; iy<nmeshy; iy++) {
         FLOAT xy = coords[nmeshz + iy] + coords[nmeshypz + ix];

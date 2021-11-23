@@ -13,28 +13,6 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
     Numerical agreement in the Zeldovich displacements between original codes and this re-implementation is machine precision
     (absolute and relative difference of 1e-12).
     """
-    def __init__(self, fft_engine='numpy', fft_wisdom=None, **kwargs):
-        """
-        Initialize :class:`IterativeFFTParticleReconstruction`.
-
-        Parameters
-        ----------
-        fft_engine : string, BaseFFTEngine, default='numpy'
-            Engine for fast Fourier transforms. See :class:`BaseFFTEngine`.
-            We strongly recommend using 'fftw' for multithreaded FFTs.
-
-        fft_wisdom : string, tuple
-            Wisdom for FFTW, if ``fft_engine`` is 'fftw'.
-
-        kwargs : dict
-            See :class:`BaseReconstruction` for parameters.
-        """
-        super(OriginalIterativeFFTParticleReconstruction,self).__init__(**kwargs)
-        kwargs = {}
-        if fft_wisdom is not None: kwargs['wisdom'] = fft_wisdom
-        kwargs['hermitian'] = False
-        self.fft_engine = self.mesh_data.get_fft_engine(fft_engine, **kwargs)
-
     def assign_data(self, positions, weights=None):
         """
         Assign (paint) data to :attr:`mesh_data`.
@@ -106,8 +84,8 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         """
         self._iter = 0
         # Gaussian smoothing before density contrast calculation
-        self.mesh_data.smooth_gaussian(self.smoothing_radius,method='fft',engine=self.fft_engine)
-        if self.has_randoms: self.mesh_randoms.smooth_gaussian(self.smoothing_radius,method='fft',engine=self.fft_engine)
+        self.mesh_data.smooth_gaussian(self.smoothing_radius,method='fft')
+        if self.has_randoms: self.mesh_randoms.smooth_gaussian(self.smoothing_radius,method='fft')
         self._positions_rec_data = self._positions_data.copy()
         for iter in range(niterations):
             self.mesh_psi = self._iterate(return_psi=iter==niterations-1)
@@ -120,11 +98,11 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             # Painting reconstructed data real-space positions
             super(OriginalIterativeFFTParticleReconstruction,self).assign_data(self._positions_rec_data,weights=self._weights_data) # super in order not to save positions_rec_data
             # Gaussian smoothing before density contrast calculation
-            self.mesh_data.smooth_gaussian(self.smoothing_radius,method='fft',engine=self.fft_engine)
+            self.mesh_data.smooth_gaussian(self.smoothing_radius,method='fft')
 
         self.set_density_contrast(ran_min=self.ran_min, smoothing_radius=self.smoothing_radius)
         del self.mesh_data
-        delta_k = self.mesh_delta.to_complex(engine=self.fft_engine)
+        delta_k = self.mesh_delta.to_complex()
         k = utils.broadcast_arrays(*delta_k.coords())
         delta_k.prod_sum([k**2 for k in delta_k.coords()], exp=-1)
         delta_k[0,0,0] = 0.
@@ -140,7 +118,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             if not return_psi and self.los is not None and self.los[iaxis] == 0:
                 shifts[:,iaxis] = 0.
                 continue
-            psi = (delta_k*1j*k[iaxis]).to_real(engine=self.fft_engine)
+            psi = (delta_k*1j*k[iaxis]).to_real()
             # Reading shifts at reconstructed data real-space positions
             shifts[:,iaxis] = psi.read_cic(self._positions_rec_data)
             if return_psi: psis.append(psi)

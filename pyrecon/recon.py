@@ -53,7 +53,7 @@ class BaseReconstruction(BaseClass):
         If ``None``, local (varying) line-of-sight.
         Else line-of-sight (unit) 3-vector.
     """
-    def __init__(self, f=0., bias=1., los=None, **kwargs):
+    def __init__(self, f=0., bias=1., los=None, fft_engine='numpy', fft_wisdom=None, fft_plan=None, **kwargs):
         """
         Initialize :class:`BaseReconstruction`.
 
@@ -70,6 +70,18 @@ class BaseReconstruction(BaseClass):
             Else, may be 'x', 'y' or 'z', for one of the Cartesian axes.
             Else, a 3-vector.
 
+        fft_engine : string, BaseFFTEngine, default='numpy'
+            Engine for fast Fourier transforms. See :class:`BaseFFTEngine`.
+            We strongly recommend using 'fftw' for multithreaded FFTs.
+
+        fft_wisdom : string, tuple, default=None
+            Wisdom for FFTW, if ``fft_engine`` is 'fftw'.
+
+        fft_plan : string, default=None
+            Only used for FFTW. Choices are ['estimate', 'measure', 'patient', 'exhaustive'].
+            The increasing amount of effort spent during the planning stage to create the fastest possible transform.
+            Usually 'measure' is a good compromise.
+
         kwargs : dict
             Arguments to build :attr:`mesh_data`, :attr:`mesh_randoms` (see :class:`RealMesh`).
         """
@@ -78,6 +90,12 @@ class BaseReconstruction(BaseClass):
         self.mesh_randoms = RealMesh(**kwargs)
         self.set_los(los)
         self.log_info('Using mesh {}.'.format(self.mesh_data))
+        kwargs = {}
+        if fft_wisdom is not None: kwargs['wisdom'] = fft_wisdom
+        if fft_plan is not None: kwargs['plan'] = fft_plan
+        kwargs['hermitian'] = False
+        self.mesh_data.set_fft_engine(fft_engine, **kwargs)
+        self.mesh_randoms.set_fft_engine(self.mesh_data.fft_engine)
 
     @property
     def beta(self):
