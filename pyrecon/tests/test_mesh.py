@@ -94,17 +94,22 @@ def test_fft():
             assert np.allclose(mesh2,mesh,atol=1e-5)
 
     mesh = RealMesh(value=1., boxsize=1000.,boxcenter=0.,nmesh=4,dtype='f8')
-    meshc = mesh.to_complex()
+    cmesh = mesh.to_complex()
     from pyrecon.mesh import NumpyFFTEngine
     assert isinstance(mesh.fft_engine, NumpyFFTEngine)
     if pyfftw is not None:
-        meshc = mesh.to_complex(engine='fftw', plan='estimate')
+        mesh0 = mesh.deepcopy()
+        cmesh = mesh.to_complex(engine='fftw', plan='estimate')
+        assert np.allclose(mesh.value, mesh0.value)
+        cmesh0 = cmesh.deepcopy()
+        mesh1 = cmesh.to_real(engine='fftw')
+        assert np.allclose(cmesh.value, cmesh0.value)
         from pyrecon.mesh import FFTWEngine
         assert isinstance(mesh.fft_engine, FFTWEngine)
-    fft_engine = meshc.fft_engine
-    meshc = meshc + 1
-    assert meshc.fft_engine is fft_engine
-    mesh = meshc.to_real()
+    fft_engine = cmesh.fft_engine
+    cmesh = cmesh + 1
+    assert cmesh.fft_engine is fft_engine
+    mesh = cmesh.to_real()
     assert mesh.fft_engine is fft_engine
     mesh.smooth_gaussian(15., method='fft')
     assert mesh.fft_engine is fft_engine
@@ -126,6 +131,8 @@ def test_misc():
     for Cls, dtype in zip([RealMesh, ComplexMesh], ['f8', 'c16']):
         mesh = Cls(value=1., boxsize=1., boxcenter=0., nmesh=(4,3,5), dtype=dtype)
         value = np.array(mesh.value)
+        test = mesh._copy_value()
+        assert np.all(test == value)
         arrays = [1. + c for c in mesh.coords()]
         index_zero = (0,0,0)
         tmp = sum(utils.broadcast_arrays(*arrays))
@@ -174,10 +181,23 @@ def test_timing():
 
     import os
     import time
-    nmesh = 400
+    nmesh = 500
     nthreads = 2
     os.environ['OMP_NUM_THREADS'] = str(nthreads)
     niter = 10
+
+    mesh = ComplexMesh(1., boxsize=1000., boxcenter=0., nmesh=nmesh, hermitian=False, dtype='c16', nthreads=nthreads)
+    t0 = time.time()
+    for i in range(niter):
+        mesh.value.copy()
+    print('numpy took {:.3f} s.'.format(time.time() - t0))
+
+    mesh = ComplexMesh(1., boxsize=1000., boxcenter=0., nmesh=nmesh, hermitian=False, dtype='c16', nthreads=nthreads)
+    t0 = time.time()
+    for i in range(niter):
+        mesh._copy_value()
+    print('C took {:.3f} s.'.format(time.time() - t0))
+    exit()
 
     mesh = ComplexMesh(1., boxsize=1000., boxcenter=0., nmesh=nmesh, hermitian=False, dtype='c16', nthreads=nthreads)
     t0 = time.time()
@@ -241,7 +261,8 @@ if __name__ == '__main__':
     #test_timing()
     #test_misc()
     #exit()
-
+    #test_timing()
+    #test_fft()
     test_info()
     test_cic()
     test_finite_difference_cic()

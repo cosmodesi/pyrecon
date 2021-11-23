@@ -281,10 +281,22 @@ class BaseMesh(NDArrayLike,BaseClass,metaclass=BaseMetaClass):
         info += ['dtype={}'.format(self.dtype)]
         return '{}({})'.format(self.__class__.__name__,', '.join(info))
 
+    def _copy_value(self, out=None):
+        if out is None: out = np.empty_like(self.value)
+        func = self._lib.copy
+        func.argtypes = (self._type_float_mesh, self._type_float_mesh, ctypes.c_size_t)
+        func.restype = ctypes.c_int
+        self.value.shape = out.shape = -1
+        flag = func(self.value, out, self.size)
+        if (flag != 0):
+            raise MeshError('Issue with _copy_value')
+        self.value.shape = out.shape = self.shape
+        return out
+
     def deepcopy(self, copy_value=True):
         kwargs = {name:getattr(self,name) for name in self._attrs}
         kwargs['info'] = kwargs['info'].deepcopy()
-        new = self.__class__(self.value.copy() if copy_value and self.value is not None else self.value,**kwargs)
+        new = self.__class__(self._copy_value() if copy_value and self.value is not None else self.value,**kwargs)
         new.fft_engine = self.fft_engine
         return new
 
@@ -646,7 +658,9 @@ class RealMesh(BaseMesh):
         if len(arrays) != 3:
             raise MeshError('Provide a sequence of 3 arrays')
         arrays = list(arrays)
-        arrays = np.concatenate(arrays[::-1], axis=0, dtype=self._type_float) # ::-1 for prod_sum
+        #arrays = np.concatenate(arrays[::-1], axis=0, dtype=self._type_float) # ::-1 for prod_sum
+        # dtype keyword for np.concatenate appears in version 1.20.0.
+        arrays = np.concatenate([np.asarray(array, dtype=self._type_float) for array in arrays[::-1]], axis=0)
         if arrays.size != sum(self.shape):
             raise MeshError('Length of input arrays must match shape')
         type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int, shape=self.ndim, flags='C')
@@ -706,6 +720,22 @@ class ComplexMesh(BaseMesh):
         if 'complex' not in self.dtype.name:
             raise MeshError('Provide complex dtype')
 
+    def _copy_value(self, out=None):
+        if out is None: out = np.empty_like(self.value)
+        func = self._lib.copy
+        type_mesh = ctypeslib.ndpointer(dtype=self._type_float, shape=2*self.size, flags='C')
+        func.argtypes = (type_mesh, type_mesh, ctypes.c_size_t)
+        func.restype = ctypes.c_int
+        value_view = self.value.view(dtype=self._type_float)
+        out_view = out.view(dtype=self._type_float)
+        value_view.shape = out_view.shape = -1
+        flag = func(value_view, out_view, 2*self.size)
+        out = out_view.view(dtype=self.dtype)
+        out.shape = self.shape
+        if (flag != 0):
+            raise MeshError('Issue with _copy_value')
+        return out
+
     @property
     def shape(self):
         if self.hermitian:
@@ -741,7 +771,12 @@ class ComplexMesh(BaseMesh):
         if kwargs or self.fft_engine is None: self.set_fft_engine(**kwargs)
         if self.fft_engine.hermitian != self.hermitian:
             raise MeshError('ComplexMesh has hermitian = {} but provided FFT engine has hermitian = {}'.format(self.hermitian,self.fft_engine.hermitian))
-        toret = RealMesh(self.fft_engine.backward(self.value).real, info=self.info, nthreads=self.nthreads, attrs=self.attrs)
+        value = self.value
+        kwargs = {}
+        if isinstance(self.fft_engine, FFTWEngine):
+            value = self._copy_value()
+            kwargs = {'destroy_input':True}
+        toret = RealMesh(self.fft_engine.backward(value, **kwargs).real, info=self.info, nthreads=self.nthreads, attrs=self.attrs)
         toret.fft_engine = self.fft_engine
         return toret
 
@@ -761,7 +796,9 @@ class ComplexMesh(BaseMesh):
             raise MeshError('Provide a sequence of 3 arrays')
         arrays = list(arrays)
         arrays[-1] = np.repeat(arrays[-1], 2)
-        arrays = np.concatenate(arrays[::-1], axis=0, dtype=self._type_float) # ::-1 for prod_sum
+        #arrays = np.concatenate(arrays[::-1], axis=0, dtype=self._type_float) # ::-1 for prod_sum
+        # dtype keyword for np.concatenate appears in version 1.20.0.
+        arrays = np.concatenate([np.asarray(array, dtype=self._type_float) for array in arrays[::-1]], axis=0)
         if arrays.size != sum(self.shape) + self.shape[-1]:
             raise MeshError('Length of input arrays must match shape')
         shape = np.asarray(self.shape, dtype=ctypes.c_int)
@@ -776,12 +813,11 @@ class ComplexMesh(BaseMesh):
         #print(value.shape, value.size)
         #value.shape = (value.size,)
         self.value.shape = -1
-        value = self.value.view(dtype=self._type_float)
-        flag = func(value, shape, arrays, exp)
-        self.value = value.view(dtype=self.dtype)
+        value_view = self.value.view(dtype=self._type_float)
+        flag = func(value_view, shape, arrays, exp)
+        self.value = value_view.view(dtype=self.dtype)
         if (flag != 0):
             raise MeshError('Issue with prod_sum')
-
 
 class BaseFFTEngine(object):
     """
@@ -900,6 +936,16 @@ class FFTWEngine(BaseFFTEngine):
         """
         Initialize :mod:`pyfftw` engine.
 
+        Note
+        ----
+        :class:`pyfftw.FFTW` internally stores :attr:`pyfftw.FFTW._input_array` and :attr:`pyfftw.FFTW._output_array`,
+        which is a waste of memory if one does not want to save them.
+        e.g. performing ``engine.backward(engine.forward(array))`` would take as much as 3 times
+        (2 for the forward transform, and 1 output array in the backward transform) the memory footprint of ``array``.
+        As no access is provided to :attr:`pyfftw.FFTW._input_array` and :attr:`pyfftw.FFTW._output_array` attributes,
+        we choose to destroy and rebuild :class:`pyfftw.FFTW` for each transform, thereby allowing Python to destroy
+        undesired arrays, at a relatively modest overhead (~ 0.5 s).
+
         Parameters
         ----------
         shape : list, tuple
@@ -941,25 +987,50 @@ class FFTWEngine(BaseFFTEngine):
         else:
             fftw_f = pyfftw.empty_aligned(self.shape,dtype=self.type_complex,order='C')
         fftw_fk = pyfftw.empty_aligned(self.hshape,dtype=self.type_complex,order='C')
-        self.fftw_forward_object = pyfftw.FFTW(fftw_f,fftw_fk,axes=range(self.ndim),direction='FFTW_FORWARD',flags=(plan,),threads=self.nthreads)
-        self.fftw_backward_object = pyfftw.FFTW(fftw_fk,fftw_f,axes=range(self.ndim),direction='FFTW_BACKWARD',flags=(plan,),threads=self.nthreads)
+        self.flags = (plan,)
+        v = pyfftw.FFTW(fftw_f,fftw_fk,axes=range(self.ndim),direction='FFTW_FORWARD',flags=self.flags,threads=self.nthreads)
+        self.fftw_forward_object = pyfftw.FFTW(fftw_f,fftw_fk,axes=range(self.ndim),direction='FFTW_FORWARD',flags=self.flags,threads=self.nthreads)
+        self.fftw_backward_object = pyfftw.FFTW(fftw_fk,fftw_f,axes=range(self.ndim),direction='FFTW_BACKWARD',flags=self.flags,threads=self.nthreads)
+        # We delete these instances to save memory, see note above
+        self.fftw_forward_object, self.fftw_backward_object = None, None
 
     def forward(self, fun):
         """Return forward transform of ``fun``."""
         output_array = pyfftw.empty_aligned(self.hshape,dtype=self.type_complex,order='C')
+        #if self.hermitian:
+        #    input_array = pyfftw.empty_aligned(self.shape,dtype=self.type_real,order='C')
+        #else:
+        #    input_array = pyfftw.empty_aligned(self.shape,dtype=self.type_complex,order='C')
         if self.hermitian:
             fun = fun.astype(self.type_real,copy=False)
         else:
             fun = fun.astype(self.type_complex,copy=False)
-        return self.fftw_forward_object(input_array=fun,output_array=output_array,normalise_idft=True)
+        if self.fftw_forward_object is None:
+            fftw_forward_object = pyfftw.FFTW(fun,output_array,axes=range(self.ndim),direction='FFTW_FORWARD',flags=self.flags,threads=self.nthreads)
+            #input_array[...] = fun
+            toret = fftw_forward_object(normalise_idft=True)
+        else:
+            toret = self.fftw_forward_object(input_array=fun,output_array=output_array,normalise_idft=True)
+        return toret
 
-    def backward(self, fun):
-        """Return backward transform of ``fun``, which is destroyed."""
+    def backward(self, fun, destroy_input=True):
+        """Return backward transform of ``fun``; ``destroy_input = True`` to allow destroy ``fun``."""
+        if destroy_input:
+            input_array = fun
+        else:
+            input_array = pyfftw.empty_aligned(self.hshape,dtype=self.type_complex,order='C')
+            input_array[...] = fun
         if self.hermitian:
             output_array = pyfftw.empty_aligned(self.shape,dtype=self.type_real,order='C')
         else:
             output_array = pyfftw.empty_aligned(self.shape,dtype=self.type_complex,order='C')
-        return self.fftw_backward_object(input_array=fun,output_array=output_array,normalise_idft=True)
+        if self.fftw_backward_object is None:
+            #fftw_backward_object = pyfftw.FFTW(fun,output_array,axes=range(self.ndim),direction='FFTW_BACKWARD',flags=self.flags,threads=self.nthreads)
+            fftw_backward_object = pyfftw.FFTW(input_array,output_array,axes=range(self.ndim),direction='FFTW_BACKWARD',flags=self.flags,threads=self.nthreads)
+            toret = fftw_backward_object(normalise_idft=True)
+        else:
+            toret = self.fftw_backward_object(input_array=fun,output_array=output_array,normalise_idft=True)
+        return toret
 
 
 def get_fft_engine(engine, *args, **kwargs):

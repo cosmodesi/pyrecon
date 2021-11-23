@@ -308,6 +308,20 @@ int read_cic(const FLOAT* mesh, const int* nmesh, const FLOAT* positions, FLOAT*
   return 0;
 }
 
+/*
+int copy(FLOAT* input_array, FLOAT* output_array, const size_t size) {
+  #pragma omp parallel for schedule(dynamic) shared(input_array, output_array)
+  for (size_t ii=0; ii<size; ii++) output_array[ii] = input_array[ii];
+  return 0;
+}
+*/
+int copy(FLOAT* input_array, FLOAT* output_array, const size_t size) {
+  int chunksize = 100000;
+  #pragma omp parallel for schedule(static, chunksize) shared(input_array, output_array)
+  for (size_t ii=0; ii<size; ii++) output_array[ii] = input_array[ii];
+  return 0;
+}
+
 
 int prod_sum(FLOAT* mesh, const int* nmesh, const FLOAT* coords, const int exp) {
   // We expand everything to help compiler
