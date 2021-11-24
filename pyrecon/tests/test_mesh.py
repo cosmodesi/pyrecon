@@ -83,36 +83,38 @@ def test_smoothing():
 
 
 def test_fft():
-    mesh = RealMesh(boxsize=1000.,boxcenter=0.,nmesh=4,dtype='f8')
-    mesh.value = np.random.uniform(0.,1.,mesh.shape)
-
     try: import pyfftw
     except ImportError: pyfftw = None
-    for hermitian in [True, False]:
-        for kwargs in [{'engine':'numpy'}] + ([{'engine':'fftw'},{'engine':'fftw','plan':'estimate'}] if pyfftw is not None else []):
-            mesh_copy = mesh.value.copy()
-            mesh1 = mesh.to_complex(hermitian=hermitian,**kwargs)
-            assert np.all(mesh.value == mesh_copy)
-            mesh_copy = mesh1.value.copy()
-            mesh2 = mesh1.to_real()
-            assert np.all(mesh1.value == mesh_copy)
-            assert np.allclose(mesh2,mesh,atol=1e-5)
 
-    mesh = RealMesh(value=1.,boxsize=1000.,boxcenter=0.,nmesh=4,dtype='f8')
-    cmesh = mesh.to_complex()
-    from pyrecon.mesh import NumpyFFTEngine
-    assert isinstance(mesh.fft_engine, NumpyFFTEngine)
-    if pyfftw is not None:
-        cmesh = mesh.to_complex(engine='fftw', plan='estimate')
-        from pyrecon.mesh import FFTWEngine
-        assert isinstance(cmesh.fft_engine, FFTWEngine)
-    fft_engine = cmesh.fft_engine
-    cmesh = cmesh + 1
-    assert cmesh.fft_engine is fft_engine
-    mesh = cmesh.to_real()
-    assert mesh.fft_engine is fft_engine
-    mesh.smooth_gaussian(15., method='fft')
-    assert mesh.fft_engine is fft_engine
+    for dtype in ['f4','f8']:
+        mesh = RealMesh(boxsize=1000.,boxcenter=0.,nmesh=4,dtype=dtype)
+        mesh.value = np.random.uniform(0.,1.,mesh.shape)
+
+        for hermitian in [True, False]:
+            for kwargs in [{'engine':'numpy'}] + ([{'engine':'fftw'},{'engine':'fftw','plan':'estimate'}] if pyfftw is not None else []):
+                mesh_copy = mesh.value.copy()
+                mesh1 = mesh.to_complex(hermitian=hermitian,**kwargs)
+                assert np.all(mesh.value == mesh_copy)
+                mesh_copy = mesh1.value.copy()
+                mesh2 = mesh1.to_real()
+                assert np.all(mesh1.value == mesh_copy)
+                assert np.allclose(mesh2,mesh,atol=1e-5)
+
+        mesh = RealMesh(value=1.,boxsize=1000.,boxcenter=0.,nmesh=4,dtype=dtype)
+        cmesh = mesh.to_complex()
+        from pyrecon.mesh import NumpyFFTEngine
+        assert isinstance(mesh.fft_engine, NumpyFFTEngine)
+        if pyfftw is not None:
+            cmesh = mesh.to_complex(engine='fftw', plan='estimate')
+            from pyrecon.mesh import FFTWEngine
+            assert isinstance(cmesh.fft_engine, FFTWEngine)
+        fft_engine = cmesh.fft_engine
+        cmesh = cmesh + 1
+        assert cmesh.fft_engine is fft_engine
+        mesh = cmesh.to_real()
+        assert mesh.fft_engine is fft_engine
+        mesh.smooth_gaussian(15., method='fft')
+        assert mesh.fft_engine is fft_engine
 
 
 def test_hermitian():
@@ -128,7 +130,7 @@ def test_hermitian():
 
 def test_misc():
 
-    for Cls, dtype in zip([RealMesh, ComplexMesh], ['f8', 'c16']):
+    for Cls, dtype in zip([RealMesh, ComplexMesh]*2, ['f4', 'c8', 'f8', 'c16']):
         mesh = Cls(value=1., boxsize=1., boxcenter=0., nmesh=(4,3,5), dtype=dtype)
         value = np.array(mesh.value)
         test = mesh._copy_value()
@@ -262,7 +264,8 @@ if __name__ == '__main__':
     #test_misc()
     #exit()
     #test_timing()
-    #test_fft()
+    test_fft()
+    exit()
     test_info()
     test_cic()
     test_finite_difference_cic()

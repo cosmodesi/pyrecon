@@ -115,7 +115,8 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         func(self.mesh_delta.value.ravel(order='C'),self.mesh_phi.value,
             self.mesh_delta.nmesh.astype(ctypes.c_int,copy=False),self.mesh_delta.boxsize.astype(self._type_float,copy=False),self.mesh_delta.boxcenter.astype(self._type_float,copy=False),
             self.beta,jacobi_damping_factor,jacobi_niterations,vcycle_niterations,los)
-        self.mesh_phi.value.shape = self.mesh_delta.shape
+        del self.mesh_delta
+        self.mesh_phi.value.shape = self.mesh_phi.shape
 
     def read_shifts(self, positions, field='disp+rsd'):
         """

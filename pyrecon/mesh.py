@@ -465,7 +465,7 @@ class RealMesh(BaseMesh):
 
     _path_lib = os.path.join(utils.lib_dir,'mesh_{}.so')
 
-    def __init__(self, value=None, dtype='f8', info=None, nthreads=None, attrs=None, **kwargs):
+    def __init__(self, value=None, dtype=None, info=None, nthreads=None, attrs=None, **kwargs):
         """
         Initalize :class:`RealMesh`.
 
@@ -474,8 +474,8 @@ class RealMesh(BaseMesh):
         value : array, default=None
             Numpy array holding mesh values, or ``None`` (can set later through ``mesh.value = value``.
 
-        dtype : string, np.dtype, defaut='f8'
-            Type for :attr:`value` array.
+        dtype : string, np.dtype, defaut=None
+            Type for :attr:`value` array. Defaults to 'f8'.
 
         info : MeshInfo, default=None
             Mesh information (boxsize, boxcenter, nmesh, etc.),
@@ -490,6 +490,7 @@ class RealMesh(BaseMesh):
         kwargs : dict
             Arguments for :class:`MeshInfo`.
         """
+        if dtype is None and (value is None or np.ndim(value) == 0): dtype = 'f8' # accept single float as input
         super(RealMesh, self).__init__(value=value, dtype=dtype, info=info, nthreads=nthreads, attrs=attrs, **kwargs)
         if 'float' not in self.dtype.name:
             raise MeshError('Provide float dtype')
@@ -518,8 +519,7 @@ class RealMesh(BaseMesh):
         positions = ((positions - self.boxcenter)/self.boxsize + 0.5)*self.nmesh
         positions = positions.astype(self._type_float,copy=False).ravel(order='C')
         weights = weights.astype(self._type_float,copy=False).ravel(order='C')
-        if self.value is None:
-            self.value = np.zeros(shape=self.nmesh,dtype=self._type_float,order='C')
+        if self.value is None: self.value = 0.
         type_positions = ctypeslib.ndpointer(dtype=self._type_float,shape=positions.size,flags='C')
         type_weights = ctypeslib.ndpointer(dtype=self._type_float,shape=weights.size,flags='C')
         type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int,shape=self.ndim,flags='C')
@@ -687,7 +687,7 @@ class ComplexMesh(BaseMesh):
     """
     _attrs = BaseMesh._attrs + ['hermitian']
 
-    def __init__(self, value=None, dtype='c16', info=None, hermitian=True, nthreads=None, attrs=None, **kwargs):
+    def __init__(self, value=None, dtype=None, info=None, hermitian=True, nthreads=None, attrs=None, **kwargs):
         """
         Initialize :class:`ComplexMesh`.
 
@@ -696,8 +696,8 @@ class ComplexMesh(BaseMesh):
         value : array, default=None
             Numpy array holding mesh values, or ``None`` (can set later through ``mesh.value = value``.
 
-        dtype : string, np.dtype, defaut='c16'
-            Type for :attr:`value` array.
+        dtype : string, np.dtype, defaut=None
+            Type for :attr:`value` array. Defaults to 'c16'.
 
         info : MeshInfo, default=None
             Mesh information (boxsize, boxcenter, nmesh, etc.).
@@ -716,6 +716,7 @@ class ComplexMesh(BaseMesh):
             Arguments for :class:`MeshInfo`.
         """
         self.hermitian = hermitian
+        if dtype is None and (value is None or np.ndim(value) == 0): dtype = 'c16' # accept single float as input
         super(ComplexMesh, self).__init__(value=value, dtype=dtype, info=info, nthreads=nthreads, attrs=attrs, **kwargs)
         if 'complex' not in self.dtype.name:
             raise MeshError('Provide complex dtype')

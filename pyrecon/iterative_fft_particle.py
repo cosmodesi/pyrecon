@@ -89,12 +89,13 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         self._positions_rec_data = self._positions_data.copy()
         for iter in range(niterations):
             self.mesh_psi = self._iterate(return_psi=iter==niterations-1)
+        del self.mesh_randoms
 
     def _iterate(self, return_psi=False):
         self.log_info('Running iteration {:d}.'.format(self._iter))
 
         if self._iter > 0:
-            self.mesh_data = self.mesh_delta.copy(value=None)
+            self.mesh_data = self.mesh_randoms.copy(value=None)
             # Painting reconstructed data real-space positions
             super(OriginalIterativeFFTParticleReconstruction,self).assign_data(self._positions_rec_data,weights=self._weights_data) # super in order not to save positions_rec_data
             # Gaussian smoothing before density contrast calculation
@@ -103,6 +104,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         self.set_density_contrast(ran_min=self.ran_min, smoothing_radius=self.smoothing_radius)
         del self.mesh_data
         delta_k = self.mesh_delta.to_complex()
+        del self.mesh_delta
         k = utils.broadcast_arrays(*delta_k.coords())
         delta_k.prod_sum([k**2 for k in delta_k.coords()], exp=-1)
         delta_k[0,0,0] = 0.
@@ -140,12 +142,12 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         # assumed to not have RSD.
         # The iterative procedure then uses the new positions as if they'd been read in from the start
         _positions_rec_data = self._positions_data - self.f*np.sum(shifts*los,axis=-1)[:,None]*los
-        diff = _positions_rec_data - self.mesh_delta.offset
-        if self.los is None and np.any((diff < 0) | (diff > self.mesh_delta.boxsize - self.mesh_delta.cellsize)):
+        diff = _positions_rec_data - self.mesh_randoms.offset
+        if self.los is None and np.any((diff < 0) | (diff > self.mesh_randoms.boxsize - self.mesh_randoms.cellsize)):
             self.log_warning('Some particles are out-of-bounds.')
-        self._positions_rec_data = diff % self.mesh_delta.boxsize + self.mesh_delta.offset
+        self._positions_rec_data = diff % self.mesh_randoms.boxsize + self.mesh_randoms.offset
         #if self.los is not None:
-        #    self._positions_rec_data %= self.mesh_delta.boxsize
+        #    self._positions_rec_data %= self.mesh_randoms.boxsize
         self._iter += 1
         if return_psi:
             return psis
@@ -214,10 +216,10 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         # we follow convention of original algorithm: remove RSD first,
         # then remove Zeldovich displacement
         real_positions = positions - rsd
-        diff = real_positions - self.mesh_delta.offset
-        if self.los is None and np.any((diff < 0) | (diff > self.mesh_delta.boxsize - self.mesh_delta.cellsize)):
+        diff = real_positions - self.mesh_psi[0].offset
+        if self.los is None and np.any((diff < 0) | (diff > self.mesh_psi[0].boxsize - self.mesh_psi[0].cellsize)):
             self.log_warning('Some particles are out-of-bounds.')
-        real_positions = diff % self.mesh_delta.boxsize + self.mesh_delta.offset
+        real_positions = diff % self.mesh_psi[0].boxsize + self.mesh_psi[0].offset
         shifts = read_cic(real_positions)
 
         return shifts + rsd

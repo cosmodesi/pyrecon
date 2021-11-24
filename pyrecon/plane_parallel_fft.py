@@ -47,8 +47,8 @@ class PlaneParallelFFTReconstruction(BaseReconstruction):
 
     def run(self):
         """Run reconstruction, i.e. compute Zeldovich displacement fields :attr:`mesh_psi`."""
-
         delta_k = self.mesh_delta.to_complex()
+        del self.mesh_delta
         k = utils.broadcast_arrays(*delta_k.coords())
         k2 = sum(k_**2 for k_ in k)
         k2[0,0,0] = 1. # to avoid dividing by 0

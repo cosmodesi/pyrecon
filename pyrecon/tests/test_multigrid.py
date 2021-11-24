@@ -61,6 +61,23 @@ def test_dtype():
     assert np.allclose(shifts_f4,shifts_f8,rtol=1e-2,atol=1e-2)
 
 
+def test_mem():
+    data = get_random_catalog(seed=42)
+    randoms = get_random_catalog(seed=84)
+    from pyrecon.utils import MemoryMonitor
+    with MemoryMonitor() as mem:
+        recon = MultiGridReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=256,dtype='f8')
+        mem('init')
+        recon.assign_data(data['Position'],data['Weight'])
+        mem('data')
+        recon.assign_randoms(randoms['Position'],randoms['Weight'])
+        mem('randoms')
+        recon.set_density_contrast()
+        mem('delta')
+        recon.run()
+        mem('recon') # 1 mesh
+
+
 def test_los():
     boxsize = 1000.
     boxcenter = [boxsize/2]*3
@@ -310,6 +327,7 @@ if __name__ == '__main__':
     script_output_data_fn = os.path.join(catalog_dir,'script_data_rec.fits')
     script_output_randoms_fn = os.path.join(catalog_dir,'script_randoms_rec.fits')
 
+    #test_mem()
     test_random()
     test_no_nrandoms()
     test_dtype()

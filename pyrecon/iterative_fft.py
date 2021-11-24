@@ -24,7 +24,9 @@ class IterativeFFTReconstruction(BaseReconstruction):
         self.mesh_delta_real = self.mesh_delta.deepcopy()
         for iter in range(niterations):
             self._iterate()
+        del self.mesh_delta
         self.mesh_psi = self._compute_psi()
+        del self.mesh_delta_real
 
     def _iterate(self):
         self.log_info('Running iteration {:d}.'.format(self._iter))

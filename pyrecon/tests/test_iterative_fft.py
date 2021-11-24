@@ -6,6 +6,25 @@ import numpy as np
 import fitsio
 
 from pyrecon import IterativeFFTReconstruction
+from test_multigrid import get_random_catalog
+
+
+
+def test_mem():
+    data = get_random_catalog(seed=42)
+    randoms = get_random_catalog(seed=84)
+    from pyrecon.utils import MemoryMonitor
+    with MemoryMonitor() as mem:
+        recon = IterativeFFTReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=256,dtype='f8')
+        mem('init')
+        recon.assign_data(data['Position'],data['Weight'])
+        mem('data')
+        recon.assign_randoms(randoms['Position'],randoms['Weight'])
+        mem('randoms')
+        recon.set_density_contrast()
+        mem('delta')
+        recon.run()
+        mem('recon') # 3 meshes
 
 
 def test_iterative_fft(data_fn, randoms_fn):
@@ -52,6 +71,7 @@ def test_iterative_fft(data_fn, randoms_fn):
     plt.show()
 
 
+
 if __name__ == '__main__':
 
     import utils
@@ -59,4 +79,5 @@ if __name__ == '__main__':
     from pyrecon.utils import setup_logging
 
     setup_logging()
+    #test_mem()
     test_iterative_fft(data_fn, randoms_fn)
