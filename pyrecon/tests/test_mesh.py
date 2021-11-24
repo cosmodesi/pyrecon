@@ -184,7 +184,7 @@ def test_timing():
     import os
     import time
     nmesh = 500
-    nthreads = 2
+    nthreads = 1
     os.environ['OMP_NUM_THREADS'] = str(nthreads)
     niter = 10
 
@@ -199,7 +199,6 @@ def test_timing():
     for i in range(niter):
         mesh._copy_value()
     print('C took {:.3f} s.'.format(time.time() - t0))
-    exit()
 
     mesh = ComplexMesh(1., boxsize=1000., boxcenter=0., nmesh=nmesh, hermitian=False, dtype='c16', nthreads=nthreads)
     t0 = time.time()
@@ -264,8 +263,8 @@ if __name__ == '__main__':
     #test_misc()
     #exit()
     #test_timing()
-    test_fft()
-    exit()
+    #test_fft()
+
     test_info()
     test_cic()
     test_finite_difference_cic()

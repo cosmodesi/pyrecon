@@ -46,8 +46,8 @@ void jacobi(FLOAT *v, const FLOAT *f, const int* nmesh, const FLOAT* boxsize, co
   // is where the explicit equation we are solving appears.
   // See notes for more details.
   const size_t size = nmesh[0]*nmesh[1]*nmesh[2];
-  const int nmeshz = nmesh[2];
-  const int nmeshyz = nmesh[2]*nmesh[1];
+  const size_t nmeshz = nmesh[2];
+  const size_t nmeshyz = nmesh[2]*nmesh[1];
   FLOAT* jac = (FLOAT *) malloc(size*sizeof(FLOAT));
   FLOAT cell, cell2[NDIM], icell2[NDIM], offset[NDIM], losn[NDIM];
   for (int idim=0; idim<NDIM; idim++) {
@@ -110,8 +110,8 @@ void residual(const FLOAT* v, const FLOAT* f, FLOAT* r, const int* nmesh, const 
   // boundary conditions and ignoring the 1/h terms.
   // Note the relative signs here and in jacobi (or gauss_seidel).
   const size_t size = nmesh[0]*nmesh[1]*nmesh[2];
-  const int nmeshz = nmesh[2];
-  const int nmeshyz = nmesh[2]*nmesh[1];
+  const size_t nmeshz = nmesh[2];
+  const size_t nmeshyz = nmesh[2]*nmesh[1];
   FLOAT cell, cell2[NDIM], icell2[NDIM], offset[NDIM], losn[NDIM];
   for (int idim=0; idim<NDIM; idim++) {
     cell = boxsize[idim]/nmesh[idim];
@@ -169,26 +169,26 @@ void prolong(const FLOAT* v2h, FLOAT* v1h, const int* nmesh) {
   // fine grid with spacing 1h using linear interpolation and periodic BC.
   // The length, N, is of the coarse-grid vector, v2h.
   // This is simple, linear interpolation in a cube.
-  const int nmeshz = nmesh[2];
-  const int nmeshyz = nmesh[2]*nmesh[1];
-  const int nmesh2z = 2*nmesh[2];
-  const int nmesh2yz = 4*nmesh[2]*nmesh[1];
+  const size_t nmeshz = nmesh[2];
+  const size_t nmeshyz = nmesh[2]*nmesh[1];
+  const size_t nmesh2z = 2*nmesh[2];
+  const size_t nmesh2yz = 4*nmesh[2]*nmesh[1];
   #pragma omp parallel for shared(v2h,v1h)
   for (int ix=0; ix<nmesh[0]; ix++) {
-    int ix0 = nmeshyz*ix;
-    int ixp = nmeshyz*((ix+1) % nmesh[0]);
-    int i2x0 = nmesh2yz*2*ix;
-    int i2xp = i2x0 + nmesh2yz;
+    size_t ix0 = nmeshyz*ix;
+    size_t ixp = nmeshyz*((ix+1) % nmesh[0]);
+    size_t i2x0 = nmesh2yz*2*ix;
+    size_t i2xp = i2x0 + nmesh2yz;
     for (int iy=0; iy<nmesh[1]; iy++) {
-      int iy0 = nmeshz*iy;
-      int iyp = nmeshz*((iy+1) % nmesh[1]);
-      int i2y0 = nmesh2z*2*iy;
-      int i2yp = i2y0 + nmesh2z;
+      size_t iy0 = nmeshz*iy;
+      size_t iyp = nmeshz*((iy+1) % nmesh[1]);
+      size_t i2y0 = nmesh2z*2*iy;
+      size_t i2yp = i2y0 + nmesh2z;
       for (int iz0=0; iz0<nmesh[2]; iz0++) {
-        int izp = (iz0+1) % nmesh[2];
-        int i2z0 = 2*iz0;
-        int i2zp = i2z0 + 1;
-        int ii0 = ix0+iy0+iz0;
+        size_t izp = (iz0+1) % nmesh[2];
+        size_t i2z0 = 2*iz0;
+        size_t i2zp = i2z0 + 1;
+        size_t ii0 = ix0+iy0+iz0;
         v1h[i2x0+i2y0+i2z0] = v2h[ii0];
         v1h[i2xp+i2y0+i2z0] = (v2h[ii0] + v2h[ixp+iy0+iz0])/2;
         v1h[i2x0+i2yp+i2z0] = (v2h[ii0] + v2h[ix0+iyp+iz0])/2;
@@ -214,12 +214,12 @@ void reduce(const FLOAT* v1h, FLOAT* v2h, const int* nmesh) {
   // grid with spacing 2h using full weighting and periodic BC.
   // The length, N, is of the fine-grid vector (v1h) and is assumed even,
   // the code doesn't check.
-  const int nmeshz = nmesh[2];
-  const int nmeshyz = nmesh[2]*nmesh[1];
+  const size_t nmeshz = nmesh[2];
+  const size_t nmeshyz = nmesh[2]*nmesh[1];
   int nmesh2[NDIM];
   for (int idim=0; idim<NDIM; idim++) nmesh2[idim] = nmesh[idim]/2;
-  const int nmesh2z = nmesh2[2];
-  const int nmesh2yz = nmesh2[2]*nmesh2[1];
+  const size_t nmesh2z = nmesh2[2];
+  const size_t nmesh2yz = nmesh2[2]*nmesh2[1];
   #pragma omp parallel for shared(v2h,v1h)
   for (int ix=0; ix<nmesh2[0]; ix++) {
     size_t ix0 = nmeshyz*2*ix;

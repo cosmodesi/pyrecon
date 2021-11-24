@@ -27,8 +27,8 @@ int assign_cic(FLOAT* mesh, const int* nmesh, const FLOAT* positions, const FLOA
   // Assign positions (weights) to mesh
   // Asumes periodic boundaries
   // Positions must be in [0,nmesh-1]
-  const int nmeshz = nmesh[2];
-  const int nmeshyz = nmesh[2]*nmesh[1];
+  const size_t nmeshz = nmesh[2];
+  const size_t nmeshyz = nmesh[2]*nmesh[1];
   for (size_t ii=0; ii<npositions; ii++) {
     const FLOAT weight = weights[ii];
     const FLOAT *pos = &(positions[ii*NDIM]);
@@ -65,13 +65,13 @@ int convolve(FLOAT* mesh, const int* nmesh, const FLOAT* kernel, const int* nker
   // Asumes periodic boundaries
   FLOAT sumw = 0;
   size_t size = nkernel[0]*nkernel[1]*nkernel[2];
-  const int nkernelz = nkernel[2];
-  const int nkernelyz = nkernel[2]*nkernel[1];
+  const size_t nkernelz = nkernel[2];
+  const size_t nkernelyz = nkernel[2]*nkernel[1];
   for (size_t ii=0; ii<size; ii++) sumw += kernel[ii];
   // Take a copy of the data we're smoothing.
   size = nmesh[0]*nmesh[1]*nmesh[2];
-  const int nmeshz = nmesh[2];
-  const int nmeshyz = nmesh[2]*nmesh[1];
+  const size_t nmeshz = nmesh[2];
+  const size_t nmeshyz = nmesh[2]*nmesh[1];
   FLOAT *ss = (FLOAT *) malloc(size*sizeof(FLOAT));
   for (size_t ii=0; ii<size; ii++) ss[ii] = mesh[ii];
   FLOAT rad[NDIM];
@@ -118,7 +118,7 @@ int smooth_gaussian(FLOAT* mesh, const int* nmesh, const FLOAT* smoothing_radius
   int rad[NDIM], nkernel[NDIM];
   FLOAT fact[NDIM];
   for (int idim=0; idim<NDIM; idim++) {
-    rad[idim] = (int) (nsigmas*smoothing_radius[idim]*nmesh[idim] + 1.0);
+    rad[idim] = (size_t) (nsigmas*smoothing_radius[idim]*nmesh[idim] + 1.0);
     nkernel[idim] = 2*rad[idim] + 1;
     fact[idim] = 1.0/(nmesh[idim]*smoothing_radius[idim])/(nmesh[idim]*smoothing_radius[idim]);
   }
@@ -188,8 +188,8 @@ int read_finite_difference_cic(const FLOAT* mesh, const int* nmesh, const FLOAT*
   // particles using CIC.
   // Positions must be in [0,nmesh-1]
   // Output is in boxsize unit
-  const int nmeshz = nmesh[2];
-  const int nmeshyz = nmesh[2]*nmesh[1];
+  const size_t nmeshz = nmesh[2];
+  const size_t nmeshyz = nmesh[2]*nmesh[1];
   FLOAT cell[NDIM];
   for (int idim=0; idim<NDIM; idim++) cell[idim] = 2.0*boxsize[idim]/nmesh[idim];
   int flag = 0;
@@ -211,15 +211,15 @@ int read_finite_difference_cic(const FLOAT* mesh, const int* nmesh, const FLOAT*
     FLOAT dx = pos[0] - ix0;
     FLOAT dy = pos[1] - iy0;
     FLOAT dz = pos[2] - iz0;
-    int ixp = nmeshyz*((ix0+1) % nmesh[0]);
-    int ixpp = nmeshyz*((ix0+2) % nmesh[0]);
-    int ixm = nmeshyz*((ix0-1+nmesh[0]) % nmesh[0]);
-    int iyp = nmeshz*((iy0+1) % nmesh[1]);
-    int iypp = nmeshz*((iy0+2) % nmesh[1]);
-    int iym = nmeshz*((iy0-1+nmesh[1]) % nmesh[1]);
-    int izp = (iz0+1) % nmesh[2];
-    int izpp = (iz0+2) % nmesh[2];
-    int izm = (iz0-1+nmesh[2]) % nmesh[2];
+    size_t ixp = nmeshyz*((ix0+1) % nmesh[0]);
+    size_t ixpp = nmeshyz*((ix0+2) % nmesh[0]);
+    size_t ixm = nmeshyz*((ix0-1+nmesh[0]) % nmesh[0]);
+    size_t iyp = nmeshz*((iy0+1) % nmesh[1]);
+    size_t iypp = nmeshz*((iy0+2) % nmesh[1]);
+    size_t iym = nmeshz*((iy0-1+nmesh[1]) % nmesh[1]);
+    size_t izp = (iz0+1) % nmesh[2];
+    size_t izpp = (iz0+2) % nmesh[2];
+    size_t izm = (iz0-1+nmesh[2]) % nmesh[2];
     ix0 *= nmeshyz;
     iy0 *= nmeshz;
     FLOAT px,py,pz,wt;
@@ -270,8 +270,8 @@ int read_finite_difference_cic(const FLOAT* mesh, const int* nmesh, const FLOAT*
 
 int read_cic(const FLOAT* mesh, const int* nmesh, const FLOAT* positions, FLOAT* shifts, size_t npositions) {
   // Positions must be in [0,nmesh-1]
-  const int nmeshz = nmesh[2];
-  const int nmeshyz = nmesh[2]*nmesh[1];
+  const size_t nmeshz = nmesh[2];
+  const size_t nmeshyz = nmesh[2]*nmesh[1];
   int flag = 0;
   #pragma omp parallel for shared(mesh,positions,shifts,flag)
   for (size_t ii=0; ii<npositions; ii++) {
@@ -288,9 +288,9 @@ int read_cic(const FLOAT* mesh, const int* nmesh, const FLOAT* positions, FLOAT*
     FLOAT dx = pos[0] - ix0;
     FLOAT dy = pos[1] - iy0;
     FLOAT dz = pos[2] - iz0;
-    int ixp = nmeshyz*((ix0+1) % nmesh[0]);
-    int iyp = nmeshz*((iy0+1) % nmesh[1]);
-    int izp = (iz0+1) % nmesh[2];
+    size_t ixp = nmeshyz*((ix0+1) % nmesh[0]);
+    size_t iyp = nmeshz*((iy0+1) % nmesh[1]);
+    size_t izp = (iz0+1) % nmesh[2];
     ix0 *= nmeshyz;
     iy0 *= nmeshz;
     FLOAT px;
@@ -327,38 +327,36 @@ int prod_sum(FLOAT* mesh, const int* nmesh, const FLOAT* coords, const int exp) 
   // We expand everything to help compiler
   // Slightly faster than a numpy code
   // NOTE: coords should list arrays to apply along z, y and x, in this order
-  const int nmeshx = nmesh[0];
-  const int nmeshy = nmesh[1];
-  const int nmeshz = nmesh[2];
-  const int nmeshypz = nmesh[1] + nmesh[2];
-  const int nmeshyz = nmesh[2]*nmesh[1];
+  const size_t nmeshz = nmesh[2];
+  const size_t nmeshypz = nmesh[1] + nmesh[2];
+  const size_t nmeshyz = nmesh[2]*nmesh[1];
   if (exp == -1) {
     #pragma omp parallel for shared(mesh)
-    for (int ix=0; ix<nmeshx; ix++) {
-      for (int iy=0; iy<nmeshy; iy++) {
+    for (int ix=0; ix<nmesh[0]; ix++) {
+      for (int iy=0; iy<nmesh[1]; iy++) {
         FLOAT xy = coords[nmeshz + iy] + coords[nmeshypz + ix];
-        int ixy = nmeshyz*ix + nmeshz*iy;
-        for (int iz=0; iz<nmeshz; iz++) mesh[ixy + iz] /= (xy + coords[iz]);
+        size_t ixy = nmeshyz*ix + nmeshz*iy;
+        for (int iz=0; iz<nmesh[2]; iz++) mesh[ixy + iz] /= (xy + coords[iz]);
       }
     }
   }
   else if (exp == 1) {
     #pragma omp parallel for shared(mesh)
-    for (int ix=0; ix<nmeshx; ix++) {
-      for (int iy=0; iy<nmeshy; iy++) {
+    for (int ix=0; ix<nmesh[0]; ix++) {
+      for (int iy=0; iy<nmesh[1]; iy++) {
         FLOAT xy = coords[nmeshz + iy] + coords[nmeshypz + ix];
-        int ixy = nmeshyz*ix + nmeshz*iy;
-        for (int iz=0; iz<nmeshz; iz++) mesh[ixy + iz] *= (xy + coords[iz]);
+        size_t ixy = nmeshyz*ix + nmeshz*iy;
+        for (int iz=0; iz<nmesh[2]; iz++) mesh[ixy + iz] *= (xy + coords[iz]);
       }
     }
   }
   else {
     #pragma omp parallel for shared(mesh)
-    for (int ix=0; ix<nmeshx; ix++) {
-      for (int iy=0; iy<nmeshy; iy++) {
+    for (int ix=0; ix<nmesh[0]; ix++) {
+      for (int iy=0; iy<nmesh[1]; iy++) {
         FLOAT xy = coords[nmeshz + iy] + coords[nmeshypz + ix];
-        int ixy = nmeshyz*ix + nmeshz*iy;
-        for (int iz=0; iz<nmeshz; iz++) mesh[ixy + iz] *= POW((xy + coords[iz]), exp);
+        size_t ixy = nmeshyz*ix + nmeshz*iy;
+        for (int iz=0; iz<nmesh[2]; iz++) mesh[ixy + iz] *= POW((xy + coords[iz]), exp);
       }
     }
   }

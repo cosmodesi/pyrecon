@@ -846,7 +846,7 @@ class BaseFFTEngine(object):
     hermitian : bool
         Whether complex array has Hermitian symmetry, i.e. is real when Fourier transformed.
     """
-    def __init__(self, shape, nthreads=None, type_complex=None, type_real=None, hermitian=True):
+    def __init__(self, shape, nthreads=None, type_complex=None, type_real=None, hermitian=True, **kwargs):
         """
         Initialize FFT engine.
         Default types are 'c16' for :attr:`type_complex` and 'f8' for :attr:`type_float`.

@@ -26,7 +26,9 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         Initialize :class:`MultiGridReconstruction`.
         See :class:`BaseReconstruction` for input parameters.
         """
-        super(OriginalMultiGridReconstruction,self).__init__(*args,**kwargs)
+        # Only 2 FFTs to perform, for the Gaussian smoothing, so no need to spend time on scheduling
+        kwargs.setdefault('fft_plan', 'estimate')
+        super(OriginalMultiGridReconstruction,self).__init__(*args, **kwargs)
         self._type_float = self.mesh_data._type_float
         self._lib = ctypes.CDLL(self._path_lib.format(self.mesh_data._precision),mode=ctypes.RTLD_LOCAL)
 
