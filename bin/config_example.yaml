@@ -25,7 +25,6 @@ output:
 algorithm:
   name: MultiGridReconstruction                                                 # name of reconstruction algorithm (Julian's IterativeFFTReconstruction, Martin's MultiGridReconstruction)
   convention: RecSym                                                            # RecSym = RSD-shifted randoms or RecIso = only data RSD-shifted
-  nthreads: 4                                                                   # number of OpenMP threads
   los: 'local'                                                                  # line-of-sight can be 'local' (default) or an axis ('x', 'y', 'z') or a 3-vector.
   # other algorithm-related parameters
 
