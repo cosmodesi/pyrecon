@@ -116,8 +116,9 @@ def main(args=None):
     config_cosmo = {name:value for name,value in config['cosmology'].items() if name in ['f','bias']}
     config_cosmo['los'] = config['algorithm'].pop('los',None)
     convention = config['algorithm'].pop('convention').lower()
-    nthreads = multiprocessing.cpu_count()
-    #nthreads = config['algorithm'].pop('nthreads',None)
+    nthreads = config['algorithm'].pop('nthreads',None)
+    if nthreads is None:
+        nthreads = multiprocessing.cpu_count()
     allowed_conventions = ['recsym','reciso']
     if not convention in allowed_conventions:
         raise ConfigError('Unknown convention {}. Choices are {}'.format(convention, allowed_conventions))
