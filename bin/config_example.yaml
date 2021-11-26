@@ -25,7 +25,7 @@ output:
 algorithm:
   name: MultiGridReconstruction                                                 # name of reconstruction algorithm (Julian's IterativeFFTReconstruction, Martin's MultiGridReconstruction)
   convention: RecSym                                                            # RecSym = data and randoms shifted by 'disp+rsd', RecIso = randoms shifted by 'disp' only, RSD = data shifted by 'rsd', no shift on randoms
-  nthreads: 4                                                                   # number of OpenMP threads
+  nthreads: 4                                                                   # number of OpenMP threads; defaults to OMP_NUM_THREADS if set, else OpenMP's default (usually number of cores)
   los: 'local'                                                                  # line-of-sight can be 'local' (default) or an axis ('x', 'y', 'z') or a 3-vector.
   # other algorithm-related parameters
 
@@ -43,3 +43,5 @@ mesh:
   boxsize:                                                                      # box size (floot or list of 3 floats)
   boxcenter:                                                                    # box center
   dtype: f4                                                                     # mesh data-type for f4 (float32) or f8 (float64)
+  fft_engine: 'fftw'                                                            # FFT engine, either 'numpy' or 'fftw' (recommended)
+  fft_plan: 'estimate'                                                          # FFT planning for FFTW engine

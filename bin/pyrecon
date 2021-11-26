@@ -324,9 +324,9 @@ def main(args=None, **input_config):
                 del catalog[col]
 
         catalogs[name] = catalog
-
+    
     # Run reconstruction
-    recon = ReconstructionAlgorithm(**config_cosmo,**config['mesh'],positions=positions['randoms'] if selection_function == 'randoms' else None,nthreads=nthreads)
+    recon = ReconstructionAlgorithm(**config_cosmo, **config['mesh'], positions=positions['randoms'] if selection_function == 'randoms' else None, nthreads=nthreads)
     recon.assign_data(positions['data'],weights['data'])
     if selection_function == 'randoms': recon.assign_randoms(positions['randoms'],weights['randoms'])
     recon.set_density_contrast(**config['delta'])
