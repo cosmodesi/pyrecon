@@ -262,7 +262,7 @@ def test_revolver(data_fn, randoms_fn=None):
 def test_script(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
 
     catalog_dir = '_catalogs'
-    command = 'pyrecon config_iterativefft.yaml --data-fn {} --randoms-fn {} --output-data-fn {} --output-randoms-fn {}'.format(
+    command = 'pyrecon config_iterativefft_particle.yaml --data-fn {} --randoms-fn {} --output-data-fn {} --output-randoms-fn {}'.format(
                 os.path.relpath(data_fn,catalog_dir),os.path.relpath(randoms_fn,catalog_dir),
                 os.path.relpath(output_data_fn,catalog_dir),os.path.relpath(output_randoms_fn,catalog_dir))
     subprocess.call(command,shell=True)
@@ -290,7 +290,7 @@ def test_script(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
 def test_script_no_randoms(data_fn, output_data_fn):
 
     catalog_dir = '_catalogs'
-    command = 'pyrecon config_iterativefft_no_randoms.yaml --data-fn {} --output-data-fn {}'.format(
+    command = 'pyrecon config_iterativefft_particle_no_randoms.yaml --data-fn {} --output-data-fn {}'.format(
                 os.path.relpath(data_fn,catalog_dir),os.path.relpath(output_data_fn,catalog_dir))
     subprocess.call(command,shell=True)
     data = fitsio.read(data_fn)
