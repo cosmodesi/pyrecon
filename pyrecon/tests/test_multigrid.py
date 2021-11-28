@@ -232,7 +232,7 @@ def test_script_no_randoms(data_fn, output_data_fn):
     data = fitsio.read(data_fn)
     boxsize = 800
     boxcenter = boxsize/2.
-    recon = MultiGridReconstruction(nthreads=4,los='x',boxcenter=boxcenter,boxsize=boxsize,nmesh=128,dtype='f8')
+    recon = MultiGridReconstruction(nthreads=4,los=0,boxcenter=boxcenter,boxsize=boxsize,nmesh=128,dtype='f8')
     recon.set_cosmo(f=0.8,bias=2.)
     recon.assign_data(data['RSDPosition'])
     recon.set_density_contrast()

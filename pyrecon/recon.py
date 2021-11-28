@@ -65,8 +65,8 @@ class BaseReconstruction(BaseClass):
         bias : float
             Galaxy bias.
 
-        los : string, array, default=None
-            If ``los`` is ``None`` or 'local', use local (varying) line-of-sight.
+        los : string, array_like, default=None
+            If ``los`` is ``None``, use local (varying) line-of-sight.
             Else, may be 'x', 'y' or 'z', for one of the Cartesian axes.
             Else, a 3-vector.
 
@@ -131,16 +131,19 @@ class BaseReconstruction(BaseClass):
         Parameters
         ----------
         los : string, array
-            If ``los`` is ``None`` or 'local', use local (varying) line-of-sight.
+            If ``los`` is ``None``, use local (varying) line-of-sight.
             Else, may be 'x', 'y' or 'z', for one of the Cartesian axes.
             Else, a 3-vector.
         """
         if los in [None, 'local']:
             self.los = None
-        elif los in ['x', 'y', 'z']:
-            self.los = np.zeros(3, dtype=self.mesh_data.dtype)
-            self.los['xyz'.index(los)] = 1.
         else:
+            if isinstance(los, str):
+                los = 'xyz'.index(los)
+            if np.ndim(los) == 0:
+                ilos = los
+                los = np.zeros(3, dtype=self.mesh_data.dtype)
+                los[ilos] = 1.
             los = np.array(los, dtype=self.mesh_data.dtype)
             self.los = los/utils.distance(los)
 

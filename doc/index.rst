@@ -35,15 +35,15 @@ A typical reconstruction run is (e.g. for MultiGridReconstruction; the same work
 
   from pyrecon import MultiGridReconstruction
 
-  # line-of-sight "los" can be 'local' (default) or an axis, 'x', 'y', 'z', or a 3-vector
-  recon = MultiGridReconstruction(f=0.8, bias=2.0, los='local', nmesh=512, boxsize=1000., boxcenter=2000.)
+  # line-of-sight "los" can be local (None, default) or an axis, 'x', 'y', 'z', or a 3-vector
+  recon = MultiGridReconstruction(f=0.8, bias=2.0, los=None, nmesh=512, boxsize=1000., boxcenter=2000.)
   recon.assign_data(positions_data, weights_data) # positions_data are a (N, 3) array of Cartesian positions, weights a (N,) array
-  # you can skip the following line if you assume uniform selection function (randoms)
+  # You can skip the following line if you assume uniform selection function (randoms)
   recon.assign_randoms(positions_randoms, weights_randoms)
   recon.set_density_contrast()
   recon.run()
-  # if you are using IterativeFFTParticleReconstruction, displacements are to be taken at the reconstructed data real-space positions;
-  # in this case, do: positions_rec_data = positions_data - recon.read_shifts('data')
+  # If you are using IterativeFFTParticleReconstruction, displacements are to be taken at the reconstructed data real-space positions;
+  # In this case, do: positions_rec_data = positions_data - recon.read_shifts('data')
   positions_rec_data = positions_data - recon.read_shifts(positions_data)
   # RecSym = remove large scale RSD from randoms
   positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms)

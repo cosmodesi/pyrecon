@@ -348,14 +348,14 @@ class MeshInfo(BaseClass):
 
     Attributes
     ----------
+    nmesh : array
+        Mesh size, i.e. number of mesh nodes along each axis.
+
     boxsize : array
         Physical size of the box.
 
     boxcenter : array
         Box center.
-
-    nmesh : array
-        Mesh size, i.e. number of mesh nodes along each axis.
     """
     _attrs = ['boxsize', 'boxcenter', 'nmesh']
 

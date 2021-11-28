@@ -28,22 +28,17 @@ class PlaneParallelFFTReconstruction(BaseReconstruction):
 
     def set_los(self, los=None):
         """
-        Set line of sight.
+        Set line-of-sight.
 
         Parameters
         ----------
-        los : string, array
+        los : string, array_like
             May be 'x', 'y' or 'z', for one of the Cartesian axes.
             Else, a 3-vector.
         """
-        if los is None:
-            raise ReconstructionError('A (global) line of sight must be provided')
-        if los in ['x', 'y', 'z']:
-            self.los = np.zeros(3, dtype=self.mesh_data.dtype)
-            self.los['xyz'.index(los)] = 1.
-        else:
-            los = np.array(los, dtype=self.mesh_data.dtype)
-            self.los = los/utils.distance(los)
+        super(PlaneParallelFFTReconstruction, self).set_los(los=los)
+        if self.los is None:
+            raise ReconstructionError('A (global) line-of-sight must be provided')
 
     def run(self):
         """Run reconstruction, i.e. compute Zeldovich displacement fields :attr:`mesh_psi`."""
