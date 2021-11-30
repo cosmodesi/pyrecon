@@ -70,3 +70,5 @@ See [pyrecon docs](https://pyrecon.readthedocs.io/en/latest/user/building.html).
 - Julian E. Bautista for https://github.com/julianbautista/eboss_clustering/blob/master/python/recon.py
 - Pedro Rangel Caetano for inspiration for the script bin/recon
 - Sesh Nadathur for careful checks against Revolver https://github.com/seshnadathur/Revolver/blob/main/python_tools/recon.py
+- Enrique Paillas for bug reports
+- Grant Merz for propagator https://github.com/grantmerz/DESI_Recon

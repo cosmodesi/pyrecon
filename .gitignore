@@ -23,6 +23,7 @@
 **/bak*
 **/lib
 **/wisdom*
+**/.ipynb_checkpoints
 
 # Unit test / coverage reports
 **/.coverage
