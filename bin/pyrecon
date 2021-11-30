@@ -227,7 +227,7 @@ def main(args=None, **input_config):
             cols = config['input'].get('{}_{}'.format(format,name),None)
             if cols is not None:
                 # Check whether e.g. 'rdz_data' but 'xyz_data' has been specified previously
-                if input_format[name] != format:
+                if input_format[name] is not None:
                     raise ConfigError('Cannot use two different input formats')
                 input_format[name] = format
                 position_columns = cols
@@ -252,7 +252,8 @@ def main(args=None, **input_config):
         # Optionally, mask to apply
         mask_str = config['input'].get('mask_{}'.format(name), config['input'].get('mask',None))
         mask_str, mask_columns = decode_eval_str(mask_str)
-        weight_str, weight_columns = decode_eval_str(mask_str)
+        weight_str = config['input'].get('weights_{}'.format(name), config['input'].get('weights',None))
+        weight_str, weight_columns = decode_eval_str(weight_str)
         # Input columns to keep for ouput
         keep_input_columns[name] = make_list(config['output'].get('columns_{}'.format(name),config['output'].get('columns',None)))
         columns = []
