@@ -113,17 +113,17 @@ def test_metrics():
         ax.grid(True)
         ax.set_xlabel('$k$ [$\mathrm{Mpc}/h$]')
     lax[0].set_ylabel(r'$r(k) = P_{\mathrm{rec},\mathrm{init}}/\sqrt{P_{\mathrm{rec}}P_{\mathrm{init}}}$')
-    lax[1].set_ylabel(r'$t(k) = P_{\mathrm{rec}}/P_{\mathrm{init}}$')
+    lax[1].set_ylabel(r'$t(k) = \sqrt{P_{\mathrm{rec}}/P_{\mathrm{init}}}$')
     lax[2].set_ylabel(r'$g(k) = P_{\mathrm{rec},\mathrm{init}}/P_{\mathrm{init}}$')
     plt.show()
 
     ax = plt.gca()
     auto = correlator.auto_initial
     auto.rebin((1, len(auto.edges[-1])-1))
-    ax.plot(auto.k[:,0], auto.k[:,0]*auto.power[:,0]*bias**2, label='initial')
+    ax.plot(auto.k[:,0], auto.k[:,0]*auto.power[:,0].real*bias**2, label='initial')
     auto = correlator.auto_reconstructed
     auto.rebin((1, len(auto.edges)-1))
-    ax.plot(auto.k[:,0], auto.k[:,0]*auto.power[:,0], label='reconstructed')
+    ax.plot(auto.k[:,0], auto.k[:,0]*auto.power[:,0].real, label='reconstructed')
     ax.legend()
     plt.show()
 
