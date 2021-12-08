@@ -9,6 +9,33 @@ from pyrecon import IterativeFFTReconstruction
 from test_multigrid import get_random_catalog
 
 
+def test_dtype():
+    data = get_random_catalog(seed=42)
+    randoms = get_random_catalog(seed=81)
+    for los in [None, 'x']:
+        recon_f4 = IterativeFFTReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=64,los=los,dtype='f4')
+        recon_f4.assign_data(data['Position'],data['Weight'])
+        recon_f4.assign_randoms(randoms['Position'],randoms['Weight'])
+        recon_f4.set_density_contrast()
+        assert recon_f4.mesh_delta.dtype.itemsize == 4
+        recon_f4.run()
+        assert recon_f4.mesh_psi[0].dtype.itemsize == 4
+        shifts_f4 = recon_f4.read_shifts(data['Position'].astype('f8'),field='disp+rsd')
+        assert shifts_f4.dtype.itemsize == 8
+        shifts_f4 = recon_f4.read_shifts(data['Position'].astype('f4'),field='disp+rsd')
+        assert shifts_f4.dtype.itemsize == 4
+        recon_f8 = IterativeFFTReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=64,los=los,dtype='f8')
+        recon_f8.assign_data(data['Position'],data['Weight'])
+        recon_f8.assign_randoms(randoms['Position'],randoms['Weight'])
+        recon_f8.set_density_contrast()
+        assert recon_f8.mesh_delta.dtype.itemsize == 8
+        recon_f8.run()
+        assert recon_f8.mesh_psi[0].dtype.itemsize == 8
+        shifts_f8 = recon_f8.read_shifts(data['Position'],field='disp+rsd')
+        assert shifts_f8.dtype.itemsize == 8
+        assert not np.all(shifts_f4 == shifts_f8)
+        assert np.allclose(shifts_f4, shifts_f8, atol=1e-2, rtol=1e-2)
+
 
 def test_mem():
     data = get_random_catalog(seed=42)
@@ -80,4 +107,5 @@ if __name__ == '__main__':
 
     setup_logging()
     #test_mem()
+    test_dtype()
     test_iterative_fft(data_fn, randoms_fn)

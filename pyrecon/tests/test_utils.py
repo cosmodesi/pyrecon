@@ -1,5 +1,9 @@
 import re
 
+import numpy as np
+
+from pyrecon.utils import DistanceToRedshift
+
 
 def decode_eval_str(s):
     # change ${col} => col, and return list of columns
@@ -19,6 +23,17 @@ def test_decode_eval_str():
     print(s,cols)
 
 
+def test_distance_to_redshift():
+    def distance(z): return z**2
+    d2z = DistanceToRedshift(distance)
+    z = np.linspace(0., 20., 200)
+    d = distance(z)
+    assert np.allclose(d2z(d), z)
+    for itemsize in [4, 8]:
+        assert d2z(d.astype('f{:d}'.format(itemsize))).itemsize == itemsize
+
+
 if __name__ == '__main__':
 
     test_decode_eval_str()
+    test_distance_to_redshift()

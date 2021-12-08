@@ -95,7 +95,8 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         self.log_info('Running iteration {:d}.'.format(self._iter))
 
         if self._iter > 0:
-            self.mesh_data = self.mesh_randoms.copy(value=None)
+            self.mesh_data = self.mesh_randoms.copy()
+            self.mesh_data.value = None # to reset mesh values
             # Painting reconstructed data real-space positions
             super(OriginalIterativeFFTParticleReconstruction,self).assign_data(self._positions_rec_data,weights=self._weights_data) # super in order not to save positions_rec_data
             # Gaussian smoothing before density contrast calculation

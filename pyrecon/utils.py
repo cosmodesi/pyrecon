@@ -111,10 +111,8 @@ class BaseClass(object,metaclass=BaseMetaClass):
         new.__dict__.update(self.__dict__)
         return new
 
-    def copy(self, **kwargs):
-        new = self.__copy__()
-        new.__dict__.update(kwargs)
-        return new
+    def copy(self):
+        return self.__copy__()
 
 
 def broadcast_arrays(*arrays):
@@ -247,7 +245,8 @@ class DistanceToRedshift(object):
 
     def __call__(self, distance):
         """Return (interpolated) redshift at distance ``distance`` (scalar or array)."""
-        return self.interp(distance)
+        distance = np.asarray(distance)
+        return self.interp(distance).astype(distance.dtype, copy=False)
 
 
 import time
