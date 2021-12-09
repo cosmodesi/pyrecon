@@ -73,6 +73,8 @@ def main(args=None, **input_config):
     parser.add_argument('--randoms-fn', nargs='?', metavar='<fits, hdf5 file>', help='Path(s) to input randoms file (overrides configuration file)')
     parser.add_argument('--output-data-fn', nargs='?', metavar='<fits, hdf5 file>', help='Path to output data file (overrides configuration file)')
     parser.add_argument('--output-randoms-fn', nargs='?', metavar='<fits, hdf5file>', help='Path to output randoms file (overrides configuration file)')
+    parser.add_argument('--growth-rate', nargs='?', type=float, help='Value of the logarithmic growth rate')
+    parser.add_argument('--galaxy-bias', nargs='?', type=float, help='Value of the linear galaxy bias')
 
     opt = parser.parse_args(args=args)
     setup_logging()
@@ -112,6 +114,10 @@ def main(args=None, **input_config):
         config['output']['data_fn'] = opt.output_data_fn
     if opt.output_randoms_fn:
         config['output']['randoms_fn'] = opt.output_randoms_fn
+    if opt.growth_rate:
+        config['cosmology']['f'] = opt.growth_rate
+    if opt.galaxy_bias:
+        config['cosmology']['bias'] = opt.galaxy_bias
 
     # Fetch reconstruction algorithm, e.g. MultiGridReconstruction
     ReconstructionAlgorithm = getattr(pyrecon,config['algorithm'].pop('name'))
