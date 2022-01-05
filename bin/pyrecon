@@ -345,16 +345,10 @@ def main(args=None, **input_config):
     field = 'rsd' if convention == 'rsd' else 'disp+rsd'
     if type(recon) is IterativeFFTParticleReconstruction:
         positions_rec['data'] = positions['data'] - recon.read_shifts('data', field=field)
-        if wrap:
-            boxsize = recon.mesh_psi[0].boxsize
-            offset = recon.mesh_psi[0].offset
-            positions_rec['data'] = (positions_rec['data'] - offset) % boxsize + offset
     else:
         positions_rec['data'] = positions['data'] - recon.read_shifts(positions['data'], field=field)
-        if wrap:
-            boxsize = recon.mesh_delta.boxsize
-            offset = recon.mesh_delta.offset
-            positions_rec['data'] = (positions_rec['data'] - offset) % boxsize + offset
+    if wrap:
+        positions_rec['data'] = (positions_rec['data'] - recon.offset) % recon.boxsize + recon.offset
     if 'randoms' in output_fns:
         # RSD removal only: no effect on the randoms
         if convention == 'rsd':
@@ -364,8 +358,10 @@ def main(args=None, **input_config):
             # convention == reciso: move randoms by Zeldovich displacement
             field = 'disp+rsd' if convention == 'recsym' else 'disp'
             positions_rec['randoms'] = positions['randoms'] - recon.read_shifts(positions['randoms'], field=field)
-            if wrap:
-                positions_rec['randoms'] = (positions_rec['randoms'] - offset) % boxsize + offset
+        if wrap:
+            # note that output reconstructed random positions will be wrapped so may differ from input
+            # positions even if convention is 'rsd' if input positions are not wrapped 
+            positions_rec['randoms'] = (positions_rec['randoms'] - recon.offset) % recon.boxsize + recon.offset
 
     # Now dump reconstructed catalogs to disk
     for name in output_fns:

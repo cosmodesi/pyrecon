@@ -20,7 +20,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         See :meth:`BaseReconstruction.assign_data` for parameters.
         """
         if self.wrap:
-            positions = (positions - self.mesh_randoms.offset) % self.mesh_randoms.boxsize + self.mesh_randoms.offset
+            positions = (positions - self.offset) % self.boxsize + self.offset
         if weights is None:
             weights = np.ones_like(positions,shape=(len(positions),))
         if self.mesh_data.value is None:
@@ -38,7 +38,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         See :meth:`BaseReconstruction.assign_randoms` for parameters.
         """
         if self.wrap:
-            positions = (positions - self.mesh_randoms.offset) % self.mesh_randoms.boxsize + self.mesh_randoms.offset
+            positions = (positions - self.offset) % self.boxsize + self.offset
         if weights is None:
             weights = np.ones_like(positions,shape=(len(positions),))
         if self.mesh_randoms.value is None:
@@ -205,13 +205,13 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             return shifts
 
         # check input positions
-        diff = positions - self.mesh_psi[0].offset
-        if np.any((diff < 0) | (diff > self.mesh_psi[0].boxsize - self.mesh_psi[0].cellsize)):
+        diff = positions - self.offset
+        if np.any((diff < 0) | (diff > self.boxsize - self.cellsize)):
             if self.wrap:
-                positions = diff % self.mesh_psi[0].boxsize + self.mesh_psi[0].offset
+                positions = diff % self.boxsize + self.offset
             else:
                 self.log_warning('Some input particle positions are out of bounds')
-            
+
         shifts = read_cic(positions)
 
         if field == 'disp':

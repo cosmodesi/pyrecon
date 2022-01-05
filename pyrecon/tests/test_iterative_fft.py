@@ -53,6 +53,32 @@ def test_mem():
         recon.run()
         mem('recon') # 3 meshes
 
+def test_iterative_fft_wrap():
+    size = 100000
+    boxsize = 1000
+    for origin in [-500, 0, 500]:
+        boxcenter = boxsize/2 + origin
+        data = get_random_catalog(size, boxsize, seed=42)
+        # set one of the data positions to be outside the fiducial box by hand
+        data['Position'][-1] = np.array([boxsize, boxsize, boxsize]) + 1
+        data['Position'] += boxcenter
+        randoms = get_random_catalog(size, boxsize, seed=42)
+        # set one of the random positions to be outside the fiducial box by hand
+        randoms['Position'][-1] = np.array([0, 0, 0]) - 1
+        randoms['Position'] += boxcenter
+        recon = pyrecon.IterativeFFTReconstruction(f=0.8, bias=2, los='z', boxsize=boxsize, boxcenter=boxcenter, nmesh=64, wrap=True)
+        # following steps should run without error if wrapping is correctly implemented
+        recon.assign_data(data['Position'],data['Weight'])
+        recon.assign_randoms(randoms['Position'],randoms['Weight'])
+        recon.set_density_contrast()
+        recon.run()
+
+        # following steps test the implementation coded into standalone pyrecon code
+        for field in ['rsd', 'disp', 'disp+rsd']:
+            shifts = recon.read_shifts(data['Position'], field=field)
+            diff = data['Position'] - shifts
+            positions_rec = (diff - recon.offset) % recon.boxsize + recon.offset
+            assert np.all(positions_rec <= origin + boxsize) and np.all(positions_rec >= origin)
 
 def test_iterative_fft(data_fn, randoms_fn):
     boxsize = 1200.

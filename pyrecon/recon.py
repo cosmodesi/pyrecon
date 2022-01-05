@@ -92,6 +92,10 @@ class BaseReconstruction(BaseClass):
         self.wrap = wrap
         self.mesh_data = RealMesh(**kwargs)
         self.mesh_randoms = RealMesh(**kwargs)
+        # record mesh boxsize, cellsize and offset for later use when the meshes themselves get deleted
+        self.boxsize = self.mesh_randoms.boxsize
+        self.offset = self.mesh_randoms.offset
+        self.cellsize = self.mesh_randoms.cellsize
         self.set_los(los)
         self.log_info('Using mesh {}.'.format(self.mesh_data))
         kwargs = {}
@@ -165,13 +169,13 @@ class BaseReconstruction(BaseClass):
             Weights; default to 1.
         """
         if self.wrap:
-            positions = (positions - self.mesh_randoms.offset) % self.mesh_randoms.boxsize + self.mesh_randoms.offset
+            positions = (positions - self.offset) % self.boxsize + self.offset
         self.mesh_data.assign_cic(positions, weights=weights)
 
     def assign_randoms(self, positions, weights=None):
         """Same as :meth:`assign_data`, but for random objects."""
         if self.wrap:
-            positions = (positions - self.mesh_randoms.offset) % self.mesh_randoms.boxsize + self.mesh_randoms.offset
+            positions = (positions - self.offset) % self.boxsize + self.offset
         self.mesh_randoms.assign_cic(positions, weights=weights)
 
     @property
@@ -260,10 +264,10 @@ class BaseReconstruction(BaseClass):
             Displacements.
         """
         # check input positions
-        diff = positions - self.mesh_delta.offset
-        if np.any((diff < 0) | (diff > self.mesh_delta.boxsize - self.mesh_delta.cellsize)):
+        diff = positions - self.offset
+        if np.any((diff < 0) | (diff > self.boxsize - self.cellsize)):
             if self.wrap:
-                positions = diff % self.mesh_delta.boxsize + self.mesh_delta.offset
+                positions = diff % self.boxsize + self.offset
             else:
                 self.log_warning('Some input particle positions are out of bounds')
 
