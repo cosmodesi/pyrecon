@@ -66,7 +66,7 @@ def test_plane_parallel_fft_wrap():
         # set one of the random positions to be outside the fiducial box by hand
         randoms['Position'][-1] = np.array([0, 0, 0]) - 1
         randoms['Position'] += boxcenter
-        recon = pyrecon.PlaneParallelFFTReconstruction(f=0.8, bias=2, los='z', boxsize=boxsize, boxcenter=boxcenter, nmesh=64, wrap=True)
+        recon = PlaneParallelFFTReconstruction(f=0.8, bias=2, los='z', boxsize=boxsize, boxcenter=boxcenter, nmesh=64, wrap=True)
         # following steps should run without error if wrapping is correctly implemented
         recon.assign_data(data['Position'],data['Weight'])
         recon.assign_randoms(randoms['Position'],randoms['Weight'])
