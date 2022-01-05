@@ -45,3 +45,4 @@ mesh:
   dtype: f4                                                                     # mesh data-type for f4 (float32) or f8 (float64)
   fft_engine: 'fftw'                                                            # FFT engine, either 'numpy' or 'fftw' (recommended)
   fft_plan: 'estimate'                                                          # FFT planning for FFTW engine
+  wrap: False                                                                   # whether to wrap positions using periodic boundary conditions over the box

@@ -19,6 +19,8 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         Keeps track of input positions (for :meth:`run`) and weights (for :meth:`set_density_contrast`).
         See :meth:`BaseReconstruction.assign_data` for parameters.
         """
+        if self.wrap:
+            positions = (positions - self.mesh_randoms.offset) % self.mesh_randoms.boxsize + self.mesh_randoms.offset
         if weights is None:
             weights = np.ones_like(positions,shape=(len(positions),))
         if self.mesh_data.value is None:
@@ -35,6 +37,8 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         Keeps track of sum of weights (for :meth:`set_density_contrast`).
         See :meth:`BaseReconstruction.assign_randoms` for parameters.
         """
+        if self.wrap:
+            positions = (positions - self.mesh_randoms.offset) % self.mesh_randoms.boxsize + self.mesh_randoms.offset
         if weights is None:
             weights = np.ones_like(positions,shape=(len(positions),))
         if self.mesh_randoms.value is None:
@@ -189,6 +193,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             return shifts
 
         if isinstance(positions, str) and positions == 'data':
+            # _positions_rec_data already wrapped during iteration
             shifts = read_cic(self._positions_rec_data)
             if field == 'disp':
                 return shifts
@@ -199,6 +204,14 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             shifts += rsd
             return shifts
 
+        # check input positions
+        diff = positions - self.mesh_psi[0].offset
+        if np.any((diff < 0) | (diff > self.mesh_psi[0].boxsize - self.mesh_psi[0].cellsize)):
+            if self.wrap:
+                positions = diff % self.mesh_psi[0].boxsize + self.mesh_psi[0].offset
+            else:
+                self.log_warning('Some input particle positions are out of bounds')
+            
         shifts = read_cic(positions)
 
         if field == 'disp':
