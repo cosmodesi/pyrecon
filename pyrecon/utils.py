@@ -71,6 +71,14 @@ def setup_logging(level=logging.INFO, stream=sys.stdout, filename=None, filemode
     sys.excepthook = exception_handler
 
 
+def mkdir(dirname):
+    """Try to create ``dirnm`` and catch :class:`OSError`."""
+    try:
+        os.makedirs(dirname) # MPI...
+    except OSError:
+        return
+
+
 class BaseMetaClass(type):
 
     """Meta class to add logging attributes to :class:`BaseClass` derived classes."""

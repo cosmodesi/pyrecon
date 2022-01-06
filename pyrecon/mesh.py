@@ -349,7 +349,7 @@ class MeshInfo(BaseClass):
             Mesh size, i.e. number of mesh nodes along each axis.
             If not provided, see ``value``.
 
-        boxsize : float, default=None
+        boxsize : array, float, default=None
             Physical size of the box.
             If not provided, see ``positions``.
 

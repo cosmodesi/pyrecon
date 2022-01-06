@@ -47,5 +47,5 @@ In this case, you can try to export:
 
   export CC=clang
 
-Before installing pyrecon. This will set clang OpenMP flags for compilation.
-Note that with Mac OS gcc can point to clang.
+Before installing **pyrecon**. This will set clang OpenMP flags for compilation.
+Note that with Mac OS "gcc" may sometimes point to clang.

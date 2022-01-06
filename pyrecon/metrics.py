@@ -15,9 +15,11 @@ import numpy as np
 
 from mpi4py import MPI
 
-from .utils import BaseClass
 from pmesh.pm import ParticleMesh
 from pypower import MeshFFTPower, CatalogMesh, ArrayMesh, WedgePowerSpectrum
+
+from .utils import BaseClass
+from . import utils
 
 
 class BasePowerRatio(BaseClass):
@@ -81,6 +83,7 @@ class BasePowerRatio(BaseClass):
 
     def save(self, filename):
         self.log_info('Saving {}.'.format(filename))
+        mkdir(os.path.dirname(filename))
         np.save(filename, self.__getstate__(), allow_pickle=True)
 
     @classmethod

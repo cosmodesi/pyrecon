@@ -83,7 +83,7 @@ class BaseReconstruction(BaseClass):
             Usually 'measure' is a good compromise.
 
         wrap : boolean, default=False
-            If ``True'', will enforce periodic boundary conditions to ensure particles stay within the box
+            If ``True'', will enforce periodic boundary conditions to ensure particles stay within the box.
 
         kwargs : dict
             Arguments to build :attr:`mesh_data`, :attr:`mesh_randoms` (see :class:`RealMesh`).
@@ -93,9 +93,8 @@ class BaseReconstruction(BaseClass):
         self.mesh_data = RealMesh(**kwargs)
         self.mesh_randoms = RealMesh(**kwargs)
         # record mesh boxsize, cellsize and offset for later use when the meshes themselves get deleted
-        self.boxsize = self.mesh_randoms.boxsize
-        self.offset = self.mesh_randoms.offset
-        self.cellsize = self.mesh_randoms.cellsize
+        for name in ['boxsize', 'offset', 'cellsize']:
+            setattr(self, name, getattr(self.mesh_randoms, name))
         self.set_los(los)
         self.log_info('Using mesh {}.'.format(self.mesh_data))
         kwargs = {}
