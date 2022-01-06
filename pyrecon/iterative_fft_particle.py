@@ -19,6 +19,8 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         Keeps track of input positions (for :meth:`run`) and weights (for :meth:`set_density_contrast`).
         See :meth:`BaseReconstruction.assign_data` for parameters.
         """
+        if self.wrap:
+            positions = (positions - self.offset) % self.boxsize + self.offset
         if weights is None:
             weights = np.ones_like(positions,shape=(len(positions),))
         if self.mesh_data.value is None:
@@ -35,6 +37,8 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         Keeps track of sum of weights (for :meth:`set_density_contrast`).
         See :meth:`BaseReconstruction.assign_randoms` for parameters.
         """
+        if self.wrap:
+            positions = (positions - self.offset) % self.boxsize + self.offset
         if weights is None:
             weights = np.ones_like(positions,shape=(len(positions),))
         if self.mesh_randoms.value is None:
@@ -189,6 +193,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             return shifts
 
         if isinstance(positions, str) and positions == 'data':
+            # _positions_rec_data already wrapped during iteration
             shifts = read_cic(self._positions_rec_data)
             if field == 'disp':
                 return shifts
@@ -198,6 +203,14 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             # field == 'disp+rsd'
             shifts += rsd
             return shifts
+
+        # check input positions
+        diff = positions - self.offset
+        if np.any((diff < 0) | (diff > self.boxsize - self.cellsize)):
+            if self.wrap:
+                positions = diff % self.boxsize + self.offset
+            else:
+                self.log_warning('Some input particle positions are out of bounds')
 
         shifts = read_cic(positions)
 

@@ -53,7 +53,7 @@ class BaseReconstruction(BaseClass):
         If ``None``, local (varying) line-of-sight.
         Else line-of-sight (unit) 3-vector.
     """
-    def __init__(self, f=0., bias=1., los=None, fft_engine='numpy', fft_wisdom=None, fft_plan=None, **kwargs):
+    def __init__(self, f=0., bias=1., los=None, fft_engine='numpy', fft_wisdom=None, fft_plan=None, wrap=False, **kwargs):
         """
         Initialize :class:`BaseReconstruction`.
 
@@ -82,12 +82,20 @@ class BaseReconstruction(BaseClass):
             The increasing amount of effort spent during the planning stage to create the fastest possible transform.
             Usually 'measure' is a good compromise.
 
+        wrap : boolean, default=False
+            If ``True'', will enforce periodic boundary conditions to ensure particles stay within the box
+
         kwargs : dict
             Arguments to build :attr:`mesh_data`, :attr:`mesh_randoms` (see :class:`RealMesh`).
         """
         self.set_cosmo(f=f,bias=bias)
+        self.wrap = wrap
         self.mesh_data = RealMesh(**kwargs)
         self.mesh_randoms = RealMesh(**kwargs)
+        # record mesh boxsize, cellsize and offset for later use when the meshes themselves get deleted
+        self.boxsize = self.mesh_randoms.boxsize
+        self.offset = self.mesh_randoms.offset
+        self.cellsize = self.mesh_randoms.cellsize
         self.set_los(los)
         self.log_info('Using mesh {}.'.format(self.mesh_data))
         kwargs = {}
@@ -160,10 +168,14 @@ class BaseReconstruction(BaseClass):
         weights : array of shape (N,), default=None
             Weights; default to 1.
         """
+        if self.wrap:
+            positions = (positions - self.offset) % self.boxsize + self.offset
         self.mesh_data.assign_cic(positions, weights=weights)
 
     def assign_randoms(self, positions, weights=None):
         """Same as :meth:`assign_data`, but for random objects."""
+        if self.wrap:
+            positions = (positions - self.offset) % self.boxsize + self.offset
         self.mesh_randoms.assign_cic(positions, weights=weights)
 
     @property
@@ -251,6 +263,14 @@ class BaseReconstruction(BaseClass):
         shifts : array of shape (N, 3)
             Displacements.
         """
+        # check input positions
+        diff = positions - self.offset
+        if np.any((diff < 0) | (diff > self.boxsize - self.cellsize)):
+            if self.wrap:
+                positions = diff % self.boxsize + self.offset
+            else:
+                self.log_warning('Some input particle positions are out of bounds')
+
         field = field.lower()
         allowed_fields = ['disp', 'rsd', 'disp+rsd']
         if field not in allowed_fields:
