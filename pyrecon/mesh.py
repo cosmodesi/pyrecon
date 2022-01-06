@@ -50,10 +50,7 @@ class BaseMesh(NDArrayLike,BaseClass,metaclass=BaseMetaClass):
         Can be set any time using ``mesh.value = newvalue``.
 
     info : MeshInfo
-        Mesh information (boxsize, boxcenter, nmesh, etc.)
-
-    nthreads : int
-        Number of threads to use in mesh calculations.
+        Mesh information (boxsize, boxcenter, nmesh, etc.).
 
     attrs : dict
         Dictionary of other attributes.
@@ -136,7 +133,7 @@ class BaseMesh(NDArrayLike,BaseClass,metaclass=BaseMetaClass):
         self._lib = ctypes.CDLL(self._path_lib.format(self._precision), mode=ctypes.RTLD_LOCAL)
 
     def set_num_threads(self, nthreads=None):
-        """Set number of OpenMP threads."""
+        """Set number of OpenMP threads used in mesh calculations."""
         if nthreads is not None:
             func = self._lib.set_num_threads
             func.argtypes = (ctypes.c_int,)
@@ -468,6 +465,10 @@ class MeshInfo(BaseClass):
         """Number of dimensions: 3."""
         return 3
 
+    def wrap(self, positions):
+        """Wrap input positions."""
+        return ((positions - self.offset) % self.boxsize) + self.offset
+
     def deepcopy(self):
         import copy
         return copy.deepcopy(self)
@@ -516,7 +517,7 @@ class RealMesh(BaseMesh):
             toret.append(o + d*np.arange(n))
         return tuple(toret)
 
-    def assign_cic(self, positions, weights=None):
+    def assign_cic(self, positions, weights=None, wrap=False):
         """
         Assign (paint) positions to mesh with Cloud-in-Cell scheme.
 
@@ -527,9 +528,13 @@ class RealMesh(BaseMesh):
 
         weights : array of shape (N,), default=None
             Weights; default to 1.
+
+        wrap : boolean, default=False
+            If ``True``, wrap input particle positions into the box.
         """
         size = len(positions)
         if weights is None: weights = np.ones_like(positions,shape=size,dtype=self._type_float)
+        if wrap: positions = self.info.wrap(positions)
         positions = ((positions - self.boxcenter)/self.boxsize + 0.5)*self.nmesh
         positions = positions.astype(self._type_float, copy=False).ravel(order='C')
         weights = weights.astype(self._type_float, copy=False).ravel(order='C')
@@ -546,7 +551,7 @@ class RealMesh(BaseMesh):
             raise MeshError('Issue with assign_cic')
         self.value.shape = self.shape
 
-    def read_cic(self, positions):
+    def read_cic(self, positions, wrap=False):
         """
         Read mesh values interpolated at input positions with Cloud-in-Cell scheme.
 
@@ -555,6 +560,9 @@ class RealMesh(BaseMesh):
         positions : array of shape (N,3)
             Cartesian positions.
 
+        wrap : boolean, default=False
+            If ``True``, wrap input particle positions into the box.
+
         Returns
         -------
         values : array of shape (N,)
@@ -562,6 +570,7 @@ class RealMesh(BaseMesh):
         """
         size = len(positions)
         dtype = positions.dtype
+        if wrap: positions = self.info.wrap(positions)
         positions = ((positions - self.boxcenter)/self.boxsize + 0.5)*self.nmesh
         positions = positions.astype(self._type_float,copy=False).ravel(order='C')
         values = np.empty_like(positions,shape=size,order='C')
@@ -576,7 +585,7 @@ class RealMesh(BaseMesh):
             raise MeshError('Issue with read_cic')
         return values.astype(dtype=dtype,copy=False)
 
-    def read_finite_difference_cic(self, positions):
+    def read_finite_difference_cic(self, positions, wrap=False):
         """
         Read derivative (finite difference scheme) of mesh values along each axis interpolated at input positions with Cloud-in-Cell scheme.
 
@@ -585,6 +594,9 @@ class RealMesh(BaseMesh):
         positions : array of shape (N,3)
             Cartesian positions.
 
+        wrap : boolean, default=False
+            If ``True``, wrap input particle positions into the box.
+
         Returns
         -------
         values : array of shape (N,)
@@ -592,6 +604,7 @@ class RealMesh(BaseMesh):
         """
         size = len(positions)
         dtype = positions.dtype
+        if wrap: positions = self.info.wrap(positions)
         positions = ((positions - self.boxcenter)/self.boxsize + 0.5)*self.nmesh
         positions = positions.astype(self._type_float,copy=False).ravel(order='C')
         values = np.empty_like(positions,order='C')

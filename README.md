@@ -22,12 +22,12 @@ recon.assign_randoms(positions_randoms, weights_randoms)
 recon.set_density_contrast()
 recon.run()
 # If you are using IterativeFFTParticleReconstruction, displacements are to be taken at the reconstructed data real-space positions;
-# in this case, do: positions_rec_data = positions_data - recon.read_shifts('data')
-positions_rec_data = positions_data - recon.read_shifts(positions_data)
+# in this case, do: positions_rec_data = recon.read_shifted_positions('data')
+positions_rec_data = recon.read_shifted_positions(positions_data)
 # RecSym = remove large scale RSD from randoms
-positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms)
+positions_rec_randoms = recon.read_shifted_positions(positions_randoms)
 # or RecIso
-# positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms, field='disp')
+# positions_rec_randoms = recon.read_shifted_positions(positions_randoms, field='disp')
 ```
 Also provided a script to run reconstruction as a standalone:
 ```

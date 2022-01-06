@@ -23,6 +23,8 @@ def test_no_nrandoms():
     assert np.allclose(np.mean(recon.mesh_delta), 0.)
     recon.run()
     assert np.all(np.abs(recon.read_shifts(data['Position'])) < 5.)
+    for name in ['boxsize', 'boxcenter', 'offset', 'cellsize']:
+        assert np.allclose(getattr(recon, name), getattr(recon.info, name))
 
 
 def test_dtype():
@@ -69,6 +71,7 @@ def test_mem():
         recon.run()
         mem('recon') # 3 meshes
 
+
 def test_iterative_fft_particle_wrap():
     size = 100000
     boxsize = 1000
@@ -95,6 +98,8 @@ def test_iterative_fft_particle_wrap():
             diff = data['Position'] - shifts
             positions_rec = (diff - recon.offset) % recon.boxsize + recon.offset
             assert np.all(positions_rec <= origin + boxsize) and np.all(positions_rec >= origin)
+            assert np.allclose(recon.read_shifted_positions('data', field=field), positions_rec)
+
 
 def test_los():
     boxsize = 1000.
@@ -120,7 +125,7 @@ def test_los():
     assert np.allclose(shifts_local,shifts_global,rtol=1e-3,atol=1e-3)
 
 
-def test_iterative_fft(data_fn, randoms_fn):
+def test_iterative_fft_particle(data_fn, randoms_fn):
     # here path to reference Julian's code: https://github.com/julianbautista/eboss_clustering/blob/master/python (python setup.py build_ext --inplace)
     sys.path.insert(0,'../../../../reconstruction/eboss_clustering/python')
     from cosmo import CosmoSimple
@@ -360,7 +365,8 @@ if __name__ == '__main__':
     test_no_nrandoms()
     test_dtype()
     test_los()
-    test_iterative_fft(data_fn,randoms_fn)
+    test_iterative_fft_particle_wrap()
+    test_iterative_fft_particle(data_fn,randoms_fn)
     test_revolver(data_fn,randoms_fn)
     test_revolver(box_data_fn)
     test_script(data_fn,randoms_fn,script_output_data_fn,script_output_randoms_fn)

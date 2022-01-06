@@ -24,16 +24,16 @@ class BaseReconstruction(BaseClass):
     .. code-block:: python
 
         # MyReconstruction is your reconstruction algorithm
-        recon = MyReconstruction(f=0.8,bias=2.0,nmesh=512,boxsize=1000.,boxcenter=2000.)
-        recon.assign_data(positions_data,weights_data)
-        recon.assign_randoms(positions_randoms,weights_randoms)
+        recon = MyReconstruction(f=0.8, bias=2.0, nmesh=512, boxsize=1000., boxcenter=2000.)
+        recon.assign_data(positions_data, weights_data)
+        recon.assign_randoms(positions_randoms, weights_randoms)
         recon.set_density_contrast()
         recon.run()
-        positions_rec_data = positions_data - recon.read_shifts(positions_data)
+        positions_rec_data = recon.read_shifted_positions(positions_data)
         # RecSym = remove large scale RSD from randoms
-        positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms)
+        positions_rec_randoms = recon.read_shifted_positions(positions_randoms)
         # Or RecIso
-        # positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms,with_rsd=False)
+        # positions_rec_randoms = recon.read_shifted_positions(positions_randoms, field='disp')
 
     Attributes
     ----------
@@ -52,6 +52,12 @@ class BaseReconstruction(BaseClass):
     los : array
         If ``None``, local (varying) line-of-sight.
         Else line-of-sight (unit) 3-vector.
+
+    info : MeshInfo
+        Mesh information (boxsize, boxcenter, nmesh, etc.).
+
+    boxsize, boxcenter, cellsize, offset : array
+        Mesh properties; see :class:`MeshInfo`.
     """
     def __init__(self, f=0., bias=1., los=None, fft_engine='numpy', fft_wisdom=None, fft_plan=None, wrap=False, **kwargs):
         """
@@ -83,7 +89,7 @@ class BaseReconstruction(BaseClass):
             Usually 'measure' is a good compromise.
 
         wrap : boolean, default=False
-            If ``True'', will enforce periodic boundary conditions to ensure particles stay within the box.
+            If ``True``, wrap input particle positions into the box.
 
         kwargs : dict
             Arguments to build :attr:`mesh_data`, :attr:`mesh_randoms` (see :class:`RealMesh`).
@@ -93,8 +99,7 @@ class BaseReconstruction(BaseClass):
         self.mesh_data = RealMesh(**kwargs)
         self.mesh_randoms = RealMesh(**kwargs)
         # record mesh boxsize, cellsize and offset for later use when the meshes themselves get deleted
-        for name in ['boxsize', 'offset', 'cellsize']:
-            setattr(self, name, getattr(self.mesh_randoms, name))
+        self.info = self.mesh_randoms.info
         self.set_los(los)
         self.log_info('Using mesh {}.'.format(self.mesh_data))
         kwargs = {}
@@ -167,15 +172,11 @@ class BaseReconstruction(BaseClass):
         weights : array of shape (N,), default=None
             Weights; default to 1.
         """
-        if self.wrap:
-            positions = (positions - self.offset) % self.boxsize + self.offset
-        self.mesh_data.assign_cic(positions, weights=weights)
+        self.mesh_data.assign_cic(positions, weights=weights, wrap=self.wrap)
 
     def assign_randoms(self, positions, weights=None):
         """Same as :meth:`assign_data`, but for random objects."""
-        if self.wrap:
-            positions = (positions - self.offset) % self.boxsize + self.offset
-        self.mesh_randoms.assign_cic(positions, weights=weights)
+        self.mesh_randoms.assign_cic(positions, weights=weights, wrap=self.wrap)
 
     @property
     def has_randoms(self):
@@ -239,7 +240,7 @@ class BaseReconstruction(BaseClass):
     def read_shifts(self, positions, field='disp+rsd'):
         """
         Read displacement at input positions.
-        To get reconstructed positions, given reconstruction instance ``recon``:
+        To get shifted/reconstructed positions, given reconstruction instance ``recon``:
 
         .. code-block:: python
 
@@ -248,6 +249,8 @@ class BaseReconstruction(BaseClass):
             positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms)
             # Or RecIso
             # positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms, field='disp')
+
+        Or directly use :meth:`read_shifted_positions` (which wraps output positions if :attr:`wrap`).
 
         Parameters
         ----------
@@ -262,21 +265,14 @@ class BaseReconstruction(BaseClass):
         shifts : array of shape (N, 3)
             Displacements.
         """
-        # check input positions
-        diff = positions - self.offset
-        if np.any((diff < 0) | (diff > self.boxsize - self.cellsize)):
-            if self.wrap:
-                positions = diff % self.boxsize + self.offset
-            else:
-                self.log_warning('Some input particle positions are out of bounds')
-
         field = field.lower()
         allowed_fields = ['disp', 'rsd', 'disp+rsd']
         if field not in allowed_fields:
             raise ReconstructionError('Unknown field {}. Choices are {}'.format(field, allowed_fields))
         shifts = np.empty_like(positions)
-        for iaxis,psi in enumerate(self.mesh_psi):
-            shifts[:,iaxis] = psi.read_cic(positions)
+        if self.wrap: positions = self.info.wrap(positions) # wrap here for local los
+        for iaxis, psi in enumerate(self.mesh_psi):
+            shifts[:,iaxis] = psi.read_cic(positions, wrap=False) # already wrapped if required
         if field == 'disp':
             return shifts
         if self.los is None:
@@ -289,3 +285,38 @@ class BaseReconstruction(BaseClass):
         # field == 'disp+rsd'
         shifts += rsd
         return shifts
+
+    def read_shifted_positions(self, positions, field='disp+rsd'):
+        """
+        Read shifted positions i.e. the difference ``positions - self.read_shifts(positions, field=field)``.
+        Output (and input) positions are wrapped if :attr:`wrap`.
+
+        Parameters
+        ----------
+        positions : array of shape (N, 3)
+            Cartesian positions.
+
+        field : string, default='disp+rsd'
+            Apply either 'disp' (Zeldovich displacement), 'rsd' (RSD displacement), or 'disp+rsd' (Zeldovich + RSD displacement).
+
+        Returns
+        -------
+        positions : array of shape (N, 3)
+            Shifted positions.
+        """
+        shifts = self.read_shifts(positions, field=field)
+        positions = positions - shifts
+        if self.wrap: positions = self.info.wrap(positions)
+        return positions
+
+
+def _make_property(name):
+
+    @property
+    def func(self):
+        return getattr(self.info, name)
+
+    return func
+
+for name in ['boxsize', 'boxcenter', 'nmesh', 'offset', 'cellsize']:
+    setattr(BaseReconstruction, name, _make_property(name))

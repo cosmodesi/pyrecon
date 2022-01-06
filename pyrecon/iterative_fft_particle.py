@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from .recon import BaseReconstruction
+from .recon import BaseReconstruction, ReconstructionError
 from . import utils
 
 
@@ -19,17 +19,16 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         Keeps track of input positions (for :meth:`run`) and weights (for :meth:`set_density_contrast`).
         See :meth:`BaseReconstruction.assign_data` for parameters.
         """
-        if self.wrap:
-            positions = (positions - self.offset) % self.boxsize + self.offset
         if weights is None:
             weights = np.ones_like(positions,shape=(len(positions),))
+        if self.wrap: positions = self.info.wrap(positions)
         if self.mesh_data.value is None:
             self._positions_data = positions
             self._weights_data = weights
         else:
-            self._positions_data = np.concatenate([self._positions_data,positions],axis=0)
-            self._weights_data = np.concatenate([self._weights_data,weights],axis=0)
-        self.mesh_data.assign_cic(positions,weights=weights)
+            self._positions_data = np.concatenate([self._positions_data, positions], axis=0)
+            self._weights_data = np.concatenate([self._weights_data, weights], axis=0)
+        self.mesh_data.assign_cic(positions, weights=weights, wrap=self.wrap)
 
     def assign_randoms(self, positions, weights=None):
         """
@@ -37,15 +36,14 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         Keeps track of sum of weights (for :meth:`set_density_contrast`).
         See :meth:`BaseReconstruction.assign_randoms` for parameters.
         """
-        if self.wrap:
-            positions = (positions - self.offset) % self.boxsize + self.offset
         if weights is None:
             weights = np.ones_like(positions,shape=(len(positions),))
+        if self.wrap: positions = self.info.wrap(positions)
         if self.mesh_randoms.value is None:
             self._sum_randoms = 0.
             self._size_randoms = 0
         #super(OriginalIterativeFFTParticleReconstruction,self).assign_randoms(positions,weights=weights)
-        self.mesh_randoms.assign_cic(positions,weights=weights)
+        self.mesh_randoms.assign_cic(positions, weights=weights, wrap=self.wrap)
         self._sum_randoms += np.sum(weights)
         self._size_randoms += len(positions)
 
@@ -102,7 +100,9 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             self.mesh_data = self.mesh_randoms.copy()
             self.mesh_data.value = None # to reset mesh values
             # Painting reconstructed data real-space positions
-            super(OriginalIterativeFFTParticleReconstruction,self).assign_data(self._positions_rec_data,weights=self._weights_data) # super in order not to save positions_rec_data
+            wrap = self.wrap; self.wrap = True # enforce wrapping
+            super(OriginalIterativeFFTParticleReconstruction, self).assign_data(self._positions_rec_data, weights=self._weights_data) # super in order not to save positions_rec_data
+            self.wrap = wrap
             # Gaussian smoothing before density contrast calculation
             self.mesh_data.smooth_gaussian(self.smoothing_radius,method='fft')
 
@@ -127,7 +127,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
                 continue
             psi = (delta_k*1j*k[iaxis]).to_real()
             # Reading shifts at reconstructed data real-space positions
-            shifts[:,iaxis] = psi.read_cic(self._positions_rec_data)
+            shifts[:,iaxis] = psi.read_cic(self._positions_rec_data, wrap=True)
             if return_psi: psis.append(psi)
 
         #self.log_info('A few displacements values:')
@@ -146,13 +146,10 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         # these positions are then used in next determination of psi,
         # assumed to not have RSD.
         # The iterative procedure then uses the new positions as if they'd been read in from the start
-        _positions_rec_data = self._positions_data - self.f*np.sum(shifts*los,axis=-1)[:,None]*los
-        diff = _positions_rec_data - self.mesh_randoms.offset
-        if self.los is None and np.any((diff < 0) | (diff > self.mesh_randoms.boxsize - self.mesh_randoms.cellsize)):
+        self._positions_rec_data = self._positions_data - self.f*np.sum(shifts*los,axis=-1)[:,None]*los
+        diff = self._positions_rec_data - self.mesh_randoms.offset
+        if (not self.wrap) and np.any((diff < 0) | (diff > self.mesh_randoms.boxsize - self.mesh_randoms.cellsize)):
             self.log_warning('Some particles are out-of-bounds.')
-        self._positions_rec_data = diff % self.mesh_randoms.boxsize + self.mesh_randoms.offset
-        #if self.los is not None:
-        #    self._positions_rec_data %= self.mesh_randoms.boxsize
         self._iter += 1
         if return_psi:
             return psis
@@ -170,7 +167,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         ----------
         positions : array of shape (N, 3), string
             Cartesian positions.
-            Pass string 'data' if you wish to get the displacements for the input data positions, passed to :meth:`assign_data`.
+            Pass string 'data' to get the displacements for the input data positions passed to :meth:`assign_data`.
             Note that in this case, shifts are read at the reconstructed data real-space positions.
 
         field : string, default='disp+rsd'
@@ -186,15 +183,15 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         if field not in allowed_fields:
             raise ReconstructionError('Unknown field {}. Choices are {}'.format(field, allowed_fields))
 
-        def read_cic(positions):
+        def read_cic(positions, wrap=False):
             shifts = np.empty_like(positions)
             for iaxis,psi in enumerate(self.mesh_psi):
-                shifts[:,iaxis] = psi.read_cic(positions)
+                shifts[:,iaxis] = psi.read_cic(positions, wrap=wrap)
             return shifts
 
         if isinstance(positions, str) and positions == 'data':
             # _positions_rec_data already wrapped during iteration
-            shifts = read_cic(self._positions_rec_data)
+            shifts = read_cic(self._positions_rec_data, wrap=True)
             if field == 'disp':
                 return shifts
             rsd = self._positions_data - self._positions_rec_data
@@ -204,15 +201,8 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             shifts += rsd
             return shifts
 
-        # check input positions
-        diff = positions - self.offset
-        if np.any((diff < 0) | (diff > self.boxsize - self.cellsize)):
-            if self.wrap:
-                positions = diff % self.boxsize + self.offset
-            else:
-                self.log_warning('Some input particle positions are out of bounds')
-
-        shifts = read_cic(positions)
+        if self.wrap: positions = self.info.wrap(positions) # wrap here for local los
+        shifts = read_cic(positions, wrap=False) # aleady wrapped
 
         if field == 'disp':
             return shifts
@@ -231,12 +221,38 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         # then remove Zeldovich displacement
         real_positions = positions - rsd
         diff = real_positions - self.mesh_psi[0].offset
-        if self.los is None and np.any((diff < 0) | (diff > self.mesh_psi[0].boxsize - self.mesh_psi[0].cellsize)):
+        if (not self.wrap) and np.any((diff < 0) | (diff > self.mesh_psi[0].boxsize - self.mesh_psi[0].cellsize)):
             self.log_warning('Some particles are out-of-bounds.')
-        real_positions = diff % self.mesh_psi[0].boxsize + self.mesh_psi[0].offset
-        shifts = read_cic(real_positions)
+        shifts = read_cic(real_positions, wrap=True)
 
         return shifts + rsd
+
+    def read_shifted_positions(self, positions, field='disp+rsd'):
+        """
+        Read shifted positions i.e. the difference ``positions - self.read_shifts(positions, field=field)``.
+        Output (and input) positions are wrapped if :attr:`wrap`.
+
+        Parameters
+        ----------
+        positions : array of shape (N, 3), string
+            Cartesian positions.
+            Pass string 'data' to get the shift positions for the input data positions passed to :meth:`assign_data`.
+            Note that in this case, shifts are read at the reconstructed data real-space positions.
+
+        field : string, default='disp+rsd'
+            Apply either 'disp' (Zeldovich displacement), 'rsd' (RSD displacement), or 'disp+rsd' (Zeldovich + RSD displacement).
+
+        Returns
+        -------
+        positions : array of shape (N, 3)
+            Shifted positions.
+        """
+        shifts = self.read_shifts(positions, field=field)
+        if isinstance(positions, str) and positions == 'data':
+            positions = self._positions_data
+        positions = positions - shifts
+        if self.wrap: positions = self.info.wrap(positions)
+        return positions
 
 
 class IterativeFFTParticleReconstruction(OriginalIterativeFFTParticleReconstruction):

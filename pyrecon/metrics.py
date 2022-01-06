@@ -1,14 +1,15 @@
 """
 Routines to estimate reconstruction efficiency:
 
-- MeshFFTCorrelation: correlation :math:`r(k) = \frac{P_{\mathrm{rec},\mathrm{init}}}{\sqrt{P_{\mathrm{rec}}P_{\mathrm{init}}}}`
-- MeshFFTTransfer: transfer :math:`t(k) = \frac{P_{\mathrm{rec}}}{G^{2}(z) b^{2}(z) P_{\mathrm{init}}}`
-- MeshFFTPropagator: propagator :math:`g(k) = \frac{P_{\mathrm{rec},\mathrm{init}}}{G(z) b(z) P_{\mathrm{init}}}`
+  - :class:`MeshFFTCorrelation`: correlation
+  - :class:`MeshFFTTransfer`: transfer
+  - :class:`MeshFFTPropagator`: propagator
 
 This requires the following packages:
 
-- pmesh
-- pypower, see https://github.com/adematti/pypower
+  - pmesh
+  - pypower, see https://github.com/adematti/pypower
+
 """
 
 import numpy as np
@@ -95,7 +96,7 @@ class BasePowerRatio(BaseClass):
 
 
 class MeshFFTCorrelator(BasePowerRatio):
-    """
+    r"""
     Estimate correlation between two meshes (reconstructed and initial fields), i.e.:
 
     .. math::
@@ -183,7 +184,7 @@ class MeshFFTCorrelator(BasePowerRatio):
 
 
 class MeshFFTTransfer(BasePowerRatio):
-    """
+    r"""
     Estimate transfer function, i.e.:
 
     .. math::
@@ -233,7 +234,7 @@ class MeshFFTTransfer(BasePowerRatio):
 
 
 class MeshFFTPropagator(BasePowerRatio):
-    """
+    r"""
     Estimate propagator, i.e.:
 
     .. math::

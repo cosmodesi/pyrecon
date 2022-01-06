@@ -41,6 +41,7 @@ def test_no_nrandoms():
     #recon.run()
     assert np.all(np.abs(recon.read_shifts(data['Position'])) < 2.)
 
+
 def test_multigrid_wrap():
     size = 100000
     boxsize = 1000
@@ -67,6 +68,8 @@ def test_multigrid_wrap():
             diff = data['Position'] - shifts
             positions_rec = (diff - recon.offset) % recon.boxsize + recon.offset
             assert np.all(positions_rec <= origin + boxsize) and np.all(positions_rec >= origin)
+            assert np.allclose(recon.read_shifted_positions(data['Position'], field=field), positions_rec)
+
 
 def test_dtype():
     # ran_min threshold in set_density_contrast() may not mask exactly the same number of cells in f4 and f8 cases, hence big difference in the end
@@ -368,6 +371,7 @@ if __name__ == '__main__':
     test_random()
     test_no_nrandoms()
     test_dtype()
+    test_multigrid_wrap()
     test_los()
     test_recon(data_fn,randoms_fn,output_data_fn,output_randoms_fn)
     compute_ref(data_fn,randoms_fn,ref_output_data_fn,ref_output_randoms_fn)

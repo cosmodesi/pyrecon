@@ -53,6 +53,7 @@ def test_mem():
         recon.run()
         mem('recon') # 3 meshes
 
+
 def test_plane_parallel_fft_wrap():
     size = 100000
     boxsize = 1000
@@ -79,6 +80,8 @@ def test_plane_parallel_fft_wrap():
             diff = data['Position'] - shifts
             positions_rec = (diff - recon.offset) % recon.boxsize + recon.offset
             assert np.all(positions_rec <= origin + boxsize) and np.all(positions_rec >= origin)
+            assert np.allclose(recon.read_shifted_positions(data['Position'], field=field), positions_rec)
+
 
 def test_plane_parallel_fft(data_fn, randoms_fn):
     boxsize = 1200.
@@ -133,4 +136,5 @@ if __name__ == '__main__':
     setup_logging()
     #test_mem()
     test_dtype()
+    test_plane_parallel_fft_wrap()
     test_plane_parallel_fft(data_fn, randoms_fn)

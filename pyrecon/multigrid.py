@@ -125,19 +125,11 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         Read displacement at input positions by deriving the computed displacement potential :attr:`mesh_phi` (finite difference scheme).
         See :meth:`BaseReconstruction.read_shifts` for input parameters.
         """
-        # check input positions
-        diff = positions - self.offset
-        if np.any((diff < 0) | (diff > self.boxsize - self.cellsize)):
-            if self.wrap:
-                positions = diff % self.boxsize + self.offset
-            else:
-                self.log_warning('Some input particle positions are out of bounds')
-                
         field = field.lower()
         allowed_fields = ['disp', 'rsd', 'disp+rsd']
         if field not in allowed_fields:
             raise ReconstructionError('Unknown field {}. Choices are {}'.format(field, allowed_fields))
-        shifts = self.mesh_phi.read_finite_difference_cic(positions)
+        shifts = self.mesh_phi.read_finite_difference_cic(positions, wrap=self.wrap)
         if field == 'disp':
             return shifts
         if self.los is None:

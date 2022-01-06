@@ -1,6 +1,8 @@
+import pytest
 import numpy as np
 
 from pyrecon import RealMesh, ComplexMesh, MeshInfo, utils
+from pyrecon.mesh import MeshError
 
 
 def test_info():
@@ -41,14 +43,24 @@ def test_cic():
     rng = np.random.RandomState(seed=42)
     positions = np.array([rng.uniform(-400.,400.,size) for i in range(3)]).T
     weights = rng.uniform(0.5,1.,size)
-    mesh.assign_cic(positions,weights)
+    mesh.assign_cic(positions,weights, wrap=False)
     assert np.allclose(np.sum(mesh),np.sum(weights))
     mesh_ref = np.zeros_like(mesh)
     sample_cic(mesh_ref,((positions - mesh.boxcenter)/mesh.boxsize + 0.5)*mesh.nmesh,weights)
     assert np.allclose(mesh,mesh_ref)
+    with pytest.raises(MeshError):
+        mesh.assign_cic(positions+mesh.boxsize)
+    mesh[...] = 0.
+    mesh.assign_cic(positions+mesh.boxsize,weights, wrap=True)
+    assert np.allclose(np.sum(mesh),np.sum(weights))
+    assert np.allclose(mesh,mesh_ref)
     positions = np.array([rng.uniform(-400.,400.,size) for i in range(3)]).T
-    shifts = mesh.read_cic(positions)
+    shifts = mesh.read_cic(positions, wrap=False)
     shifts_ref = read_cic(mesh,((positions - mesh.boxcenter)/mesh.boxsize + 0.5)*mesh.nmesh)
+    assert np.allclose(shifts,shifts_ref)
+    with pytest.raises(MeshError):
+        mesh.read_cic(positions+mesh.boxsize)
+    shifts = mesh.read_cic(positions+mesh.boxsize, wrap=True)
     assert np.allclose(shifts,shifts_ref)
 
 
@@ -58,7 +70,11 @@ def test_finite_difference_cic():
     mesh.value = 1.
     size = 10000
     positions = np.array([rng.uniform(-400.,400.,size) for i in range(3)]).T
-    shifts = mesh.read_finite_difference_cic(positions)
+    shifts = mesh.read_finite_difference_cic(positions, wrap=False)
+    assert np.allclose(shifts,0)
+    with pytest.raises(MeshError):
+        mesh.read_finite_difference_cic(positions+mesh.boxsize)
+    shifts = mesh.read_finite_difference_cic(positions+mesh.boxsize, wrap=True)
     assert np.allclose(shifts,0)
 
 
@@ -261,10 +277,8 @@ if __name__ == '__main__':
     #test_pyfftw()
     #test_timing()
     #test_misc()
-    #exit()
     #test_timing()
     #test_fft()
-
     test_info()
     test_cic()
     test_finite_difference_cic()

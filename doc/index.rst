@@ -43,12 +43,12 @@ A typical reconstruction run is (e.g. for MultiGridReconstruction; the same work
   recon.set_density_contrast()
   recon.run()
   # If you are using IterativeFFTParticleReconstruction, displacements are to be taken at the reconstructed data real-space positions;
-  # In this case, do: positions_rec_data = positions_data - recon.read_shifts('data')
-  positions_rec_data = positions_data - recon.read_shifts(positions_data)
+  # In this case, do: positions_rec_data = recon.read_shifted_positions('data')
+  positions_rec_data = recon.read_shifted_positions(positions_data)
   # RecSym = remove large scale RSD from randoms
-  positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms)
+  positions_rec_randoms = recon.read_shifted_positions(positions_randoms)
   # or RecIso
-  # positions_rec_randoms = positions_randoms - recon.read_shifts(positions_randoms, field='disp')
+  # positions_rec_randoms = recon.read_shifted_positions(positions_randoms, field='disp')
 
 
 **************
