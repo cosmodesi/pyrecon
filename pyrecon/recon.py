@@ -1,6 +1,7 @@
 """Implementation of base reconstruction class."""
 
 import numpy as np
+import os
 
 from .mesh import RealMesh
 from .utils import BaseClass
@@ -103,11 +104,27 @@ class BaseReconstruction(BaseClass):
         self.set_los(los)
         self.log_info('Using mesh {}.'.format(self.mesh_data))
         kwargs = {}
-        if fft_wisdom is not None: kwargs['wisdom'] = fft_wisdom
+        if fft_wisdom is None:
+            # set to default – if this file doesn't exist it will be ignored
+            default_wisdom_fn = os.path.join(os.getcwd(), f'wisdom.{self.mesh_data.nmesh[0]}.{self.mesh_data.nthreads}.npy')
+            kwargs['wisdom'] = default_wisdom_fn
+        else:
+            kwargs['wisdom'] = fft_wisdom
         if fft_plan is not None: kwargs['plan'] = fft_plan
         kwargs['hermitian'] = False
         self.mesh_data.set_fft_engine(fft_engine, **kwargs)
         self.mesh_randoms.set_fft_engine(self.mesh_data.fft_engine)
+        if fft_engine == 'fftw':
+            # allow the wisdom to be accessed from outside if necessary
+            self.wisdom = self.mesh_data.fft_engine.fft_wisdom
+            # generating the wisdom can be a large fraction of the total FFT time, so we should save it
+            if isinstance(fft_wisdom, str):
+                # if fft_wisdom contains a file name we save it there, overwriting existing file if necessary
+                np.save(fft_wisdom, self.wisdom)
+            if fft_wisdom is None:
+                # if no filename was provided, save it to a default file location
+                np.save(default_wisdom_fn, self.wisdom)
+            # if fft_wisdom was a tuple containing the wisdom itself, don't save anything
 
     @property
     def beta(self):

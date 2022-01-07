@@ -46,3 +46,4 @@ mesh:
   fft_engine: 'fftw'                                                            # FFT engine, either 'numpy' or 'fftw' (recommended)
   fft_plan: 'estimate'                                                          # FFT planning for FFTW engine
   wrap: False                                                                   # whether to wrap positions using periodic boundary conditions over the box
+  fft_wisdom:                                                                   # wisdom for 'fftw' FFT engine (optional)

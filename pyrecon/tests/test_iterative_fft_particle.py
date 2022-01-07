@@ -71,6 +71,20 @@ def test_mem():
         recon.run()
         mem('recon') # 3 meshes
 
+def test_wisdom():
+    recon = IterativeFFTParticleReconstruction(f=0.8, bias=2, los='z', boxsize=1000, boxcenter=500, nmesh=64, fft_engine='fftw', fft_plan='measure')
+    # wisdom created and accessible
+    assert recon.wisdom
+    default_wisdom_fn = os.path.join(os.getcwd(), f'wisdom.{recon.mesh_data.nmesh[0]}.{recon.mesh_data.nthreads}.npy')
+    print(default_wisdom_fn)
+    # wisdom was written to default wisdom file
+    assert os.path.isfile(default_wisdom_fn)
+    new_wisdom_fn = 'new_wisdomfile.npy'
+    recon = IterativeFFTParticleReconstruction(f=0.8, bias=2, los='z', boxsize=1000, boxcenter=500, nmesh=64, fft_engine='fftw', fft_plan='measure', fft_wisdom=new_wisdom_fn)
+    # wisdom written to custom file
+    assert os.path.isfile(new_wisdom_fn)
+    # wisdom written to both files is the same
+    assert tuple(np.load(default_wisdom_fn)) == tuple(np.load(new_wisdom_fn))
 
 def test_iterative_fft_particle_wrap():
     size = 100000

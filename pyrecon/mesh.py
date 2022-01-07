@@ -987,7 +987,7 @@ class FFTWEngine(BaseFFTEngine):
 
         wisdom : string, tuple, default=None
             :mod:`pyfftw` wisdom, used to accelerate further FFTs.
-            If a string, should be a path to the save FFT wisdom (with :func:`numpy.save`).
+            If a string, should be a path to previously saved FFT wisdom (with :func:`numpy.save`).
             If a tuple, directly corresponds to the wisdom.
 
         plan : string, default='measure'
@@ -1008,7 +1008,10 @@ class FFTWEngine(BaseFFTEngine):
         plan = 'FFTW_{}'.format(plan.upper())
 
         if isinstance(wisdom, str):
-            wisdom = tuple(np.load(wisdom))
+            if os.path.isfile(wisdom):
+                wisdom = tuple(np.load(wisdom))
+            else:
+                wisdom = None
         if wisdom is not None:
             pyfftw.import_wisdom(wisdom)
         else:
@@ -1024,6 +1027,8 @@ class FFTWEngine(BaseFFTEngine):
         self.fftw_backward_object = pyfftw.FFTW(fftw_fk, fftw_f, axes=range(self.ndim), direction='FFTW_BACKWARD', flags=self.flags, threads=self.nthreads)
         # We delete these instances to save memory, see note above
         self.fftw_forward_object, self.fftw_backward_object = None, None
+        # allow the wisdom to be accessed from outside
+        self.fft_wisdom = pyfftw.export_wisdom()
 
     def forward(self, fun):
         """Return forward transform of ``fun``."""
