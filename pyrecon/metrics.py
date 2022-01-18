@@ -11,13 +11,11 @@ This requires the following packages:
   - pypower, see https://github.com/adematti/pypower
 
 """
+import os
 
 import numpy as np
-
-from mpi4py import MPI
-
-from pmesh.pm import ParticleMesh
-from pypower import MeshFFTPower, CatalogMesh, ArrayMesh, WedgePowerSpectrum
+from scipy.interpolate import RectBivariateSpline
+from pypower import MeshFFTPower, CatalogMesh, ParticleMesh, ArrayMesh, PowerSpectrumWedge
 
 from .utils import BaseClass
 from . import utils
@@ -36,27 +34,50 @@ class BasePowerRatio(BaseClass):
         """Power spectrum ratio."""
         return self.num.power.real/self.denom.power.real
 
-    @property
-    def edges(self):
-        """Edges used to bin power spectrum measurements."""
-        return self.num.edges
+    def __call__(self, k=None, mu=None):
+        r"""
+        Return :attr:`ratio`, optionally performing linear interpolation over :math:`k` and :math:`\mu`.
 
-    def _mu_index(self, mu=None):
-        if mu is not None:
-            return np.digitize(mu, self.edges[1], right=False) - 1
-        return Ellipsis
+        Parameters
+        ----------
+        k : float, array, default=None
+            :math:`k` where to interpolate the power spectrum.
+            Values outside :attr:`kavg` are set to the first/last power value;
+            outside :attr:`edges[0]` to nan.
+            Defaults to :attr:`kavg`.
 
-    def k(self, mu=None):
-        """Wavenumbers."""
-        return self.num.k[:,self._mu_index(mu)]
+        mu : float, array, default=None
+            :math:`\mu` where to interpolate the power spectrum.
+            Defaults to :attr:`muavg`.
 
-    def mu(self, mu=None):
-        """Cosine angle to line-of-sight of shape :attr:`shape` = (nk, nmu)."""
-        return self.num.mu[:,self._mu_index(mu)]
-
-    def __call__(self, mu=None):
-        r"""Return :attr:`ratio`, restricted to the bin(s) corresponding to input :math:`\mu` if not ``None``."""
-        return self.ratio[:,self._mu_index(mu)]
+        Returns
+        -------
+        toret : array
+            (Optionally interpolated) power spectrum ratio.
+        """
+        tmp = self.ratio
+        if k is None and mu is None:
+            return tmp
+        kavg, muavg = self.kavg, self.muavg
+        if k is None: k = kavg
+        if mu is None: mu = muavg
+        mask_finite_k, mask_finite_mu = ~np.isnan(kavg), ~np.isnan(muavg)
+        kavg, muavg, tmp = kavg[mask_finite_k], muavg[mask_finite_mu], tmp[np.ix_(mask_finite_k, mask_finite_mu)]
+        k, mu = np.asarray(k), np.asarray(mu)
+        isscalar = k.ndim == 0 or mu.ndim == 0
+        k, mu = np.atleast_1d(k), np.atleast_1d(mu)
+        toret = np.nan * np.zeros((k.size, mu.size), dtype=tmp.dtype)
+        mask_k = (k >= self.edges[0][0]) & (k <= self.edges[0][-1])
+        mask_mu = (mu >= self.edges[1][0]) & (mu <= self.edges[1][-1])
+        if mask_k.any() and mask_mu.any():
+            if muavg.size == 1:
+                interp = lambda array: UnivariateSpline(kavg, array, k=1, ext=3)(k[mask_k])[:, None]
+            else:
+                interp = lambda array: RectBivariateSpline(kavg, muavg, array, kx=1, ky=1, s=0)(k[mask_k], mu[mask_mu], grid=True)
+            toret[np.ix_(mask_k, mask_mu)] = interp(tmp)
+        if isscalar:
+            return toret.ravel()
+        return toret
 
     def __getstate__(self):
         """Return this class state dictionary."""
@@ -74,7 +95,7 @@ class BasePowerRatio(BaseClass):
         self.__dict__.update(state)
         for name in self._powers:
             if name in state:
-                setattr(self, name, WedgePowerSpectrum.from_state(state[name]))
+                setattr(self, name, PowerSpectrumWedge.from_state(state[name]))
 
     @classmethod
     def from_state(cls, state):
@@ -84,7 +105,7 @@ class BasePowerRatio(BaseClass):
 
     def save(self, filename):
         self.log_info('Saving {}.'.format(filename))
-        mkdir(os.path.dirname(filename))
+        utils.mkdir(os.path.dirname(filename))
         np.save(filename, self.__getstate__(), allow_pickle=True)
 
     @classmethod
@@ -93,6 +114,28 @@ class BasePowerRatio(BaseClass):
         state = np.load(filename, allow_pickle=True)[()]
         new = cls.from_state(state)
         return new
+
+    def rebin(self, factor=1):
+        """
+        Rebin statistic, by factor(s) ``factor``.
+        A tuple must be provided in case :attr:`ndim` is greater than 1.
+        Input factors must divide :attr:`shape`.
+        """
+        self.num.rebin(factor=factor)
+        self.denum.rebin(factor=factor)
+
+
+def _make_property(name):
+
+    @property
+    def func(self):
+        return getattr(self.num, name)
+
+    return func
+
+for name in ['edges', 'nmodes', 'modes', 'k', 'mu', 'kavg', 'muavg']:
+    setattr(BasePowerRatio, name, _make_property(name))
+
 
 
 class MeshFFTCorrelator(BasePowerRatio):
