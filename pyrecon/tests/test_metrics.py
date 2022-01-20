@@ -51,37 +51,43 @@ def test_metrics():
     kedges = np.arange(0.005, 0.4, 0.005)
     #kedges = np.arange(0.005, 0.4, 0.05)
     muedges = np.linspace(-1., 1., 5)
+    dtype = 'f8'
 
     def get_correlator():
         mesh_recon = CatalogMesh(data['Position_rec'], shifted_positions=randoms['Position_rec'],
-                                 boxsize=boxsize, boxcenter=boxcenter, nmesh=nmesh, resampler='cic', interlacing=2, position_type='pos')
+                                 boxsize=boxsize, boxcenter=boxcenter, nmesh=nmesh, resampler='cic', interlacing=2, position_type='pos', dtype=dtype)
         return MeshFFTCorrelator(mesh_recon, mesh_real, edges=(kedges, muedges), los=los)
 
     def get_propagator(growth=1.):
         mesh_recon = CatalogMesh(data['Position_rec'], shifted_positions=randoms['Position_rec'],
-                                 boxsize=boxsize, boxcenter=boxcenter, nmesh=nmesh, resampler='cic', interlacing=2, position_type='pos')
+                                 boxsize=boxsize, boxcenter=boxcenter, nmesh=nmesh, resampler='cic', interlacing=2, position_type='pos', dtype=dtype)
         return MeshFFTPropagator(mesh_recon, mesh_real, edges=(kedges, muedges), los=los, growth=growth)
 
     def get_transfer(growth=1.):
         mesh_recon = CatalogMesh(data['Position_rec'], shifted_positions=randoms['Position_rec'],
-                                 boxsize=boxsize, boxcenter=boxcenter, nmesh=nmesh, resampler='cic', interlacing=2, position_type='pos')
+                                 boxsize=boxsize, boxcenter=boxcenter, nmesh=nmesh, resampler='cic', interlacing=2, position_type='pos', dtype=dtype)
         return MeshFFTTransfer(mesh_recon, mesh_real, edges=(kedges, muedges), los=los, growth=growth)
 
     def get_propagator_ref():
         # Taken from https://github.com/cosmodesi/desi_cosmosim/blob/master/reconstruction/propagator_and_multipole/DESI_Recon/propagator_catalog_calc.py
         from nbodykit.lab import ArrayMesh, FFTPower
-        meshp = data.to_nbodykit().to_mesh(position='Position_rec', Nmesh=nmesh, BoxSize=boxsize, resampler='cic', compensated=True, interlaced=True)
-        meshran = randoms.to_nbodykit().to_mesh(position='Position_rec', Nmesh=nmesh, BoxSize=boxsize, resampler='cic', compensated=True, interlaced=True)
+        from pmesh.pm import ParticleMesh
+        meshp = data.to_nbodykit().to_mesh(position='Position_rec', Nmesh=nmesh, BoxSize=boxsize, resampler='cic', compensated=True, interlaced=True, dtype='c16')
+        meshran = randoms.to_nbodykit().to_mesh(position='Position_rec', Nmesh=nmesh, BoxSize=boxsize, resampler='cic', compensated=True, interlaced=True, dtype='c16')
         #mesh_recon = ArrayMesh(meshp.compute() - meshran.compute(), BoxSize=boxsize)
         mesh_recon = meshp.compute() - meshran.compute()
         Nmu = len(muedges) - 1
         kmin, kmax, dk = kedges[0], kedges[-1]+1e-9, kedges[1] - kedges[0]
-        r_cross = FFTPower(mesh_real, mode='2d', Nmesh=nmesh, Nmu=Nmu, dk=dk, second=mesh_recon, los=los, kmin=kmin, kmax=kmax)
-        r_auto = FFTPower(mesh_recon, mode='2d', Nmesh=nmesh, Nmu=Nmu, dk=dk, los=los, kmin=kmin, kmax=kmax)
-        r_auto_init = FFTPower(mesh_real, mode='2d', Nmesh=nmesh, Nmu=Nmu, dk=dk, los=los, kmin=kmin, kmax=kmax)
-        return (r_cross.power['power']/r_auto_init.power['power']).real/bias
+        pm = ParticleMesh(BoxSize=mesh_real.pm.BoxSize, Nmesh=mesh_real.pm.Nmesh, dtype='c16', comm=mesh_real.pm.comm)
+        mesh_complex = pm.create(type='real')
+        mesh_complex[...] = mesh_real[...]
+        r_cross = FFTPower(mesh_complex, mode='2d', Nmesh=nmesh, Nmu=Nmu, dk=dk, second=mesh_recon, los=los, kmin=kmin, kmax=kmax)
+        #r_auto = FFTPower(mesh_recon, mode='2d', Nmesh=nmesh, Nmu=Nmu, dk=dk, los=los, kmin=kmin, kmax=kmax)
+        r_auto_init = FFTPower(mesh_complex, mode='2d', Nmesh=nmesh, Nmu=Nmu, dk=dk, los=los, kmin=kmin, kmax=kmax)
+        #print(r_auto_init.power['modes'])
+        return (r_cross.power['power']/r_auto_init.power['power']).real/bias, r_cross.power['power'].real, r_auto_init.power['power'].real
 
-    propagator_ref = get_propagator_ref()
+    propagator_ref, cross_ref, auto_init_ref = get_propagator_ref()
     correlator = get_correlator()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -90,24 +96,22 @@ def test_metrics():
         correlator = MeshFFTCorrelator.load(fn)
 
     propagator = correlator.to_propagator(growth=bias)
-    mask = ~np.isnan(propagator_ref)
-    assert np.allclose(propagator.ratio[mask], propagator_ref[mask], atol=1e-6, rtol=1e-4)
+    assert np.allclose(propagator.ratio, propagator_ref, atol=1e-6, rtol=1e-4, equal_nan=True)
     transfer = correlator.to_transfer(growth=bias)
 
-    assert np.allclose(get_propagator(growth=bias).ratio[mask], propagator.ratio[mask])
-    assert np.allclose(get_transfer(growth=bias).ratio[mask], transfer.ratio[mask])
+    assert np.allclose(get_propagator(growth=bias).ratio, propagator.ratio, equal_nan=True)
+    assert np.allclose(get_transfer(growth=bias).ratio, transfer.ratio, equal_nan=True)
 
     fig, lax = plt.subplots(nrows=1, ncols=3, figsize=(14,4))
     fig.subplots_adjust(wspace=0.3)
     lax = lax.flatten()
-    for mu in [0., 0.7]:
-        k = correlator.k(mu=mu)
+    for imu, mu in enumerate(correlator.muavg[3:]):
+        k = correlator.k[:,imu]
         mask = k < 0.6
         k = k[mask]
-        mu = np.nanmean(correlator.mu(mu=mu)[mask])
-        lax[0].plot(correlator.k(mu=mu)[mask], correlator(mu=mu)[mask], label=r'$\mu = {:.2f}$'.format(mu))
-        lax[1].plot(transfer.k(mu=mu)[mask], transfer(mu=mu)[mask], label=r'$\mu = {:.2f}$'.format(mu))
-        lax[2].plot(propagator.k(mu=mu)[mask], propagator(mu=mu)[mask], label=r'$\mu = {:.2f}$'.format(mu))
+        lax[0].plot(k, correlator(k=k, mu=mu), label=r'$\mu = {:.2f}$'.format(mu))
+        lax[1].plot(k, transfer(k=k, mu=mu), label=r'$\mu = {:.2f}$'.format(mu))
+        lax[2].plot(k, propagator(k=k, mu=mu), label=r'$\mu = {:.2f}$'.format(mu))
     for ax in lax:
         ax.legend()
         ax.grid(True)

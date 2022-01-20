@@ -308,12 +308,12 @@ def _make_property(name):
 
     @property
     def func(self):
-        return getattr(self.info,name)
+        return getattr(self.info, name)
 
     return func
 
 for name in ['boxsize', 'boxcenter', 'nmesh', 'offset', 'cellsize', 'ndim', '_precision', '_type_float']:
-    setattr(BaseMesh,name,_make_property(name))
+    setattr(BaseMesh, name, _make_property(name))
 
 
 class MeshInfo(BaseClass):
@@ -423,10 +423,7 @@ class MeshInfo(BaseClass):
     def _type_float(self):
         # Return ctypes-type corresponding to numpy-dtype
         # Take care of complex type
-        if self.dtype.name.startswith('complex'):
-            dtype = np.dtype('f{:d}'.format(self.dtype.itemsize//2))
-        else:
-            dtype = self.dtype
+        dtype = np.empty(0, dtype=self.dtype).real.dtype
         return ctypeslib.as_ctypes_type(dtype)
 
     @SetterProperty
@@ -849,6 +846,7 @@ class ComplexMesh(BaseMesh):
         self.value = value_view.view(dtype=self.dtype)
         if (flag != 0):
             raise MeshError('Issue with prod_sum')
+
 
 class BaseFFTEngine(object):
     """
