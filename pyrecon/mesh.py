@@ -423,10 +423,7 @@ class MeshInfo(BaseClass):
     def _type_float(self):
         # Return ctypes-type corresponding to numpy-dtype
         # Take care of complex type
-        if self.dtype.name.startswith('complex'):
-            dtype = np.dtype('f{:d}'.format(self.dtype.itemsize//2))
-        else:
-            dtype = self.dtype
+        dtype = np.empty(0, dtype=self.dtype).real.dtype
         return ctypeslib.as_ctypes_type(dtype)
 
     @SetterProperty
