@@ -33,3 +33,5 @@ cosmology:
 mesh:
   nmesh: 128
   dtype: f8
+  #fft_engine: 'fftw'
+  #save_fft_wisdom: 'wisdom.iterative_fft_particle.npy'

@@ -88,8 +88,8 @@ class BaseMesh(NDArrayLike,BaseClass,metaclass=BaseMetaClass):
             Mesh information (boxsize, boxcenter, nmesh, etc.),
             copied and updated with ``kwargs``.
 
-        nthreads : int
-            Number of threads to use in mesh calculations.
+        nthreads : int, default=None
+            Number of threads to use in mesh calculations; defaults to OpenMP's default.
 
         attrs : dict
             Dictionary of other attributes.
@@ -848,7 +848,7 @@ class ComplexMesh(BaseMesh):
             raise MeshError('Issue with prod_sum')
 
 
-class BaseFFTEngine(object):
+class BaseFFTEngine(BaseClass):
     """
     Base engine for fast Fourier transforms.
     FFT engines should extend this class, by (at least) implementing:
@@ -895,7 +895,7 @@ class BaseFFTEngine(object):
             If not provided, use ``type_complex`` instead.
         """
         if nthreads is None:
-            self.nthreads = int(os.environ.get('OMP_NUM_THREADS',1))
+            self.nthreads = int(os.environ.get('OMP_NUM_THREADS', '1'))
         else:
             self.nthreads = nthreads
         self.shape = tuple(shape)
@@ -961,7 +961,7 @@ class FFTWEngine(BaseFFTEngine):
 
     """FFT engine based on :mod:`pyfftw`."""
 
-    def __init__(self, shape, nthreads=None, wisdom=None, plan='measure', **kwargs):
+    def __init__(self, shape, nthreads=None, wisdom=None, save_wisdom=None, plan='measure', **kwargs):
         """
         Initialize :mod:`pyfftw` engine.
 
@@ -984,9 +984,15 @@ class FFTWEngine(BaseFFTEngine):
             Number of threads.
 
         wisdom : string, tuple, default=None
-            :mod:`pyfftw` wisdom, used to accelerate further FFTs.
+            Precomputed :mod:`pyfftw` wisdom, used to accelerate FFTs.
             If a string, should be a path to previously saved FFT wisdom (with :func:`numpy.save`).
             If a tuple, directly corresponds to the wisdom.
+            By default the wisdom given in ``save_wisdom`` will be loaded, if exists.
+
+        save_wisdom : bool, string, default=None
+            If not ``None``, path where to save the wisdom.
+            If ``True``, the wisdom will be saved in the default path:
+            'wisdom.shape-{shape[0]}-{shape[1]}-{shape[2]}.type-{type}.nthreads-{nthreads}.npy'.
 
         plan : string, default='measure'
             Choices are ['estimate', 'measure', 'patient', 'exhaustive'].
@@ -998,35 +1004,46 @@ class FFTWEngine(BaseFFTEngine):
         """
         if pyfftw is None:
             raise NotImplementedError('Install pyfftw to use {}'.format(self.__class__.__name__))
-        super(FFTWEngine,self).__init__(shape,nthreads=nthreads,**kwargs)
+        super(FFTWEngine, self).__init__(shape, nthreads=nthreads, **kwargs)
         plan = plan.lower()
         allowed_plans = ['estimate', 'measure', 'patient', 'exhaustive']
         if plan not in allowed_plans:
             raise MeshError('Plan {} unknown'.format(plan))
         plan = 'FFTW_{}'.format(plan.upper())
 
-        if isinstance(wisdom, str):
-            if os.path.isfile(wisdom):
-                wisdom = tuple(np.load(wisdom))
+        dtype = self.type_real if self.hermitian else self.type_complex
+        wisdom_fn = 'wisdom.shape-{}.type-{}.nthreads-{:d}.npy'.format('-'.join(['{:d}'.format(s) for s in self.shape]), dtype.name, self.nthreads)
+        # Should we save wisdom?
+        if save_wisdom and isinstance(save_wisdom, str):
+            wisdom_fn = save_wisdom
+        save_wisdom = bool(save_wisdom)
+
+        if wisdom is None:
+            try:
+                wisdom = np.load(wisdom_fn)
+                pyfftw.import_wisdom(wisdom)
+            except:
+                pass
             else:
-                wisdom = None
-        if wisdom is not None:
+                self.log_info('Loading wisdom from {}.'.format(wisdom_fn))
+        elif isinstance(wisdom, str):
+            self.log_info('Loading wisdom from {}.'.format(wisdom))
+            wisdom = tuple(np.load(wisdom))
+        else:
             pyfftw.import_wisdom(wisdom)
-        else:
-            pyfftw.forget_wisdom()
-        if self.hermitian:
-            fftw_f = pyfftw.empty_aligned(self.shape, dtype=self.type_real, order='C')
-        else:
-            fftw_f = pyfftw.empty_aligned(self.shape, dtype=self.type_complex, order='C')
+
+        fftw_f = pyfftw.empty_aligned(self.shape, dtype=dtype, order='C')
         fftw_fk = pyfftw.empty_aligned(self.hshape, dtype=self.type_complex, order='C')
         self.flags = (plan,)
-        v = pyfftw.FFTW(fftw_f,fftw_fk,axes=range(self.ndim), direction='FFTW_FORWARD', flags=self.flags, threads=self.nthreads)
         self.fftw_forward_object = pyfftw.FFTW(fftw_f, fftw_fk, axes=range(self.ndim), direction='FFTW_FORWARD', flags=self.flags, threads=self.nthreads)
         self.fftw_backward_object = pyfftw.FFTW(fftw_fk, fftw_f, axes=range(self.ndim), direction='FFTW_BACKWARD', flags=self.flags, threads=self.nthreads)
         # We delete these instances to save memory, see note above
         self.fftw_forward_object, self.fftw_backward_object = None, None
-        # allow the wisdom to be accessed from outside
-        self.fft_wisdom = pyfftw.export_wisdom()
+        # Allow the wisdom to be accessed from outside
+        self.wisdom = pyfftw.export_wisdom()
+        if save_wisdom:
+            self.log_info('Saving wisdom to {}.'.format(wisdom_fn))
+            np.save(wisdom_fn, self.wisdom)
 
     def forward(self, fun):
         """Return forward transform of ``fun``."""
@@ -1059,7 +1076,6 @@ class FFTWEngine(BaseFFTEngine):
         else:
             output_array = pyfftw.empty_aligned(self.shape, dtype=self.type_complex, order='C')
         if self.fftw_backward_object is None:
-            #fftw_backward_object = pyfftw.FFTW(fun,output_array,axes=range(self.ndim),direction='FFTW_BACKWARD',flags=self.flags,threads=self.nthreads)
             fftw_backward_object = pyfftw.FFTW(input_array, output_array, axes=range(self.ndim), direction='FFTW_BACKWARD', flags=self.flags, threads=self.nthreads)
             toret = fftw_backward_object(normalise_idft=True)
         else:

@@ -42,8 +42,8 @@ mesh:
   nmesh: 512                                                                    # mesh size (int or list of 3 ints)
   boxsize:                                                                      # box size (floot or list of 3 floats)
   boxcenter:                                                                    # box center
+  wrap: False                                                                   # whether to wrap positions using periodic boundary conditions over the box
   dtype: f4                                                                     # mesh data-type for f4 (float32) or f8 (float64)
   fft_engine: 'fftw'                                                            # FFT engine, either 'numpy' or 'fftw' (recommended)
   fft_plan: 'estimate'                                                          # FFT planning for FFTW engine
-  wrap: False                                                                   # whether to wrap positions using periodic boundary conditions over the box
-  fft_wisdom:                                                                   # wisdom for 'fftw' FFT engine (optional)
+  save_fft_wisdom:                                                              # where to save (and try to load) wisdom for 'fftw' FFT engine (optional)

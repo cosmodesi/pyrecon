@@ -60,7 +60,7 @@ class BaseReconstruction(BaseClass):
     boxsize, boxcenter, cellsize, offset : array
         Mesh properties; see :class:`MeshInfo`.
     """
-    def __init__(self, f=0., bias=1., los=None, fft_engine='numpy', fft_wisdom=None, fft_plan=None, wrap=False, **kwargs):
+    def __init__(self, f=0., bias=1., los=None, fft_engine='numpy', fft_wisdom=None, save_fft_wisdom=None, fft_plan='measure', wrap=False, **kwargs):
         """
         Initialize :class:`BaseReconstruction`.
 
@@ -82,9 +82,16 @@ class BaseReconstruction(BaseClass):
             We strongly recommend using 'fftw' for multithreaded FFTs.
 
         fft_wisdom : string, tuple, default=None
-            Wisdom for FFTW, if ``fft_engine`` is 'fftw'.
+            Optionally, wisdom for FFTW, if ``fft_engine`` is 'fftw'.
+            If a string, should be a path to previously saved FFT wisdom (with :func:`numpy.save`).
+            If a tuple, directly corresponds to the wisdom.
+            By default the wisdom given in ``save_fft_wisdom`` will be loaded, if exists.
 
-        fft_plan : string, default=None
+        save_fft_wisdom : bool, string, default=None
+            If not ``None``, path where to save the wisdom for FFTW.
+            If ``True``, the wisdom will be saved in the default path: f'wisdom.shape-{nmesh[0]}-{nmesh[1]}-{nmesh[2]}.type-{type}.nthreads-{nthreads}.npy'.
+
+        fft_plan : string, default='measure'
             Only used for FFTW. Choices are ['estimate', 'measure', 'patient', 'exhaustive'].
             The increasing amount of effort spent during the planning stage to create the fastest possible transform.
             Usually 'measure' is a good compromise.
@@ -103,28 +110,11 @@ class BaseReconstruction(BaseClass):
         self.info = self.mesh_randoms.info
         self.set_los(los)
         self.log_info('Using mesh {}.'.format(self.mesh_data))
-        kwargs = {}
-        if fft_wisdom is None:
-            # set to default – if this file doesn't exist it will be ignored
-            default_wisdom_fn = os.path.join(os.getcwd(), f'wisdom.{self.mesh_data.nmesh[0]}.{self.mesh_data.nthreads}.npy')
-            kwargs['wisdom'] = default_wisdom_fn
-        else:
-            kwargs['wisdom'] = fft_wisdom
-        if fft_plan is not None: kwargs['plan'] = fft_plan
-        kwargs['hermitian'] = False
-        self.mesh_data.set_fft_engine(fft_engine, **kwargs)
+        self.log_info('Using {:d} nthreads.'.format(self.mesh_data.nthreads))
+        self.mesh_data.set_fft_engine(fft_engine, wisdom=fft_wisdom, save_wisdom=save_fft_wisdom, plan=fft_plan, hermitian=False)
         self.mesh_randoms.set_fft_engine(self.mesh_data.fft_engine)
-        if fft_engine == 'fftw':
-            # allow the wisdom to be accessed from outside if necessary
-            self.wisdom = self.mesh_data.fft_engine.fft_wisdom
-            # generating the wisdom can be a large fraction of the total FFT time, so we should save it
-            if isinstance(fft_wisdom, str):
-                # if fft_wisdom contains a file name we save it there, overwriting existing file if necessary
-                np.save(fft_wisdom, self.wisdom)
-            if fft_wisdom is None:
-                # if no filename was provided, save it to a default file location
-                np.save(default_wisdom_fn, self.wisdom)
-            # if fft_wisdom was a tuple containing the wisdom itself, don't save anything
+        # Allow the wisdom to be accessed from outside if necessary
+        self.fft_wisdom = getattr(self.mesh_data.fft_engine, 'wisdom', None)
 
     @property
     def beta(self):

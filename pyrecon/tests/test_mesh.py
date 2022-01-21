@@ -1,3 +1,6 @@
+import os
+import tempfile
+
 import pytest
 import numpy as np
 
@@ -102,35 +105,59 @@ def test_fft():
     try: import pyfftw
     except ImportError: pyfftw = None
 
-    for dtype in ['f4','f8']:
+    mesh = RealMesh(value=1.,boxsize=1000.,boxcenter=0.,nmesh=4,dtype='f8')
+    cmesh = mesh.to_complex()
+    from pyrecon.mesh import NumpyFFTEngine
+    assert isinstance(mesh.fft_engine, NumpyFFTEngine)
+    if pyfftw is not None:
+        cmesh = mesh.to_complex(engine='fftw', plan='estimate')
+        from pyrecon.mesh import FFTWEngine
+        assert isinstance(cmesh.fft_engine, FFTWEngine)
+
+    fft_engine = cmesh.fft_engine
+    cmesh = cmesh + 1
+    assert cmesh.fft_engine is fft_engine
+    mesh = cmesh.to_real()
+    assert mesh.fft_engine is fft_engine
+    mesh.smooth_gaussian(15., method='fft')
+    assert mesh.fft_engine is fft_engine
+
+    def remove(fn):
+        try: os.remove(fn)
+        except OSError: pass
+
+    for dtype in ['f4', 'f8']:
         mesh = RealMesh(boxsize=1000.,boxcenter=0.,nmesh=4,dtype=dtype)
         mesh.value = np.random.uniform(0.,1.,mesh.shape)
+        lkwargs = [{'engine':'numpy'}]
+        if pyfftw is not None:
+            lkwargs += [{'engine':'fftw'}, {'engine':'fftw', 'plan':'estimate'}]
+            lkwargs += [{'engine':'fftw', 'save_wisdom':True}, {'engine':'fftw', 'save_wisdom':'new_wisdomfile.npy'}]
 
         for hermitian in [True, False]:
-            for kwargs in [{'engine':'numpy'}] + ([{'engine':'fftw'},{'engine':'fftw','plan':'estimate'}] if pyfftw is not None else []):
+            for kwargs in lkwargs:
                 mesh_copy = mesh.value.copy()
-                mesh1 = mesh.to_complex(hermitian=hermitian,**kwargs)
+                engine = kwargs.get('engine', None)
+                if engine == 'fftw':
+                    dtype = mesh.dtype if hermitian else (1j*np.empty(0, dtype=mesh.dtype)).dtype
+                    default_wisdom_fn = 'wisdom.shape-{}.type-{}.nthreads-{:d}.npy'.format('-'.join(['{:d}'.format(n) for n in mesh.nmesh]), dtype.name, mesh.nthreads)
+                    remove(default_wisdom_fn)
+                mesh1 = mesh.to_complex(hermitian=hermitian, **kwargs)
                 assert np.all(mesh.value == mesh_copy)
                 mesh_copy = mesh1.value.copy()
                 mesh2 = mesh1.to_real()
                 assert np.all(mesh1.value == mesh_copy)
-                assert np.allclose(mesh2,mesh,atol=1e-5)
-
-        mesh = RealMesh(value=1.,boxsize=1000.,boxcenter=0.,nmesh=4,dtype=dtype)
-        cmesh = mesh.to_complex()
-        from pyrecon.mesh import NumpyFFTEngine
-        assert isinstance(mesh.fft_engine, NumpyFFTEngine)
-        if pyfftw is not None:
-            cmesh = mesh.to_complex(engine='fftw', plan='estimate')
-            from pyrecon.mesh import FFTWEngine
-            assert isinstance(cmesh.fft_engine, FFTWEngine)
-        fft_engine = cmesh.fft_engine
-        cmesh = cmesh + 1
-        assert cmesh.fft_engine is fft_engine
-        mesh = cmesh.to_real()
-        assert mesh.fft_engine is fft_engine
-        mesh.smooth_gaussian(15., method='fft')
-        assert mesh.fft_engine is fft_engine
+                assert np.allclose(mesh2, mesh, atol=1e-5)
+                if engine == 'fftw':
+                    save_wisdom = kwargs.get('save_wisdom', None)
+                    if isinstance(save_wisdom, str):
+                        assert os.path.isfile(save_wisdom)
+                        remove(save_wisdom)
+                    elif save_wisdom:
+                        assert os.path.isfile(default_wisdom_fn)
+                        remove(default_wisdom_fn)
+                    else:
+                        assert not os.path.isfile(default_wisdom_fn)
 
 
 def test_hermitian():
@@ -278,11 +305,10 @@ if __name__ == '__main__':
     #test_timing()
     #test_misc()
     #test_timing()
-    #test_fft()
     test_info()
     test_cic()
     test_finite_difference_cic()
-    test_smoothing()
     test_fft()
     test_hermitian()
+    test_smoothing()
     test_misc()
