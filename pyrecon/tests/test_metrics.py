@@ -95,6 +95,9 @@ def test_metrics():
         correlator.save(fn)
         correlator = MeshFFTCorrelator.load(fn)
 
+    correlator_rebin = correlator.copy()
+    correlator_rebin.rebin((2, 1))
+    assert correlator_rebin.ratio.shape[0] == correlator.ratio.shape[0]//2
     propagator = correlator.to_propagator(growth=bias)
     assert np.allclose(propagator.ratio, propagator_ref, atol=1e-6, rtol=1e-4, equal_nan=True)
     transfer = correlator.to_transfer(growth=bias)

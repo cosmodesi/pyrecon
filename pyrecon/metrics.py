@@ -79,6 +79,12 @@ class BasePowerRatio(BaseClass):
             return toret.ravel()
         return toret
 
+    def __copy__(self):
+        new = super(BasePowerRatio, self).__copy__()
+        for name in self._powers:
+            setattr(new, name, getattr(self, name).__copy__())
+        return new
+
     def __getstate__(self):
         """Return this class state dictionary."""
         state = {}
@@ -121,8 +127,8 @@ class BasePowerRatio(BaseClass):
         A tuple must be provided in case :attr:`ndim` is greater than 1.
         Input factors must divide :attr:`shape`.
         """
-        self.num.rebin(factor=factor)
-        self.denum.rebin(factor=factor)
+        for name in self._powers:
+            getattr(self, name).rebin(factor=factor)
 
 
 def _make_property(name):
