@@ -15,7 +15,7 @@ import os
 
 import numpy as np
 from scipy.interpolate import RectBivariateSpline
-from pypower import MeshFFTPower, CatalogMesh, ParticleMesh, ArrayMesh, PowerSpectrumWedge
+from pypower import MeshFFTPower, CatalogMesh, ParticleMesh, ArrayMesh, PowerSpectrumWedges
 
 from .utils import BaseClass
 from . import utils
@@ -101,7 +101,7 @@ class BasePowerRatio(BaseClass):
         self.__dict__.update(state)
         for name in self._powers:
             if name in state:
-                setattr(self, name, PowerSpectrumWedge.from_state(state[name]))
+                setattr(self, name, PowerSpectrumWedges.from_state(state[name]))
 
     @classmethod
     def from_state(cls, state):
@@ -120,6 +120,44 @@ class BasePowerRatio(BaseClass):
         state = np.load(filename, allow_pickle=True)[()]
         new = cls.from_state(state)
         return new
+
+    def __getitem__(self, slices):
+        """Call :meth:`slice`."""
+        new = self.copy()
+        if isinstance(slices, tuple):
+            new.slice(*slices)
+        else:
+            new.slice(slices)
+        return new
+
+    def select(self, *xlims):
+        """
+        Restrict statistic to provided coordinate limits in place.
+
+        For example:
+
+        .. code-block:: python
+
+            statistic.select((0, 0.3)) # restrict first axis to (0, 0.3)
+            statistic.select(None, (0, 0.2)) # restrict second axis to (0, 0.2)
+
+        """
+        for name in self._powers:
+            getattr(self, name).select(*xlims)
+
+    def slice(self, *slices):
+        """
+        Slice statistics in place. If slice step is not 1, use :meth:`rebin`.
+        For example:
+
+        .. code-block:: python
+
+            statistic.slice(slice(0, 10, 2), slice(0, 6, 3)) # rebin by factor 2 (resp. 3) along axis 0 (resp. 1), up to index 10 (resp. 6)
+            statistic[:10:2,:6:3] # same as above, but return new instance.
+
+        """
+        for name in self._powers:
+            getattr(self, name).slice(*slices)
 
     def rebin(self, factor=1):
         """
