@@ -381,7 +381,7 @@ class MeshInfo(BaseClass):
 
         if boxsize is None or boxcenter is None:
             if positions is None:
-                raise MeshError('positions must be provided if boxsize and boxcenter are not specified')
+                raise MeshError('positions must be provided if boxsize or boxcenter are not specified')
             pos_min, pos_max = positions.min(axis=0), positions.max(axis=0)
             delta = np.abs(pos_max - pos_min)
             if boxcenter is None: boxcenter = 0.5 * (pos_min + pos_max)
@@ -520,7 +520,7 @@ class RealMesh(BaseMesh):
 
         Parameters
         ----------
-        positions : array of shape (N,3)
+        positions : array of shape (N, 3)
             Cartesian positions.
 
         weights : array of shape (N,), default=None

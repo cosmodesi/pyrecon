@@ -32,13 +32,20 @@ def test_dtype():
     randoms = get_random_catalog(seed=84)
     for los in [None, 'x']:
         recon_f4 = IterativeFFTParticleReconstruction(f=0.8,bias=2.,nthreads=4,positions=randoms['Position'],nmesh=64,los=los,dtype='f4')
+        positions_bak, weights_bak = data['Position'].copy(), data['Weight'].copy()
         recon_f4.assign_data(data['Position'],data['Weight'])
+        assert np.allclose(data['Position'], positions_bak)
+        assert np.allclose(data['Weight'], weights_bak)
+        positions_bak, weights_bak = randoms['Position'].copy(), randoms['Weight'].copy()
         recon_f4.assign_randoms(randoms['Position'],randoms['Weight'])
+        assert np.allclose(randoms['Position'], positions_bak)
+        assert np.allclose(randoms['Weight'], weights_bak)
         recon_f4.set_density_contrast()
         assert recon_f4.mesh_delta.dtype.itemsize == 4
         recon_f4.run()
         assert recon_f4.mesh_psi[0].dtype.itemsize == 4
         shifts_f4 = recon_f4.read_shifts(data['Position'].astype('f8'),field='disp+rsd')
+
         assert shifts_f4.dtype.itemsize == 8
         shifts_f4 = recon_f4.read_shifts(data['Position'].astype('f4'),field='disp+rsd')
         assert shifts_f4.dtype.itemsize == 4
@@ -49,7 +56,9 @@ def test_dtype():
         assert recon_f8.mesh_delta.dtype.itemsize == 8
         recon_f8.run()
         assert recon_f8.mesh_psi[0].dtype.itemsize == 8
+        positions_bak = data['Position'].copy()
         shifts_f8 = recon_f8.read_shifts(data['Position'],field='disp+rsd')
+        assert np.allclose(data['Position'], positions_bak)
         assert shifts_f8.dtype.itemsize == 8
         assert not np.all(shifts_f4 == shifts_f8)
         assert np.allclose(shifts_f4, shifts_f8, atol=1e-2, rtol=1e-2)
@@ -393,7 +402,6 @@ if __name__ == '__main__':
 
     #test_mem()
     test_script(data_fn,randoms_fn,script_output_data_fn,script_output_randoms_fn)
-    exit()
     test_wisdom()
     test_no_nrandoms()
     test_dtype()

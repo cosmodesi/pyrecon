@@ -15,7 +15,7 @@ from setuptools import setup
 package_basedir = os.path.abspath(os.path.dirname(__file__))
 package_basename = 'pyrecon'
 
-sys.path.insert(0,os.path.abspath(package_basename))
+sys.path.insert(0, os.path.join(package_basedir, package_basename))
 import _version
 import utils
 version = _version.__version__
@@ -92,7 +92,7 @@ if __name__ == '__main__':
           license='BSD3',
           url='http://github.com/cosmodesi/pyrecon',
           install_requires=['numpy'],
-          extra_requires=['fitsio','h5py','astropy','scipy'], # for bin/recon script
+          extras_require={'extras': ['fitsio','h5py','astropy'], 'metrics':['pypower @ git+https://github.com/cosmodesi/pypower']},
           cmdclass={
               'build': custom_build,
               'develop': custom_develop,

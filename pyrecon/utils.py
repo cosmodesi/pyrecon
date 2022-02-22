@@ -151,12 +151,12 @@ def distance(position):
 
 def cartesian_to_sky(position, wrap=True, degree=True):
     r"""
-    Transform cartesian coordinates into distance, RA, Dec.
+    Transform Cartesian coordinates into distance, RA, Dec.
 
     Parameters
     ----------
     position : array of shape (N, 3)
-        Position in cartesian coordinates.
+        Position in Cartesian coordinates.
 
     wrap : bool, default=True
         Whether to wrap RA in :math:`[0, 2 \pi]`.
@@ -185,7 +185,7 @@ def cartesian_to_sky(position, wrap=True, degree=True):
 
 def sky_to_cartesian(dist, ra, dec, degree=True, dtype=None):
     """
-    Transform distance, RA, Dec into cartesian coordinates.
+    Transform distance, RA, Dec into Cartesian coordinates.
 
     Parameters
     ----------
@@ -207,7 +207,7 @@ def sky_to_cartesian(dist, ra, dec, degree=True, dtype=None):
     Returns
     -------
     position : array of shape (N, 3)
-        Position in cartesian coordinates.
+        Position in Cartesian coordinates.
     """
     conversion = np.pi/180. if degree else 1.
     position = [None]*3
@@ -255,6 +255,60 @@ class DistanceToRedshift(object):
         """Return (interpolated) redshift at distance ``distance`` (scalar or array)."""
         distance = np.asarray(distance)
         return self.interp(distance).astype(distance.dtype, copy=False)
+
+
+def _make_array(value, shape, dtype='f8'):
+    # Return numpy array filled with value
+    toret = np.empty(shape, dtype=dtype)
+    toret[...] = value
+    return toret
+
+
+def random_box_positions(boxsize, boxcenter=0., size=None, nbar=None, rng=None, seed=None, dtype=None):
+    """
+    Return Cartesian positions in a 3D box.
+
+    Parameters
+    ----------
+    boxsize : array, float
+        Physical size of the box.
+
+    boxcenter : array, float, default=0.
+        Box center.
+
+    size : float, default=None
+        Number of particles. See ``nbar``.
+
+    nbar : float, default=None
+        If ``size`` is ``None``, ``size`` is obtained as the nearest integer to ``nbar * volume``
+        where ``volume`` is the box volume.
+
+    rng : np.RandomState, default=None
+        Random generator, optional.
+
+    seed : int, default=None
+        If ``rng`` is ``None``, the random seed.
+
+    dtype : string, np.dtype, defaut=None
+        Type output array.
+
+    Returns
+    -------
+    positions : array of shape (size, 3)
+    """
+    if rng is None:
+        rng = np.random.RandomState(seed=seed)
+    ndim = 3
+    boxsize = _make_array(boxsize, ndim, dtype=dtype)
+    if size is None:
+        if nbar is None:
+            raise ValueError('Provide either size or nbar')
+        size = int(nbar*np.prod(boxsize) + 0.5)
+    positions = rng.uniform(0., 1., size=(size, ndim)).astype(dtype)
+    boxsize = boxsize.astype(dtype)
+    boxcenter = _make_array(boxcenter, ndim, dtype=positions.dtype)
+    offset = boxcenter - boxsize/2.
+    return positions*boxsize + offset
 
 
 import time

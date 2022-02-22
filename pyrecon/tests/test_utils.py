@@ -2,6 +2,7 @@ import re
 
 import numpy as np
 
+from pyrecon import utils
 from pyrecon.utils import DistanceToRedshift
 
 
@@ -33,7 +34,18 @@ def test_distance_to_redshift():
         assert d2z(d.astype('f{:d}'.format(itemsize))).itemsize == itemsize
 
 
+def test_random():
+    positions = utils.random_box_positions(10., boxcenter=5., size=100, dtype='f4')
+    assert positions.shape[0] == 100
+    assert positions.dtype.itemsize == 4
+    assert (positions.min() >= 0.) and (positions.max() <= 10.)
+    positions = utils.random_box_positions(10., nbar=2)
+    assert positions.shape[0] == 2000
+    assert (positions.min() >= -5.) and (positions.max() <= 5.)
+
+
 if __name__ == '__main__':
 
     test_decode_eval_str()
     test_distance_to_redshift()
+    test_random()

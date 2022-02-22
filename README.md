@@ -54,7 +54,8 @@ Only strict requirement is:
 Extra requirements are:
 
   - [pyfftw](https://github.com/pyFFTW/pyFFTW) (for faster FFTs)
-  - fitsio, h5py, astropy, scipy to run **pyrecon** as a standalone
+  - fitsio, h5py, astropy to run **pyrecon** as a standalone
+  - pypower to evaluate reconstruction metrics (correlation, transfer function and propagator)
 
 ## Installation
 
