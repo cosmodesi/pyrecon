@@ -531,7 +531,12 @@ class RealMesh(BaseMesh):
         """
         size = len(positions)
         if weights is None: weights = np.ones_like(positions,shape=size,dtype=self._type_float)
-        if wrap: positions = self.info.wrap(positions)
+        if wrap:
+            positions = self.info.wrap(positions)
+        else:
+            low, high = self.boxcenter - self.boxsize/2., self.boxcenter + self.boxsize/2.
+            if not np.all((positions >= low) & (positions <= high)):
+                raise MeshError('positions not in box range {} - {}'.format(low, high))
         positions = ((positions - self.boxcenter)/self.boxsize + 0.5)*self.nmesh
         positions = positions.astype(self._type_float, copy=False).ravel(order='C')
         weights = weights.astype(self._type_float, copy=False).ravel(order='C')
@@ -567,7 +572,12 @@ class RealMesh(BaseMesh):
         """
         size = len(positions)
         dtype = positions.dtype
-        if wrap: positions = self.info.wrap(positions)
+        if wrap:
+            positions = self.info.wrap(positions)
+        else:
+            low, high = self.boxcenter - self.boxsize/2., self.boxcenter + self.boxsize/2.
+            if not np.all((positions >= low) & (positions <= high)):
+                raise MeshError('positions not in box range {} - {}'.format(low, high))
         positions = ((positions - self.boxcenter)/self.boxsize + 0.5)*self.nmesh
         positions = positions.astype(self._type_float,copy=False).ravel(order='C')
         values = np.empty_like(positions,shape=size,order='C')
@@ -601,7 +611,12 @@ class RealMesh(BaseMesh):
         """
         size = len(positions)
         dtype = positions.dtype
-        if wrap: positions = self.info.wrap(positions)
+        if wrap:
+            positions = self.info.wrap(positions)
+        else:
+            low, high = self.boxcenter - self.boxsize/2., self.boxcenter + self.boxsize/2.
+            if not np.all((positions >= low) & (positions <= high)):
+                raise MeshError('positions not in box range {} - {}'.format(low, high))
         positions = ((positions - self.boxcenter)/self.boxsize + 0.5)*self.nmesh
         positions = positions.astype(self._type_float,copy=False).ravel(order='C')
         values = np.empty_like(positions,order='C')
