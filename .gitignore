@@ -8,8 +8,7 @@
 **/dist
 **/eggs
 **/build
-**/_catalogs
-**/_codes
+**/.ipynb_checkpoints
 **/*.npy
 **/*.rdzw
 **/*.xyzw
@@ -23,7 +22,9 @@
 **/bak*
 **/lib
 **/wisdom*
-**/.ipynb_checkpoints
+**/_tests
+**/_catalogs
+**/_codes
 
 # Unit test / coverage reports
 **/.coverage

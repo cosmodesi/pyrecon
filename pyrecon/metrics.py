@@ -207,6 +207,8 @@ class MeshFFTCorrelator(BasePowerRatio):
         edges : tuple, array, default=None
             :math:`k`-edges for :attr:`poles`.
             One can also provide :math:`\mu-edges` (hence a tuple ``(kedges, muedges)``) for :attr:`wedges`.
+            ``kedges`` may be a dictionary, with keys 'min' (minimum :math:`k`, defaults to 0), 'max' (maximum :math:`k`, defaults to ``np.pi/(boxsize/nmesh)``),
+            'step' (if not provided :func:`pypower.fft_power.find_unique_edges` is used to find unique :math:`k` (norm) values between 'min' and 'max').
 
         los : array, default=None
             May be 'x', 'y' or 'z', for one of the Cartesian axes.
@@ -295,6 +297,8 @@ class MeshFFTTransfer(BasePowerRatio):
         edges : tuple, array, default=None
             :math:`k`-edges for :attr:`poles`.
             One can also provide :math:`\mu-edges` (hence a tuple ``(kedges, muedges)``) for :attr:`wedges`.
+            ``kedges`` may be a dictionary, with keys 'min' (minimum :math:`k`, defaults to 0), 'max' (maximum :math:`k`, defaults to ``np.pi/(boxsize/nmesh)``),
+            'step' (if not provided :func:`pypower.fft_power.find_unique_edges` is used to find unique :math:`k` (norm) values between 'min' and 'max').
 
         los : array, default=None
             May be 'x', 'y' or 'z', for one of the Cartesian axes.
@@ -345,6 +349,8 @@ class MeshFFTPropagator(BasePowerRatio):
         edges : tuple, array, default=None
             :math:`k`-edges for :attr:`poles`.
             One can also provide :math:`\mu-edges` (hence a tuple ``(kedges, muedges)``) for :attr:`wedges`.
+            ``kedges`` may be a dictionary, with keys 'min' (minimum :math:`k`, defaults to 0), 'max' (maximum :math:`k`, defaults to ``np.pi/(boxsize/nmesh)``),
+            'step' (if not provided :func:`pypower.fft_power.find_unique_edges` is used to find unique :math:`k` (norm) values between 'min' and 'max').
 
         los : array, default=None
             May be 'x', 'y' or 'z', for one of the Cartesian axes.
