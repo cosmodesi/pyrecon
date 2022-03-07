@@ -34,7 +34,7 @@ def test_metrics():
 
     #recon = MultiGridReconstruction(f=f, bias=bias, los=los, nmesh=nmesh, boxsize=boxsize, boxcenter=boxcenter, fft_engine='fftw')
     recon = PlaneParallelFFTReconstruction(f=f, bias=bias, los=los, nmesh=nmesh, boxsize=boxsize, boxcenter=boxcenter, fft_engine='fftw')
-    recon.assign_data(data.gget('Position'))
+    recon.assign_data(data.cget('Position'))
     recon.set_density_contrast()
     # Run reconstruction
     recon.run()
@@ -90,11 +90,6 @@ def test_metrics():
     propagator_ref, cross_ref, auto_init_ref = get_propagator_ref()
     correlator = get_correlator()
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        fn = os.path.join(tmp_dir, 'tmp.npy')
-        correlator.save(fn)
-        correlator = MeshFFTCorrelator.load(fn)
-
     correlator_rebin = correlator.copy()
     correlator_rebin.rebin((2, 1))
     assert correlator_rebin.ratio.shape[0] == correlator.ratio.shape[0]//2
@@ -106,6 +101,23 @@ def test_metrics():
     assert np.allclose(propagator.ratio, propagator_ref, atol=1e-6, rtol=1e-4, equal_nan=True)
     transfer = correlator.to_transfer(growth=bias)
 
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        #tmp_dir = '_tests'
+        fn = os.path.join(tmp_dir, 'tmp.npy')
+        fn_txt = os.path.join(tmp_dir, 'tmp.txt')
+
+        correlator.save(fn)
+        correlator = MeshFFTCorrelator.load(fn)
+        correlator.save_txt(fn_txt)
+
+        propagator.save(fn)
+        propagator = MeshFFTPropagator.load(fn)
+        propagator.save_txt(fn_txt)
+
+        transfer.save(fn)
+        transfer = MeshFFTTransfer.load(fn)
+        transfer.save_txt(fn_txt)
+
     assert np.allclose(get_propagator(growth=bias).ratio, propagator.ratio, equal_nan=True)
     assert np.allclose(get_transfer(growth=bias).ratio, transfer.ratio, equal_nan=True)
 
@@ -113,7 +125,7 @@ def test_metrics():
     fig.subplots_adjust(wspace=0.3)
     lax = lax.flatten()
     for imu, mu in enumerate(correlator.muavg[3:]):
-        k = correlator.k[:,imu]
+        k = correlator(mu=mu, return_k=True)[0]
         mask = k < 0.6
         k = k[mask]
         lax[0].plot(k, correlator(k=k, mu=mu), label=r'$\mu = {:.2f}$'.format(mu))
@@ -142,4 +154,5 @@ def test_metrics():
 if __name__ == '__main__':
     # Set up logging
     setup_logging()
+
     test_metrics()
