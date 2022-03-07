@@ -71,7 +71,7 @@ class BasePowerRatio(BaseClass):
         mask_mu = (mu >= self.edges[1][0]) & (mu <= self.edges[1][-1])
         if mask_k.any() and mask_mu.any():
             if muavg.size == 1:
-                interp = lambda array: UnivariateSpline(kavg, array, k=1, ext=3)(k[mask_k])[:, None]
+                interp = lambda array: UnivariateSpline(kavg, array, k=1, ext='const')(k[mask_k])[:, None]
             else:
                 interp = lambda array: RectBivariateSpline(kavg, muavg, array, kx=1, ky=1, s=0)(k[mask_k], mu[mask_mu], grid=True)
             toret[np.ix_(mask_k, mask_mu)] = interp(tmp)
@@ -193,16 +193,18 @@ class MeshFFTCorrelator(BasePowerRatio):
     _powers = ['num', 'auto_reconstructed', 'auto_initial']
 
     def __init__(self, mesh_reconstructed, mesh_initial, edges=None, los=None, compensations=None):
-        """
+        r"""
         Initialize :class:`MeshFFTCorrelation`.
 
         Parameters
         ----------
         mesh_reconstructed : CatalogMesh, RealField
             Mesh with reconstructed density field.
+            If ``RealField``, should be :math:`1 + \delta` or :math:`\bar{n} (1 + \delta)`.
 
         mesh_initial : CatalogMesh, RealField
             Mesh with initial density field (before structure formation).
+            If ``RealField``, should be :math:`1 + \delta` or :math:`\bar{n} (1 + \delta)`.
 
         edges : tuple, array, default=None
             :math:`k`-edges for :attr:`poles`.
