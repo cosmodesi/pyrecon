@@ -103,20 +103,25 @@ def test_metrics():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         #tmp_dir = '_tests'
-        fn = os.path.join(tmp_dir, 'tmp.npy')
-        fn_txt = os.path.join(tmp_dir, 'tmp.txt')
+        fn = correlator.num.mpicomm.bcast(os.path.join(tmp_dir, 'tmp.npy'), root=0)
+        fn_txt = correlator.num.mpicomm.bcast(os.path.join(tmp_dir, 'tmp.txt'), root=0)
 
         correlator.save(fn)
-        correlator = MeshFFTCorrelator.load(fn)
         correlator.save_txt(fn_txt)
+        correlator = MeshFFTCorrelator.load(fn)
 
         propagator.save(fn)
-        propagator = MeshFFTPropagator.load(fn)
         propagator.save_txt(fn_txt)
+        propagator = MeshFFTPropagator.load(fn)
 
         transfer.save(fn)
-        transfer = MeshFFTTransfer.load(fn)
         transfer.save_txt(fn_txt)
+        transfer = MeshFFTTransfer.load(fn)
+
+        fn = os.path.join(tmp_dir, 'tmp.npy')
+        correlator.save(fn)
+        propagator.save(fn)
+        transfer.save(fn)
 
     assert np.allclose(get_propagator(growth=bias).ratio, propagator.ratio, equal_nan=True)
     assert np.allclose(get_transfer(growth=bias).ratio, transfer.ratio, equal_nan=True)

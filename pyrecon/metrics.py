@@ -48,7 +48,8 @@ class BasePowerRatio(BaseClass):
         -------
         ratio : array
         """
-        return self.num.get_power(complex=complex, **kwargs)/self.denom.get_power(complex=complex, **kwargs)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            return self.num.get_power(complex=complex, **kwargs)/self.denom.get_power(complex=complex, **kwargs)
 
     @property
     def ratio(self):
@@ -171,9 +172,20 @@ class BasePowerRatio(BaseClass):
         return new
 
     def save(self, filename):
-        self.log_info('Saving {}.'.format(filename))
-        utils.mkdir(os.path.dirname(filename))
-        np.save(filename, self.__getstate__(), allow_pickle=True)
+        """Save to ``filename``."""
+        if not self.with_mpi or self.mpicomm.rank == 0:
+            self.log_info('Saving {}.'.format(filename))
+            utils.mkdir(os.path.dirname(filename))
+            np.save(filename, self.__getstate__(), allow_pickle=True)
+        if self.with_mpi:
+            self.mpicomm.Barrier()
+
+    @classmethod
+    def load(cls, filename):
+        cls.log_info('Loading {}.'.format(filename))
+        state = np.load(filename, allow_pickle=True)[()]
+        new = cls.from_state(state)
+        return new
 
     def save_txt(self, filename, fmt='%.12e', delimiter=' ', header=None, comments='# ', **kwargs):
         """
@@ -204,50 +216,46 @@ class BasePowerRatio(BaseClass):
         kwargs : dict
             Arguments for :meth:`get_power`.
         """
-        self.log_info('Saving {}.'.format(filename))
-        utils.mkdir(os.path.dirname(filename))
-        formatter = {'int_kind': lambda x: '%d' % x, 'float_kind': lambda x: fmt % x, 'complex_kind': lambda x: '{}+{}j'.format(fmt % x.real, fmt % x.imag)}
-        if header is None: header = []
-        elif isinstance(header, str): header = [header]
-        else: header = list(header)
-        for name in ['los_type', 'los', 'nmesh', 'boxsize', 'boxcenter']:
-            value = self.attrs.get(name, getattr(self, name, None))
-            if value is None:
-                value = 'None'
-            elif any(name.startswith(key) for key in ['los_type']):
-                value = str(value)
-            else:
-                value = np.array2string(np.array(value), separator=delimiter, formatter=formatter).replace('\n', '')
-            header.append('{} = {}'.format(name, value))
-        labels = ['nmodes']
-        assert len(self._coords_names) == self.ndim
-        for name in self._coords_names:
-            labels += ['{}mid'.format(name), '{}avg'.format(name)]
-        labels += self._power_names
-        power = self.get_ratio(**kwargs)
-        columns = [self.nmodes.flat]
-        mids = np.meshgrid(*[(edges[:-1] + edges[1:])/2. for edges in self.edges], indexing='ij')
-        for idim in range(self.ndim):
-            columns += [mids[idim].flat, self.modes[idim].flat]
-        for column in power.reshape((-1,)*(power.ndim == self.ndim) + power.shape):
-            columns += [column.flat]
-        columns = [[np.array2string(value, formatter=formatter) for value in column] for column in columns]
-        widths = [max(max(map(len, column)) - len(comments) * (icol == 0), len(label)) for icol, (column, label) in enumerate(zip(columns, labels))]
-        widths[-1] = 0 # no need to leave a space
-        header.append((' '*len(delimiter)).join(['{:<{width}}'.format(label, width=width) for label, width in zip(labels, widths)]))
-        widths[0] += len(comments)
-        with open(filename, 'w') as file:
-            for line in header:
-                file.write(comments + line + '\n')
-            for irow in range(len(columns[0])):
-                file.write(delimiter.join(['{:<{width}}'.format(column[irow], width=width) for column, width in zip(columns, widths)]) + '\n')
-
-    @classmethod
-    def load(cls, filename):
-        cls.log_info('Loading {}.'.format(filename))
-        state = np.load(filename, allow_pickle=True)[()]
-        new = cls.from_state(state)
-        return new
+        if not self.with_mpi or self.mpicomm.rank == 0:
+            self.log_info('Saving {}.'.format(filename))
+            utils.mkdir(os.path.dirname(filename))
+            formatter = {'int_kind': lambda x: '%d' % x, 'float_kind': lambda x: fmt % x, 'complex_kind': lambda x: '{}+{}j'.format(fmt % x.real, fmt % x.imag)}
+            if header is None: header = []
+            elif isinstance(header, str): header = [header]
+            else: header = list(header)
+            for name in ['los_type', 'los', 'nmesh', 'boxsize', 'boxcenter']:
+                value = self.attrs.get(name, getattr(self, name, None))
+                if value is None:
+                    value = 'None'
+                elif any(name.startswith(key) for key in ['los_type']):
+                    value = str(value)
+                else:
+                    value = np.array2string(np.array(value), separator=delimiter, formatter=formatter).replace('\n', '')
+                header.append('{} = {}'.format(name, value))
+            labels = ['nmodes']
+            assert len(self._coords_names) == self.ndim
+            for name in self._coords_names:
+                labels += ['{}mid'.format(name), '{}avg'.format(name)]
+            labels += self._power_names
+            power = self.get_ratio(**kwargs)
+            columns = [self.nmodes.flat]
+            mids = np.meshgrid(*[(edges[:-1] + edges[1:])/2. for edges in self.edges], indexing='ij')
+            for idim in range(self.ndim):
+                columns += [mids[idim].flat, self.modes[idim].flat]
+            for column in power.reshape((-1,)*(power.ndim == self.ndim) + power.shape):
+                columns += [column.flat]
+            columns = [[np.array2string(value, formatter=formatter) for value in column] for column in columns]
+            widths = [max(max(map(len, column)) - len(comments) * (icol == 0), len(label)) for icol, (column, label) in enumerate(zip(columns, labels))]
+            widths[-1] = 0 # no need to leave a space
+            header.append((' '*len(delimiter)).join(['{:<{width}}'.format(label, width=width) for label, width in zip(labels, widths)]))
+            widths[0] += len(comments)
+            with open(filename, 'w') as file:
+                for line in header:
+                    file.write(comments + line + '\n')
+                for irow in range(len(columns[0])):
+                    file.write(delimiter.join(['{:<{width}}'.format(column[irow], width=width) for column, width in zip(columns, widths)]) + '\n')
+        if self.with_mpi:
+            self.mpicomm.Barrier()
 
     def __getitem__(self, slices):
         """Call :meth:`slice`."""
@@ -305,7 +313,8 @@ def _make_property(name):
 
     return func
 
-for name in ['edges', 'shape', 'ndim', 'nmodes', 'modes', 'k', 'mu', 'kavg', 'muavg', 'attrs']:
+
+for name in ['edges', 'shape', 'ndim', 'nmodes', 'modes', 'k', 'mu', 'kavg', 'muavg', 'with_mpi', 'mpicomm', 'attrs']:
     setattr(BasePowerRatio, name, _make_property(name))
 
 
@@ -376,7 +385,8 @@ class MeshFFTCorrelator(BasePowerRatio):
         -------
         ratio : array
         """
-        return self.num.get_power(complex=complex, **kwargs)/(self.auto_reconstructed.get_power(complex=complex, **kwargs) * self.auto_initial.get_power(complex=complex, **kwargs))**0.5
+        with np.errstate(divide='ignore', invalid='ignore'):
+            return self.num.get_power(complex=complex, **kwargs)/(self.auto_reconstructed.get_power(complex=complex, **kwargs) * self.auto_initial.get_power(complex=complex, **kwargs))**0.5
 
     def to_propagator(self, growth=1.):
         """
