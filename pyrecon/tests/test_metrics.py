@@ -108,14 +108,17 @@ def test_metrics():
 
         correlator.save(fn)
         correlator.save_txt(fn_txt)
+        correlator.mpicomm.Barrier()
         correlator = MeshFFTCorrelator.load(fn)
 
         propagator.save(fn)
         propagator.save_txt(fn_txt)
+        propagator.mpicomm.Barrier()
         propagator = MeshFFTPropagator.load(fn)
 
         transfer.save(fn)
         transfer.save_txt(fn_txt)
+        transfer.mpicomm.Barrier()
         transfer = MeshFFTTransfer.load(fn)
 
         fn = os.path.join(tmp_dir, 'tmp.npy')
