@@ -101,6 +101,15 @@ def test_metrics():
     assert np.allclose(propagator.ratio, propagator_ref, atol=1e-6, rtol=1e-4, equal_nan=True)
     transfer = correlator.to_transfer(growth=bias)
 
+    for complex in [False, True]:
+        assert correlator(k=[0.1,0.2], complex=complex).shape == (2, correlator.shape[1])
+        assert correlator(k=[0.1,0.2], mu=[0.3], complex=complex).shape == (2, 1)
+        assert correlator(k=[[0.1,0.2]]*3, mu=[[0.3]]*2, complex=complex).shape == (3, 2, 2, 1)
+        assert correlator(k=[0.1,0.2], mu=0., complex=complex).shape == (2,)
+        assert correlator(k=0.1, mu=0., complex=complex).shape == ()
+        assert correlator(k=0.1, mu=[0., 0.1], complex=complex).shape == (2,)
+        assert np.allclose(correlator(k=[0.2, 0.1], mu=[0.2, 0.1], complex=complex), correlator(k=[0.1, 0.2], mu=[0.1, 0.2], complex=complex)[::-1,::-1], atol=0)
+
     with tempfile.TemporaryDirectory() as tmp_dir:
         #tmp_dir = '_tests'
         fn = correlator.num.mpicomm.bcast(os.path.join(tmp_dir, 'tmp.npy'), root=0)
