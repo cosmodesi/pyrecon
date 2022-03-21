@@ -118,6 +118,13 @@ def test_metrics():
         correlator.save(fn)
         correlator.save_txt(fn_txt)
         correlator.mpicomm.Barrier()
+        test = np.loadtxt(fn_txt, unpack=True)
+        mids = np.meshgrid(*(correlator.modeavg(axis=axis, method='mid') for axis in range(correlator.ndim)), indexing='ij')
+        assert np.allclose([tt.reshape(correlator.shape) for tt in test], [correlator.nmodes, mids[0], correlator.modes[0], mids[1], correlator.modes[1], correlator.ratio.real], equal_nan=True)
+        correlator.save_txt(fn_txt, complex=True)
+        test = np.loadtxt(fn_txt, unpack=True, dtype=np.complex_)
+        assert np.allclose([tt.reshape(correlator.shape) for tt in test], [correlator.nmodes, mids[0], correlator.modes[0], mids[1], correlator.modes[1], correlator.get_ratio(complex=True)], equal_nan=True)
+
         correlator = MeshFFTCorrelator.load(fn)
 
         propagator.save(fn)

@@ -218,7 +218,14 @@ class BasePowerRatio(BaseClass):
         if not self.with_mpi or self.mpicomm.rank == 0:
             self.log_info('Saving {}.'.format(filename))
             utils.mkdir(os.path.dirname(filename))
-            formatter = {'int_kind': lambda x: '%d' % x, 'float_kind': lambda x: fmt % x, 'complex_kind': lambda x: '{}+{}j'.format(fmt % x.real, fmt % x.imag)}
+            formatter = {'int_kind': lambda x: '%d' % x, 'float_kind': lambda x: fmt % x}
+
+            def complex_kind(x):
+                imag = fmt % x.imag
+                if imag[0] not in ['+', '-']: imag = '+' + imag
+                return '{}{}j'.format(fmt % x.real, imag)
+
+            formatter['complex_kind'] = complex_kind
             if header is None: header = []
             elif isinstance(header, str): header = [header]
             else: header = list(header)
@@ -316,6 +323,8 @@ def _make_property(name):
 for name in ['edges', 'shape', 'ndim', 'nmodes', 'modes', 'k', 'mu', 'kavg', 'muavg', 'with_mpi', 'mpicomm', 'attrs']:
     setattr(BasePowerRatio, name, _make_property(name))
 
+
+BasePowerRatio.modeavg = PowerSpectrumWedges.modeavg
 
 
 class MeshFFTCorrelator(BasePowerRatio):

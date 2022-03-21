@@ -1,18 +1,18 @@
 CC ?= gcc
 OMPFLAG ?= -fopenmp
-OPT ?= $(OMPFLAG) -pedantic -Wall -Wextra
+OPT ?= $(OMPFLAG) -pedantic -Wall -Wextra -O3
+LIBDIR ?= ../lib
 
 SOURCEFILES = mesh.c multigrid.c
 HEADERFILES = utils.h
-LIBDIR ?= ../lib
 
 vpath %.so $(LIBDIR)
 
 %_float.o: %.c $(HEADERFILES)
-	$(CC) $(OPT) -DFLOAT32 -fPIC -O3 -c $< -o $@
+	$(CC) $(OPT) -DFLOAT32 -fPIC -c $< -o $@
 
 %_double.o: %.c $(HEADERFILES)
-	$(CC) $(OPT) -fPIC -O3 -c $< -o $@
+	$(CC) $(OPT) -fPIC -c $< -o $@
 
 %.so: %.o
 	@mkdir -p $(LIBDIR)
