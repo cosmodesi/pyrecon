@@ -7,7 +7,7 @@ import functools
 
 import numpy as np
 
-lib_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)),'lib')
+lib_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'lib')
 
 
 def exception_handler(exc_type, exc_value, exc_traceback):
@@ -215,7 +215,7 @@ def sky_to_cartesian(dist, ra, dec, degree=True, dtype=None):
     position[0] = cos_dec*np.cos(ra*conversion)
     position[1] = cos_dec*np.sin(ra*conversion)
     position[2] = np.sin(dec*conversion)
-    return (dist*np.asarray(position,dtype=dtype)).T
+    return (dist*np.array(position, dtype=dtype)).T
 
 
 class DistanceToRedshift(object):

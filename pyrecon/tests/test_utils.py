@@ -36,7 +36,7 @@ def test_distance_to_redshift():
 
 def test_random():
     positions = utils.random_box_positions(10., boxcenter=5., size=100, dtype='f4')
-    assert positions.shape[0] == 100
+    assert positions.shape == (100, 3)
     assert positions.dtype.itemsize == 4
     assert (positions.min() >= 0.) and (positions.max() <= 10.)
     positions = utils.random_box_positions(10., nbar=2)
@@ -44,8 +44,20 @@ def test_random():
     assert (positions.min() >= -5.) and (positions.max() <= 5.)
 
 
+def test_cartesian_to_sky():
+    for dtype in ['f4', 'f8']:
+        dtype = np.dtype(dtype)
+        positions = utils.random_box_positions(10., boxcenter=15., size=100, dtype=dtype)
+        drd = utils.cartesian_to_sky(positions)
+        assert all(array.dtype.itemsize == dtype.itemsize for array in drd)
+        positions2 = utils.sky_to_cartesian(*drd)
+        assert positions2.dtype.itemsize == dtype.itemsize
+        assert np.allclose(positions2, positions, rtol=1e-6 if dtype.itemsize == 4 else 1e-9)
+
+
 if __name__ == '__main__':
 
     test_decode_eval_str()
     test_distance_to_redshift()
     test_random()
+    test_cartesian_to_sky()
