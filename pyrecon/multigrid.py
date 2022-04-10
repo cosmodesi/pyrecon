@@ -6,8 +6,7 @@ import ctypes
 import numpy as np
 from numpy import ctypeslib
 
-from .recon import BaseReconstruction
-from .mesh import RealMesh
+from .recon import BaseReconstruction, ReconstructionError
 from . import utils
 
 

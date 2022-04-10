@@ -1,7 +1,6 @@
 """Implementation of base reconstruction class."""
 
 import numpy as np
-import os
 
 from .mesh import RealMesh
 from .utils import BaseClass

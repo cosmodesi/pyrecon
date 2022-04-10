@@ -447,7 +447,7 @@ class MeshFFTTransfer(BasePowerRatio):
     _attrs = ['growth']
 
     def __init__(self, mesh_reconstructed, mesh_initial, edges=None, los=None, compensations=None, growth=1.):
-        """
+        r"""
         Initialize :class:`MeshFFTTransfer`.
 
         Parameters
@@ -514,7 +514,7 @@ class MeshFFTPropagator(BasePowerRatio):
     _attrs = ['growth']
 
     def __init__(self, mesh_reconstructed, mesh_initial, edges=None, los=None, compensations=None, growth=1.):
-        """
+        r"""
         Initialize :class:`MeshFFTPropagator`.
 
         Parameters
