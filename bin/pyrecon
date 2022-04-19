@@ -26,7 +26,7 @@ ascii_art = r"""
  | .__/ \__, |_|  \___|\___\___/|_| |_|
  | |     __/ |
  |_|    |___/                          """ + """\n\n""" + \
- """version: {}                     date: {}\n""".format(__version__,datetime.date.today())
+ """version: {}                     date: {}\n""".format(__version__, datetime.date.today())
 
 
 class YamlLoader(yaml.SafeLoader):
@@ -35,22 +35,26 @@ class YamlLoader(yaml.SafeLoader):
     Taken from https://stackoverflow.com/questions/30458977/yaml-loads-5e-6-as-string-and-not-a-number.
     """
 
-YamlLoader.add_implicit_resolver(u'tag:yaml.org,2002:float',
-                            re.compile(u'''^(?:
-                             [-+]?(?:[0-9][0-9_]*)\\.[0-9_]*(?:[eE][-+]?[0-9]+)?
-                            |[-+]?(?:[0-9][0-9_]*)(?:[eE][-+]?[0-9]+)
-                            |\\.[0-9_]+(?:[eE][-+][0-9]+)?
-                            |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\\.[0-9_]*
-                            |[-+]?\\.(?:inf|Inf|INF)
-                            |\\.(?:nan|NaN|NAN))$''', re.X),
-                            list(u'-+0123456789.'))
 
-YamlLoader.add_implicit_resolver('!none',re.compile('None$'),first='None')
+YamlLoader.add_implicit_resolver(u'tag:yaml.org,2002:float',
+                                 re.compile(u'''^(?:
+                                 [-+]?(?:[0-9][0-9_]*)\\.[0-9_]*(?:[eE][-+]?[0-9]+)?
+                                 |[-+]?(?:[0-9][0-9_]*)(?:[eE][-+]?[0-9]+)
+                                 |\\.[0-9_]+(?:[eE][-+][0-9]+)?
+                                 |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\\.[0-9_]*
+                                 |[-+]?\\.(?:inf|Inf|INF)
+                                 |\\.(?:nan|NaN|NAN))$''', re.X),
+                                 list(u'-+0123456789.'))
+
+YamlLoader.add_implicit_resolver('!none', re.compile('None$'), first='None')
+
 
 def none_constructor(loader, node):
-  return None
+    return None
 
-YamlLoader.add_constructor('!none',none_constructor)
+
+YamlLoader.add_constructor('!none', none_constructor)
+
 
 extensions = {}
 extensions['fits'] = ['.fits']
@@ -82,27 +86,27 @@ def main(args=None, **input_config):
     config = {}
     config['input'] = {}
     config['output'] = {}
-    config['algorithm'] = {'name':'MultiGridReconstruction', 'convention':'RecSym'}
-    config['delta'] = {'smoothing_radius':15.}
+    config['algorithm'] = {'name': 'MultiGridReconstruction', 'convention': 'RecSym'}
+    config['delta'] = {'smoothing_radius': 15.}
     config['cosmology'] = {}
-    config['mesh'] = {'nmesh':512, 'dtype':'f4'}
+    config['mesh'] = {'nmesh': 512, 'dtype': 'f4'}
 
     def update_config(c1, c2):
         # Update (in-place) config dictionary c1 with c2
-        for section,value in c2.items():
-            c1.setdefault(section,{})
+        for section, value in c2.items():
+            c1.setdefault(section, {})
             c1[section].update(value)
 
         # Turn empty things (dict, list, str) to None
         for section in c1:
-            for name,value in c1[section].items():
+            for name, value in c1[section].items():
                 if not value: c1[section][name] = None
 
     update_config(config, input_config)
 
     if opt.config_fn is not None:
         logger.info('Loading config file {}.'.format(opt.config_fn))
-        with open(opt.config_fn,'r') as file:
+        with open(opt.config_fn, 'r') as file:
             update_config(config, yaml.safe_load(file))
 
     # Override with command-line arguments
@@ -120,13 +124,13 @@ def main(args=None, **input_config):
         config['cosmology']['bias'] = opt.galaxy_bias
 
     # Fetch reconstruction algorithm, e.g. MultiGridReconstruction
-    ReconstructionAlgorithm = getattr(pyrecon,config['algorithm'].pop('name'))
-    config_cosmo = {name:value for name,value in config['cosmology'].items() if name in ['f','bias']}
-    config_cosmo['los'] = config['algorithm'].pop('los',None)
+    ReconstructionAlgorithm = getattr(pyrecon, config['algorithm'].pop('name'))
+    config_cosmo = {name: value for name, value in config['cosmology'].items() if name in ['f', 'bias']}
+    config_cosmo['los'] = config['algorithm'].pop('los', None)
     convention = config['algorithm'].pop('convention').lower()
-    nthreads = config['algorithm'].pop('nthreads',None)
+    nthreads = config['algorithm'].pop('nthreads', None)
     allowed_conventions = ['recsym', 'reciso', 'rsd']
-    if not convention in allowed_conventions:
+    if convention not in allowed_conventions:
         raise ConfigError('Unknown convention {}. Choices are {}'.format(convention, allowed_conventions))
     logger.info('Convention is {}.'.format(convention))
 
@@ -140,7 +144,7 @@ def main(args=None, **input_config):
         cosmo = FlatLambdaCDM(H0=70, Om0=Omega_m)
 
         def comoving_distance(z):
-            return cosmo.comoving_distance(z).value*cosmo.h
+            return cosmo.comoving_distance(z).value * cosmo.h
 
         return comoving_distance
 
@@ -165,10 +169,10 @@ def main(args=None, **input_config):
         for path in paths:
             if path is None:
                 continue
-            if toret.endswith(sep) and path.startswith(sep): # absolute
+            if toret.endswith(sep) and path.startswith(sep):  # absolute
                 toret = path
             elif (not toret.endswith(sep)) and (not path.startswith(sep)):
-                toret += sep + path # add sep between paths
+                toret += sep + path  # add sep between paths
             else:
                 toret += path
         return toret
@@ -179,10 +183,10 @@ def main(args=None, **input_config):
             return '', []
         toret = str(s)
         columns = []
-        for replace in re.finditer('(\${.*?})',s):
+        for replace in re.finditer(r'(\${.*?})', s):
             value = replace.group(1)
             col = value[2:-1]
-            toret = toret.replace(value,col)
+            toret = toret.replace(value, col)
             if col not in columns: columns.append(col)
         return toret, columns
 
@@ -193,7 +197,7 @@ def main(args=None, **input_config):
         raise ConfigError('Unknown input selection function {}. Choices are {}'.format(selection_function, allowed_selection_functions))
     # First check what we have in input/output
     input_fns, output_fns = {}, {}
-    for name in ['data','randoms']:
+    for name in ['data', 'randoms']:
         tmp_fn = config['input'].get('{}_fn'.format(name), None)
         if tmp_fn is None:
             if name == 'randoms':
@@ -205,7 +209,7 @@ def main(args=None, **input_config):
                     selection_function = 'uniform'
             else:
                 raise ConfigError('Please provide data catalog.')
-        else: # We've got a file name!
+        else:  # We've got a file name!
             input_fns[name] = tmp_fn
         tmp_fn = config['output'].get('{}_fn'.format(name), None)
         if tmp_fn is not None:
@@ -230,7 +234,7 @@ def main(args=None, **input_config):
         # First get format, xyz or rdz, from e.g. 'xyz', 'xyz_data', 'rdz_randoms'
         input_format[name] = None
         for format in allowed_formats:
-            cols = config['input'].get('{}_{}'.format(format,name),None)
+            cols = config['input'].get('{}_{}'.format(format, name), None)
             if cols is not None:
                 # Check whether e.g. 'rdz_data' but 'xyz_data' has been specified previously
                 if input_format[name] is not None:
@@ -240,7 +244,7 @@ def main(args=None, **input_config):
         # Fallback on non-differenciation between data and randoms, 'xyz', 'rdz'
         if input_format[name] is None:
             for format in allowed_formats:
-                cols = config['input'].get(format,None)
+                cols = config['input'].get(format, None)
                 if cols is not None:
                     # Check whether e.g. 'rdz' but 'xyz' has been specified previously
                     if input_format[name] is not None:
@@ -254,76 +258,76 @@ def main(args=None, **input_config):
         position_columns = make_list(position_columns)
 
         # Get catalog file name
-        fn = os.path.join(config['input'].get('dir',''), input_fns[name])
+        fn = os.path.join(config['input'].get('dir', ''), input_fns[name])
         # Optionally, mask to apply
-        mask_str = config['input'].get('mask_{}'.format(name), config['input'].get('mask',None))
+        mask_str = config['input'].get('mask_{}'.format(name), config['input'].get('mask', None))
         mask_str, mask_columns = decode_eval_str(mask_str)
-        weight_str = config['input'].get('weights_{}'.format(name), config['input'].get('weights',None))
+        weight_str = config['input'].get('weights_{}'.format(name), config['input'].get('weights', None))
         weight_str, weight_columns = decode_eval_str(weight_str)
         # Input columns to keep for ouput
-        keep_input_columns[name] = make_list(config['output'].get('columns_{}'.format(name),config['output'].get('columns',None)))
+        keep_input_columns[name] = make_list(config['output'].get('columns_{}'.format(name), config['output'].get('columns', None)))
         columns = []
         # All columns to actually read from catalogs (positions, weights, masks, and columns to be saved in output)
-        for cols in [position_columns,weight_columns,mask_columns,keep_input_columns[name]]: columns += cols
+        for cols in [position_columns, weight_columns, mask_columns, keep_input_columns[name]]: columns += cols
         columns = remove_duplicates(columns)
         catalog = {}
-        logger.info('Loading {} catalog {}.'.format(name,fn))
+        logger.info('Loading {} catalog {}.'.format(name, fn))
         is_read = False
         # Read in catalog, depending on file format
-        for file_format,exts in extensions.items():
+        for file_format, exts in extensions.items():
             if any(fn.endswith(ext) for ext in exts):
                 if file_format == 'fits':
                     import fitsio
-                    tmp = fitsio.read(fn,columns=columns)
+                    tmp = fitsio.read(fn, columns=columns)
                     for col in columns: catalog[col] = tmp[col]
                     is_read = True
                     break
                 if file_format == 'hdf5':
                     import h5py
-                    with h5py.File(fn,'r') as file:
+                    with h5py.File(fn, 'r') as file:
                         for col in columns:
-                            dataset = sepjoin(config['input'].get('hdf5_prefix',''), col)
+                            dataset = sepjoin(config['input'].get('hdf5_prefix', ''), col)
                             catalog[col] = file[dataset][:]
                     is_read = True
                     break
 
         # No matching file format found
         if not is_read:
-            allowed_formats = ', '.join(['{} ({})'.format(file_format,exts) for file_format,exts in extensions.items()])
+            allowed_formats = ', '.join(['{} ({})'.format(file_format, exts) for file_format, exts in extensions.items()])
             raise ConfigError('File format is not recognized. Formats {} only are handled.'.format(allowed_formats))
 
-        logger.info('Size of catalog {} is {:d}.'.format(name,len(catalog[columns[0]])))
+        logger.info('Size of catalog {} is {:d}.'.format(name, len(catalog[columns[0]])))
         # Apply masks
         if mask_str:
-            dglobals = {'np':np}
+            dglobals = {'np': np}
             dglobals.update(catalog)
-            mask = eval(mask_str,dglobals,{})
+            mask = eval(mask_str, dglobals, {})
             for col in columns:
                 catalog[col] = catalog[col][mask]
-            logger.info('Size of catalog {} after masking is {:d}.'.format(name,len(catalog[columns[0]])))
+            logger.info('Size of catalog {} after masking is {:d}.'.format(name, len(catalog[columns[0]])))
 
         # Prepare Cartesian positions from input columns
         if format == 'rdz':
-            if not len(position_columns) == 3: # RA, DEC, Z
+            if not len(position_columns) == 3:  # RA, DEC, Z
                 raise ConfigError('Format rdz requires 3 position columns')
             comoving_distance = get_comoving_distance()
             distance = comoving_distance(catalog[position_columns[2]])
-            positions[name] = utils.sky_to_cartesian(distance,catalog[position_columns[0]],catalog[position_columns[1]])
+            positions[name] = utils.sky_to_cartesian(distance, catalog[position_columns[0]], catalog[position_columns[1]])
 
-        else: # format == 'xyz'
-            if len(position_columns) == 3: # X, Y, Z
+        else:  # format == 'xyz'
+            if len(position_columns) == 3:  # X, Y, Z
                 positions[name] = np.array([catalog[col] for col in position_columns]).T
-            elif len(position_columns) == 1: # single array of shape (N, 3)
+            elif len(position_columns) == 1:  # single array of shape (N, 3)
                 positions[name] = catalog[position_columns[0]]
             else:
                 raise ConfigError('Format xyz requires 1 or 3 position columns')
 
         # Build up weights
-        weights.setdefault(name,None)
+        weights.setdefault(name, None)
         if weight_str:
-            dglobals = {'np':np}
+            dglobals = {'np': np}
             dglobals.update(catalog)
-            weights[name] = eval(weight_str,dglobals,{})
+            weights[name] = eval(weight_str, dglobals, {})
 
         # Remove all columns that are not requested in output catalogs
         for col in columns:
@@ -334,8 +338,8 @@ def main(args=None, **input_config):
 
     # Run reconstruction
     recon = ReconstructionAlgorithm(**config_cosmo, **config['mesh'], positions=positions['randoms'] if selection_function == 'randoms' else None, nthreads=nthreads)
-    recon.assign_data(positions['data'],weights['data'])
-    if selection_function == 'randoms': recon.assign_randoms(positions['randoms'],weights['randoms'])
+    recon.assign_data(positions['data'], weights['data'])
+    if selection_function == 'randoms': recon.assign_randoms(positions['randoms'], weights['randoms'])
     recon.set_density_contrast(**config['delta'])
     recon.run(**config['algorithm'])
 
@@ -363,58 +367,58 @@ def main(args=None, **input_config):
         catalog = catalogs[name]
         columns = list(keep_input_columns[name])
         # How do we save position columns?
-        for rec,positions_ in zip(['','_rec'],[positions[name],positions_rec[name]]):
+        for rec, positions_ in zip(['', '_rec'], [positions[name], positions_rec[name]]):
             for format in allowed_formats:
                 # First look for e.g. 'xyz_data', 'rdz_randoms', 'xyz_rec_data'
-                position_columns = config['output'].get('{}{}_{}'.format(format,rec,name),None)
+                position_columns = config['output'].get('{}{}_{}'.format(format, rec, name), None)
                 # Fallback on non-differenciation between data and randoms, 'xyz', 'rdz', 'xyz_rec'
                 if position_columns is None:
-                    position_columns = config['output'].get('{}{}'.format(format,rec),None)
+                    position_columns = config['output'].get('{}{}'.format(format, rec), None)
                 if position_columns is not None:
                     position_columns = make_list(position_columns)
                     if format == 'rdz':
-                        if not len(position_columns) == 3: # RA, DEC, Z columns
+                        if not len(position_columns) == 3:  # RA, DEC, Z columns
                             raise ConfigError('Format rdz requires 3 position columns')
                         distance, ra, dec = utils.cartesian_to_sky(positions_)
                         distance_to_redshift = utils.DistanceToRedshift(get_comoving_distance())
                         z = distance_to_redshift(distance)
-                        for col,value in zip(position_columns,[ra,dec,z]):
+                        for col, value in zip(position_columns, [ra, dec, z]):
                             catalog[col] = value
                     else:
-                        if len(position_columns) == 3: # X, Y, Z columns
-                            for icol,col in enumerate(position_columns):
-                                catalog[col] = positions_[:,icol]
-                        elif len(position_columns) == 1: # single array of shape (N, 3)
+                        if len(position_columns) == 3:  # X, Y, Z columns
+                            for icol, col in enumerate(position_columns):
+                                catalog[col] = positions_[:, icol]
+                        elif len(position_columns) == 1:  # single array of shape (N, 3)
                             catalog[position_columns[0]] = positions_
                         else:
                             raise ConfigError('Format xyz requires 1 or 3 position columns')
                     columns += position_columns
         columns = remove_duplicates(columns)
-        fn = os.path.join(config['output'].get('dir',''), output_fns[name])
-        logger.info('Saving {} catalog to {}.'.format(name,fn))
+        fn = os.path.join(config['output'].get('dir', ''), output_fns[name])
+        logger.info('Saving {} catalog to {}.'.format(name, fn))
         is_written = False
         # Write catalog, depending on file format
-        for file_format,exts in extensions.items():
+        for file_format, exts in extensions.items():
             if any(fn.endswith(ext) for ext in exts):
                 if file_format == 'fits':
                     import fitsio
                     columns = list(catalog.keys())
-                    array = np.empty(len(catalog[columns[0]]),dtype=[(col,catalog[col].dtype,catalog[col].shape[1:]) for col in columns])
+                    array = np.empty(len(catalog[columns[0]]), dtype=[(col, catalog[col].dtype, catalog[col].shape[1:]) for col in columns])
                     for col in columns: array[col] = catalog[col]
-                    fitsio.write(fn,array,clobber=True)
+                    fitsio.write(fn, array, clobber=True)
                     is_written = True
                     break
                 if file_format == 'hdf5':
                     import h5py
-                    with h5py.File(fn,'w') as file:
+                    with h5py.File(fn, 'w') as file:
                         for col in columns:
-                            dataset = sepjoin(config['output'].get('hdf5_prefix',''), col)
+                            dataset = sepjoin(config['output'].get('hdf5_prefix', ''), col)
                             file[dataset] = catalog[col]
                     is_written = True
                     break
 
         if not is_written:
-            allowed_formats = ', '.join(['{} ({})'.format(file_format,exts) for file_format,exts in extensions.items()])
+            allowed_formats = ', '.join(['{} ({})'.format(file_format, exts) for file_format, exts in extensions.items()])
             raise ConfigError('File format is not recognized. Formats {} only are handled.'.format(allowed_formats))
 
 

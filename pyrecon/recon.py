@@ -101,7 +101,7 @@ class BaseReconstruction(BaseClass):
         kwargs : dict
             Arguments to build :attr:`mesh_data`, :attr:`mesh_randoms` (see :class:`RealMesh`).
         """
-        self.set_cosmo(f=f,bias=bias)
+        self.set_cosmo(f=f, bias=bias)
         self.wrap = wrap
         self.mesh_data = RealMesh(**kwargs)
         self.mesh_randoms = RealMesh(**kwargs)
@@ -118,7 +118,7 @@ class BaseReconstruction(BaseClass):
     @property
     def beta(self):
         r""":math:`\beta` parameter, as the ratio of the growth rate to the galaxy bias."""
-        return self.f/self.bias
+        return self.f / self.bias
 
     def set_cosmo(self, f=None, bias=None, beta=None):
         r"""
@@ -137,7 +137,7 @@ class BaseReconstruction(BaseClass):
             :math:`\beta` parameter. If not ``None``, overrides ``f`` as ``beta * bias``.
         """
         if bias is None: bias = self.bias
-        if beta is not None: f = beta*bias
+        if beta is not None: f = beta * bias
         if f is None: f = self.f
         self.f = f
         self.bias = bias
@@ -163,7 +163,7 @@ class BaseReconstruction(BaseClass):
                 los = np.zeros(3, dtype=self.mesh_data.dtype)
                 los[ilos] = 1.
             los = np.array(los, dtype=self.mesh_data.dtype)
-            self.los = los/utils.distance(los)
+            self.los = los / utils.distance(los)
 
     def assign_data(self, positions, weights=None):
         """
@@ -210,9 +210,9 @@ class BaseReconstruction(BaseClass):
             Optional arguments for :meth:`RealMesh.smooth_gaussian`.
         """
         if not self.has_randoms:
-            self.mesh_delta = self.mesh_data/np.mean(self.mesh_data) - 1.
+            self.mesh_delta = self.mesh_data / np.mean(self.mesh_data) - 1.
             self.mesh_delta /= self.bias
-            self.mesh_delta.smooth_gaussian(smoothing_radius,**kwargs)
+            self.mesh_delta.smooth_gaussian(smoothing_radius, **kwargs)
             return
         # Martin's notes:
         # We remove any points which have too few randoms for a decent
@@ -220,11 +220,11 @@ class BaseReconstruction(BaseClass):
         # worst swings due to 1/eps factors. Better would be an interpolation
         # or a pre-smoothing (or many more randoms).
         mask = self.mesh_randoms >= ran_min
-        alpha = np.sum(self.mesh_data[mask])/np.sum(self.mesh_randoms[mask])
+        alpha = np.sum(self.mesh_data[mask]) / np.sum(self.mesh_randoms[mask])
         # Following two lines are how things are done in original code - does not seem exactly correct so commented out
-        #self.mesh_data[(self.mesh_randoms > 0) & (self.mesh_randoms < ran_min)] = 0.
-        #alpha = np.sum(self.mesh_data)/np.sum(self.mesh_randoms[mask])
-        self.mesh_data[mask] /= alpha*self.mesh_randoms[mask]
+        # self.mesh_data[(self.mesh_randoms > 0) & (self.mesh_randoms < ran_min)] = 0.
+        # alpha = np.sum(self.mesh_data)/np.sum(self.mesh_randoms[mask])
+        self.mesh_data[mask] /= alpha * self.mesh_randoms[mask]
         self.mesh_delta = self.mesh_data
         del self.mesh_data
         del self.mesh_randoms
@@ -237,7 +237,7 @@ class BaseReconstruction(BaseClass):
         # regions with delta != 0.
         mask = self.mesh_delta != 0.
         self.mesh_delta[mask] -= np.mean(self.mesh_delta[mask])
-        self.mesh_delta.smooth_gaussian(smoothing_radius,**kwargs)
+        self.mesh_delta.smooth_gaussian(smoothing_radius, **kwargs)
 
     def run(self, *args, **kwargs):
         """Run reconstruction; to be implemented in your algorithm."""
@@ -276,16 +276,16 @@ class BaseReconstruction(BaseClass):
         if field not in allowed_fields:
             raise ReconstructionError('Unknown field {}. Choices are {}'.format(field, allowed_fields))
         shifts = np.empty_like(positions)
-        if self.wrap: positions = self.info.wrap(positions) # wrap here for local los
+        if self.wrap: positions = self.info.wrap(positions)  # wrap here for local los
         for iaxis, psi in enumerate(self.mesh_psi):
-            shifts[:,iaxis] = psi.read_cic(positions, wrap=False) # already wrapped if required
+            shifts[:, iaxis] = psi.read_cic(positions, wrap=False)  # already wrapped if required
         if field == 'disp':
             return shifts
         if self.los is None:
-            los = positions/utils.distance(positions)[:,None]
+            los = positions / utils.distance(positions)[:, None]
         else:
             los = self.los
-        rsd = self.f*np.sum(shifts*los,axis=-1)[:,None]*los
+        rsd = self.f * np.sum(shifts * los, axis=-1)[:, None] * los
         if field == 'rsd':
             return rsd
         # field == 'disp+rsd'
@@ -323,6 +323,7 @@ def _make_property(name):
         return getattr(self.info, name)
 
     return func
+
 
 for name in ['boxsize', 'boxcenter', 'nmesh', 'offset', 'cellsize']:
     setattr(BaseReconstruction, name, _make_property(name))

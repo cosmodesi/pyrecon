@@ -1,7 +1,5 @@
 """Implementation of Burden et al. 2015 (https://arxiv.org/abs/1504.02591) algorithm."""
 
-import numpy as np
-
 from .recon import BaseReconstruction, ReconstructionError
 from . import utils
 
@@ -45,13 +43,13 @@ class PlaneParallelFFTReconstruction(BaseReconstruction):
         delta_k = self.mesh_delta.to_complex()
         del self.mesh_delta
         k = utils.broadcast_arrays(*delta_k.coords())
-        k2 = sum(k_**2 for k_ in k)
-        k2[0,0,0] = 1. # to avoid dividing by 0
+        k2 = sum(kk**2 for kk in k)
+        k2[0, 0, 0] = 1.  # to avoid dividing by 0
         delta_k /= k2
-        mu2 = sum(kk * ll for ll,kk in zip(k, self.los))/k2**0.5
+        mu2 = sum(kk * ll for ll, kk in zip(k, self.los)) / k2**0.5
         psis = []
         for iaxis in range(delta_k.ndim):
-            tmp = 1j*k[iaxis]*delta_k/(1. + self.beta*mu2)
+            tmp = 1j * k[iaxis] * delta_k / (1. + self.beta * mu2)
             psi = tmp.to_real()
             psis.append(psi)
         self.mesh_psi = psis

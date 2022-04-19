@@ -18,7 +18,7 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
     Numerical agreement in the Zeldovich displacements between original code and this re-implementation is numerical precision (absolute and relative difference of 1e-10).
     To test this, change float to double and increase precision in io.cpp/write_data in the original code.
     """
-    _path_lib = os.path.join(utils.lib_dir,'multigrid_{}.so')
+    _path_lib = os.path.join(utils.lib_dir, 'multigrid_{}.so')
 
     def __init__(self, *args, **kwargs):
         """
@@ -27,9 +27,9 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         """
         # Only 2 FFTs to perform, for the Gaussian smoothing, so no need to spend time on scheduling
         kwargs.setdefault('fft_plan', 'estimate')
-        super(OriginalMultiGridReconstruction,self).__init__(*args, **kwargs)
+        super(OriginalMultiGridReconstruction, self).__init__(*args, **kwargs)
         self._type_float = self.mesh_data._type_float
-        self._lib = ctypes.CDLL(self._path_lib.format(self.mesh_data._precision),mode=ctypes.RTLD_LOCAL)
+        self._lib = ctypes.CDLL(self._path_lib.format(self.mesh_data._precision), mode=ctypes.RTLD_LOCAL)
 
     def set_density_contrast(self, ran_min=0.75, smoothing_radius=15., **kwargs):
         r"""
@@ -52,7 +52,7 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
             Optional arguments for :meth:`RealMesh.smooth_gaussian`.
         """
         if not self.has_randoms:
-            self.mesh_delta = self.mesh_data/np.mean(self.mesh_data) - 1.
+            self.mesh_delta = self.mesh_data / np.mean(self.mesh_data) - 1.
             self.mesh_delta /= self.bias
             self.mesh_delta.smooth_gaussian(smoothing_radius, **kwargs)
             return
@@ -65,8 +65,8 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         # alpha = np.sum(self.mesh_data[mask])/np.sum(self.mesh_randoms[mask])
         # Following two lines are how things are done in original code
         self.mesh_data[(self.mesh_randoms > 0) & (self.mesh_randoms < ran_min)] = 0.
-        alpha = np.sum(self.mesh_data)/np.sum(self.mesh_randoms[mask])
-        self.mesh_data[mask] /= alpha*self.mesh_randoms[mask]
+        alpha = np.sum(self.mesh_data) / np.sum(self.mesh_randoms[mask])
+        self.mesh_data[mask] /= alpha * self.mesh_randoms[mask]
         self.mesh_delta = self.mesh_data
         del self.mesh_data
         del self.mesh_randoms
@@ -99,23 +99,23 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         """
         func = self._lib.fmg
         ndim = 3
-        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int,shape=ndim)
-        type_boxsize = ctypeslib.ndpointer(dtype=self._type_float,shape=ndim)
+        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int, shape=ndim)
+        type_boxsize = ctypeslib.ndpointer(dtype=self._type_float, shape=ndim)
         type_pointer = ctypes.POINTER(self._type_float)
-        func.argtypes = (self.mesh_delta._type_float_mesh,self.mesh_delta._type_float_mesh,
-                        type_nmesh,type_boxsize,type_boxsize,
-                        self._type_float,self._type_float,ctypes.c_int,ctypes.c_int,
-                        type_pointer if self.los is None else type_boxsize)
+        func.argtypes = (self.mesh_delta._type_float_mesh, self.mesh_delta._type_float_mesh,
+                         type_nmesh, type_boxsize, type_boxsize,
+                         self._type_float, self._type_float, ctypes.c_int, ctypes.c_int,
+                         type_pointer if self.los is None else type_boxsize)
         self.mesh_phi = self.mesh_delta.zeros_like()
         self.mesh_phi.value.shape = -1
         if self.los is None:
             los = type_pointer()
         else:
-            los = self.los.astype(self._type_float,copy=False)
+            los = self.los.astype(self._type_float, copy=False)
         self.log_info('Computing displacement potential.')
-        func(self.mesh_delta.value.ravel(order='C'),self.mesh_phi.value,
-            self.mesh_delta.nmesh.astype(ctypes.c_int,copy=False),self.mesh_delta.boxsize.astype(self._type_float,copy=False),self.mesh_delta.boxcenter.astype(self._type_float,copy=False),
-            self.beta,jacobi_damping_factor,jacobi_niterations,vcycle_niterations,los)
+        func(self.mesh_delta.value.ravel(order='C'), self.mesh_phi.value,
+             self.mesh_delta.nmesh.astype(ctypes.c_int, copy=False), self.mesh_delta.boxsize.astype(self._type_float, copy=False), self.mesh_delta.boxcenter.astype(self._type_float, copy=False),
+             self.beta, jacobi_damping_factor, jacobi_niterations, vcycle_niterations, los)
         del self.mesh_delta
         self.mesh_phi.value.shape = self.mesh_phi.shape
 
@@ -132,10 +132,10 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         if field == 'disp':
             return shifts
         if self.los is None:
-            los = positions/utils.distance(positions)[:,None]
+            los = positions / utils.distance(positions)[:, None]
         else:
             los = self.los
-        rsd = self.f*np.sum(shifts*los,axis=-1)[:,None]*los
+        rsd = self.f * np.sum(shifts * los, axis=-1)[:, None] * los
         if field == 'rsd':
             return rsd
         # field == 'disp+rsd'

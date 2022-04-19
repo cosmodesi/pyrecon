@@ -20,23 +20,23 @@ import _version
 import utils
 version = _version.__version__
 lib_dir = utils.lib_dir
-src_dir = os.path.join(package_basedir,'src')
+src_dir = os.path.join(package_basedir, 'src')
 
 
 def find_compiler():
-    compiler = os.getenv('CC',None)
+    compiler = os.getenv('CC', None)
     if compiler is None:
-        compiler = sysconfig.get_config_vars().get('CC',None)
+        compiler = sysconfig.get_config_vars().get('CC', None)
     return compiler
 
 
 class custom_build(build):
 
     def run(self):
-        super(custom_build,self).run()
+        super(custom_build, self).run()
 
-        #lib_dir = os.path.join(os.path.abspath(self.build_lib),'pyrecon','lib')
-        os.environ.setdefault('LIBDIR',lib_dir)
+        # lib_dir = os.path.join(os.path.abspath(self.build_lib),'pyrecon','lib')
+        os.environ.setdefault('LIBDIR', lib_dir)
         library_dir = sysconfig.get_config_var('LIBDIR')
 
         compiler = find_compiler()
@@ -50,36 +50,35 @@ class custom_build(build):
         os.environ.setdefault('OMPFLAG', flags)
 
         def compile():
-            subprocess.call('make',shell=True,cwd=src_dir)
+            subprocess.call('make', shell=True, cwd=src_dir)
 
-        self.execute(compile,[],'Compiling')
-        new_lib_dir = os.path.join(os.path.abspath(self.build_lib),package_basename,'lib')
-        shutil.rmtree(new_lib_dir,ignore_errors=True)
-        shutil.copytree(lib_dir,new_lib_dir)
-
+        self.execute(compile, [], 'Compiling')
+        new_lib_dir = os.path.join(os.path.abspath(self.build_lib), package_basename, 'lib')
+        shutil.rmtree(new_lib_dir, ignore_errors=True)
+        shutil.copytree(lib_dir, new_lib_dir)
 
 
 class custom_bdist_egg(bdist_egg):
 
     def run(self):
         self.run_command('build')
-        super(custom_bdist_egg,self).run()
+        super(custom_bdist_egg, self).run()
 
 
 class custom_develop(develop):
 
     def run(self):
         self.run_command('build')
-        super(custom_develop,self).run()
+        super(custom_develop, self).run()
 
 
 class custom_clean(clean):
 
     def run(self):
         # run the built-in clean
-        super(custom_clean,self).run()
+        super(custom_clean, self).run()
         # remove the recon products
-        shutil.rmtree(lib_dir,ignore_errors=True)
+        shutil.rmtree(lib_dir, ignore_errors=True)
 
 
 if __name__ == '__main__':
@@ -92,13 +91,12 @@ if __name__ == '__main__':
           license='BSD3',
           url='http://github.com/cosmodesi/pyrecon',
           install_requires=['numpy'],
-          extras_require={'extras': ['fitsio','h5py','astropy'], 'metrics':['pypower @ git+https://github.com/cosmodesi/pypower']},
+          extras_require={'extras': ['fitsio', 'h5py', 'astropy'], 'metrics': ['pypower @ git+https://github.com/cosmodesi/pypower']},
           cmdclass={
               'build': custom_build,
               'develop': custom_develop,
               'bdist_egg': custom_bdist_egg,
               'clean': custom_clean
           },
-         packages=[package_basename],
-         scripts=['bin/pyrecon']
-    )
+          packages=[package_basename],
+          scripts=['bin/pyrecon'])

@@ -14,7 +14,7 @@ This requires the following packages:
 import os
 
 import numpy as np
-from scipy.interpolate import RectBivariateSpline
+from scipy.interpolate import UnivariateSpline, RectBivariateSpline
 from pypower import MeshFFTPower, CatalogMesh, ParticleMesh, ArrayMesh, PowerSpectrumWedges
 
 from .utils import BaseClass
@@ -49,7 +49,7 @@ class BasePowerRatio(BaseClass):
         ratio : array
         """
         with np.errstate(divide='ignore', invalid='ignore'):
-            return self.num.get_power(complex=complex, **kwargs)/self.denom.get_power(complex=complex, **kwargs)
+            return self.num.get_power(complex=complex, **kwargs) / self.denom.get_power(complex=complex, **kwargs)
 
     @property
     def ratio(self):
@@ -125,11 +125,17 @@ class BasePowerRatio(BaseClass):
         k, mu = k[mask_k], mu[mask_mu]
         if mask_k.any() and mask_mu.any():
             if muavg.size == 1:
-                interp = lambda array: UnivariateSpline(kavg, array, k=1, s=0, ext='const')(k)[:, None]
+
+                def interp(array):
+                    return UnivariateSpline(kavg, array, k=1, s=0, ext='const')(k)[:, None]
+
             else:
                 i_k = np.argsort(k); ii_k = np.argsort(i_k)
                 i_mu = np.argsort(mu); ii_mu = np.argsort(i_mu)
-                interp = lambda array: RectBivariateSpline(kavg, muavg, array, kx=1, ky=1, s=0)(k[i_k], mu[i_mu], grid=True)[np.ix_(ii_k, ii_mu)]
+
+                def interp(array):
+                    return RectBivariateSpline(kavg, muavg, array, kx=1, ky=1, s=0)(k[i_k], mu[i_mu], grid=True)[np.ix_(ii_k, ii_mu)]
+
             toret[np.ix_(mask_k, mask_mu)] = interp(power.real)
             if complex and np.iscomplexobj(power):
                 toret[np.ix_(mask_k, mask_mu)] += 1j * interp(power.imag)
@@ -176,8 +182,8 @@ class BasePowerRatio(BaseClass):
             self.log_info('Saving {}.'.format(filename))
             utils.mkdir(os.path.dirname(filename))
             np.save(filename, self.__getstate__(), allow_pickle=True)
-        #if self.with_mpi:
-        #    self.mpicomm.Barrier()
+        # if self.with_mpi:
+        #     self.mpicomm.Barrier()
 
     @classmethod
     def load(cls, filename):
@@ -245,15 +251,15 @@ class BasePowerRatio(BaseClass):
             labels += self._power_names
             power = self.get_ratio(**kwargs)
             columns = [self.nmodes.flat]
-            mids = np.meshgrid(*[(edges[:-1] + edges[1:])/2. for edges in self.edges], indexing='ij')
+            mids = np.meshgrid(*[(edges[:-1] + edges[1:]) / 2. for edges in self.edges], indexing='ij')
             for idim in range(self.ndim):
                 columns += [mids[idim].flat, self.modes[idim].flat]
-            for column in power.reshape((-1,)*(power.ndim == self.ndim) + power.shape):
+            for column in power.reshape((-1,) * (power.ndim == self.ndim) + power.shape):
                 columns += [column.flat]
             columns = [[np.array2string(value, formatter=formatter) for value in column] for column in columns]
             widths = [max(max(map(len, column)) - len(comments) * (icol == 0), len(label)) for icol, (column, label) in enumerate(zip(columns, labels))]
-            widths[-1] = 0 # no need to leave a space
-            header.append((' '*len(delimiter)).join(['{:<{width}}'.format(label, width=width) for label, width in zip(labels, widths)]))
+            widths[-1] = 0  # no need to leave a space
+            header.append((' ' * len(delimiter)).join(['{:<{width}}'.format(label, width=width) for label, width in zip(labels, widths)]))
             widths[0] += len(comments)
             with open(filename, 'w') as file:
                 for line in header:
@@ -394,7 +400,7 @@ class MeshFFTCorrelator(BasePowerRatio):
         ratio : array
         """
         with np.errstate(divide='ignore', invalid='ignore'):
-            return self.num.get_power(complex=complex, **kwargs)/(self.auto_reconstructed.get_power(complex=complex, **kwargs) * self.auto_initial.get_power(complex=complex, **kwargs))**0.5
+            return self.num.get_power(complex=complex, **kwargs) / (self.auto_reconstructed.get_power(complex=complex, **kwargs) * self.auto_initial.get_power(complex=complex, **kwargs))**0.5
 
     def to_propagator(self, growth=1.):
         """
@@ -441,7 +447,7 @@ class MeshFFTTransfer(BasePowerRatio):
 
     .. math::
 
-        t(k) = \frac{P_{\mathrm{rec}}}{G^{2}(z) b^{2}(z) P_{\mathrm{init}}}
+        t(k) = \sqrt{\frac{P_{\mathrm{rec}}}{G^{2}(z) b^{2}(z) P_{\mathrm{init}}}}
     """
     _power_names = ['transfer']
     _attrs = ['growth']
@@ -499,7 +505,7 @@ class MeshFFTTransfer(BasePowerRatio):
         -------
         ratio : array
         """
-        return super(MeshFFTTransfer, self).get_ratio(complex=complex, **kwargs)**0.5/self.growth
+        return super(MeshFFTTransfer, self).get_ratio(complex=complex, **kwargs)**0.5 / self.growth
 
 
 class MeshFFTPropagator(BasePowerRatio):
@@ -566,4 +572,4 @@ class MeshFFTPropagator(BasePowerRatio):
         -------
         ratio : array
         """
-        return super(MeshFFTPropagator, self).get_ratio(complex=complex, **kwargs)/self.growth
+        return super(MeshFFTPropagator, self).get_ratio(complex=complex, **kwargs) / self.growth

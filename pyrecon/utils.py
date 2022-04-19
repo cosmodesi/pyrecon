@@ -3,7 +3,6 @@ import sys
 import time
 import logging
 import traceback
-import functools
 
 import numpy as np
 
@@ -15,8 +14,8 @@ def exception_handler(exc_type, exc_value, exc_traceback):
     # Do not print traceback if the exception has been handled and logged
     _logger_name = 'Exception'
     log = logging.getLogger(_logger_name)
-    line = '='*100
-    #log.critical(line[len(_logger_name) + 5:] + '\n' + ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback)) + line)
+    line = '=' * 100
+    # log.critical(line[len(_logger_name) + 5:] + '\n' + ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback)) + line)
     log.critical('\n' + line + '\n' + ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback)) + line)
     if exc_type is KeyboardInterrupt:
         log.critical('Interrupted by the user.')
@@ -47,8 +46,8 @@ def setup_logging(level=logging.INFO, stream=sys.stdout, filename=None, filemode
     """
     # Cannot provide stream and filename kwargs at the same time to logging.basicConfig, so handle different cases
     # Thanks to https://stackoverflow.com/questions/30861524/logging-basicconfig-not-creating-log-file-when-i-run-in-pycharm
-    if isinstance(level,str):
-        level = {'info':logging.INFO,'debug':logging.DEBUG,'warning':logging.WARNING}[level.lower()]
+    if isinstance(level, str):
+        level = {'info': logging.INFO, 'debug': logging.DEBUG, 'warning': logging.WARNING}[level.lower()]
     for handler in logging.root.handlers:
         logging.root.removeHandler(handler)
 
@@ -58,23 +57,23 @@ def setup_logging(level=logging.INFO, stream=sys.stdout, filename=None, filemode
 
         def format(self, record):
             self._style._fmt = '[%09.2f] ' % (time.time() - t0) + ' %(asctime)s %(name)-28s %(levelname)-8s %(message)s'
-            return super(MyFormatter,self).format(record)
+            return super(MyFormatter, self).format(record)
 
     fmt = MyFormatter(datefmt='%m-%d %H:%M ')
     if filename is not None:
         mkdir(os.path.dirname(filename))
-        handler = logging.FileHandler(filename,mode=filemode)
+        handler = logging.FileHandler(filename, mode=filemode)
     else:
         handler = logging.StreamHandler(stream=stream)
     handler.setFormatter(fmt)
-    logging.basicConfig(level=level,handlers=[handler],**kwargs)
+    logging.basicConfig(level=level, handlers=[handler], **kwargs)
     sys.excepthook = exception_handler
 
 
 def mkdir(dirname):
     """Try to create ``dirnm`` and catch :class:`OSError`."""
     try:
-        os.makedirs(dirname) # MPI...
+        os.makedirs(dirname)  # MPI...
     except OSError:
         return
 
@@ -101,15 +100,15 @@ class BaseMetaClass(type):
 
             @classmethod
             def logger(cls, *args, **kwargs):
-                getattr(cls.logger,level)(*args,**kwargs)
+                getattr(cls.logger, level)(*args, **kwargs)
 
             return logger
 
-        for level in ['debug','info','warning','error','critical']:
-            setattr(cls,'log_{}'.format(level),make_logger(level))
+        for level in ['debug', 'info', 'warning', 'error', 'critical']:
+            setattr(cls, 'log_{}'.format(level), make_logger(level))
 
 
-class BaseClass(object,metaclass=BaseMetaClass):
+class BaseClass(object, metaclass=BaseMetaClass):
     """
     Base class that implements :meth:`copy`.
     To be used throughout this package.
@@ -138,8 +137,8 @@ def broadcast_arrays(*arrays):
         N ND arrays of shape (n1,1,1,1...(N - 1 times)), etc.
     """
     toret = []
-    for iaxis,array in enumerate(arrays):
-        sl = [None]*len(arrays); sl[iaxis] = slice(None)
+    for iaxis, array in enumerate(arrays):
+        sl = [None] * len(arrays); sl[iaxis] = slice(None)
         toret.append(array[tuple(sl)])
     return tuple(toret)
 
@@ -176,11 +175,11 @@ def cartesian_to_sky(position, wrap=True, degree=True):
         Declination.
     """
     dist = distance(position)
-    ra = np.arctan2(position[:,1], position[:,0])
-    if wrap: ra %= 2.*np.pi
-    dec = np.arcsin(position[:,2]/dist)
-    conversion = np.pi/180. if degree else 1.
-    return dist, ra/conversion, dec/conversion
+    ra = np.arctan2(position[:, 1], position[:, 0])
+    if wrap: ra %= 2. * np.pi
+    dec = np.arcsin(position[:, 2] / dist)
+    conversion = np.pi / 180. if degree else 1.
+    return dist, ra / conversion, dec / conversion
 
 
 def sky_to_cartesian(dist, ra, dec, degree=True, dtype=None):
@@ -209,13 +208,13 @@ def sky_to_cartesian(dist, ra, dec, degree=True, dtype=None):
     position : array of shape (N, 3)
         Position in Cartesian coordinates.
     """
-    conversion = np.pi/180. if degree else 1.
-    position = [None]*3
-    cos_dec = np.cos(dec*conversion)
-    position[0] = cos_dec*np.cos(ra*conversion)
-    position[1] = cos_dec*np.sin(ra*conversion)
-    position[2] = np.sin(dec*conversion)
-    return (dist*np.array(position, dtype=dtype)).T
+    conversion = np.pi / 180. if degree else 1.
+    position = [None] * 3
+    cos_dec = np.cos(dec * conversion)
+    position[0] = cos_dec * np.cos(ra * conversion)
+    position[1] = cos_dec * np.sin(ra * conversion)
+    position[2] = np.sin(dec * conversion)
+    return (dist * np.array(position, dtype=dtype)).T
 
 
 class DistanceToRedshift(object):
@@ -245,11 +244,11 @@ class DistanceToRedshift(object):
         self.distance = distance
         self.zmax = zmax
         self.nz = nz
-        zgrid = np.logspace(-8,np.log10(self.zmax),self.nz)
+        zgrid = np.logspace(-8, np.log10(self.zmax), self.nz)
         self.zgrid = np.concatenate([[0.], zgrid])
         self.rgrid = self.distance(self.zgrid)
         from scipy import interpolate
-        self.interp = interpolate.UnivariateSpline(self.rgrid,self.zgrid,k=interp_order,s=0)
+        self.interp = interpolate.UnivariateSpline(self.rgrid, self.zgrid, k=interp_order, s=0)
 
     def __call__(self, distance):
         """Return (interpolated) redshift at distance ``distance`` (scalar or array)."""
@@ -303,15 +302,13 @@ def random_box_positions(boxsize, boxcenter=0., size=None, nbar=None, rng=None, 
     if size is None:
         if nbar is None:
             raise ValueError('Provide either size or nbar')
-        size = int(nbar*np.prod(boxsize) + 0.5)
+        size = int(nbar * np.prod(boxsize) + 0.5)
     positions = rng.uniform(0., 1., size=(size, ndim)).astype(dtype)
     boxsize = boxsize.astype(dtype)
     boxcenter = _make_array(boxcenter, ndim, dtype=positions.dtype)
-    offset = boxcenter - boxsize/2.
-    return positions*boxsize + offset
+    offset = boxcenter - boxsize / 2.
+    return positions * boxsize + offset
 
-
-import time
 
 class MemoryMonitor(object):
     """
@@ -346,7 +343,7 @@ class MemoryMonitor(object):
         """Update memory usage."""
         mem = self.proc.memory_info().rss / 1e6
         t = time.time()
-        msg = 'using {:.3f} [Mb] (increase of {:.3f} [Mb]) after {:.3f} [s]'.format(mem,mem-self.mem,t-self.time)
+        msg = 'using {:.3f} [Mb] (increase of {:.3f} [Mb]) after {:.3f} [s]'.format(mem, mem - self.mem, t - self.time)
         if log:
             msg = '[{}] {}'.format(log, msg)
         print(msg, flush=True)
