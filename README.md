@@ -19,7 +19,7 @@ recon = MultiGridReconstruction(f=0.8, bias=2.0, los=None, nmesh=512, boxsize=10
 recon.assign_data(positions_data, weights_data) # positions_data is a (N, 3) array of Cartesian positions, weights a (N,) array
 # You can skip the following line if you assume uniform selection function (randoms)
 recon.assign_randoms(positions_randoms, weights_randoms)
-recon.set_density_contrast()
+recon.set_density_contrast(smoothing_radius=15.)
 recon.run()
 # If you are using IterativeFFTParticleReconstruction, displacements are to be taken at the reconstructed data real-space positions;
 # in this case, do: positions_rec_data = recon.read_shifted_positions('data')

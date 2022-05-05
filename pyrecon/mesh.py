@@ -354,8 +354,9 @@ class MeshInfo(BaseClass):
 
         cellsize : array, float, default=None
             Physical size of mesh cells.
-            If not ``None``, and mesh size ``nmesh`` is not ``None``, used to set ``boxsize`` as ``nmesh * cellsize``.
-            If ``nmesh`` is ``None``, it is set as (the nearest integer(s) to) ``boxsize/cellsize``.
+            If not ``None``, ``boxsize`` is ``None`` and mesh size ``nmesh`` is not ``None``, used to set ``boxsize`` to ``nmesh * cellsize``.
+            If ``nmesh`` is ``None``, it is set to (the nearest integer(s) to) ``boxsize/cellsize`` if ``boxsize`` is provided,
+            else to the nearest integer to ``boxsize/cellsize``, and ``boxsize`` is then reset to ``nmesh * cellsize``.
 
         value : array, default=None
             Only used to get mesh size.
@@ -377,7 +378,8 @@ class MeshInfo(BaseClass):
             if nmesh is None: nmesh = value.shape
         dtype = np.dtype(dtype if dtype is not None else 'f8')
 
-        if boxsize is None or boxcenter is None:
+        provided_boxsize = boxsize is not None
+        if not provided_boxsize or boxcenter is None:
             if positions is None:
                 raise MeshError('positions must be provided if boxsize or boxcenter are not specified')
             pos_min, pos_max = positions.min(axis=0), positions.max(axis=0)
@@ -392,7 +394,12 @@ class MeshInfo(BaseClass):
 
         if nmesh is None:
             if cellsize is not None:
-                nmesh = np.rint(boxsize / cellsize).astype(int)
+                nmesh = boxsize / cellsize
+                if provided_boxsize:
+                    nmesh = np.rint(nmesh).astype('i8')
+                else:
+                    nmesh = np.ceil(nmesh).astype('i8')
+                    boxsize = nmesh * cellsize  # enforce exact cellsize
             else:
                 raise MeshError('nmesh (or cellsize) must be specified')
 
