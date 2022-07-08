@@ -12,6 +12,13 @@ from . import utils
 from .utils import BaseClass, BaseMetaClass
 
 
+def _make_array(value, shape, dtype='f8', **kwargs):
+    # Return numpy array filled with value
+    toret = np.empty(shape, dtype=dtype, **kwargs)
+    toret[...] = value
+    return toret
+
+
 class MeshError(Exception):
 
     """Exception raised when issue with mesh."""
@@ -233,9 +240,7 @@ class BaseMesh(NDArrayLike, BaseClass, metaclass=BaseMetaClass):
                 value.shape = self.shape
                 value = value.astype(self.dtype, copy=False, order='C')
             else:
-                value_ = value
-                value = np.empty(shape=self.shape, dtype=self.dtype, order='C')
-                value[...] = value_
+                value = _make_array(value, shape=self.shape, dtype=self.dtype, order='C')
         self.__dict__['value'] = value
 
     def zeros_like(self):
@@ -355,8 +360,8 @@ class MeshInfo(BaseClass):
         cellsize : array, float, default=None
             Physical size of mesh cells.
             If not ``None``, ``boxsize`` is ``None`` and mesh size ``nmesh`` is not ``None``, used to set ``boxsize`` to ``nmesh * cellsize``.
-            If ``nmesh`` is ``None``, it is set to (the nearest integer(s) to) ``boxsize/cellsize`` if ``boxsize`` is provided,
-            else to the nearest integer to ``boxsize/cellsize``, and ``boxsize`` is then reset to ``nmesh * cellsize``.
+            If ``nmesh`` is ``None``, it is set to (the nearest integer(s) to) ``boxsize / cellsize`` if ``boxsize`` is provided,
+            else to the nearest integer to ``boxsize / cellsize``, and ``boxsize`` is then reset to ``nmesh * cellsize``.
 
         value : array, default=None
             Only used to get mesh size.
@@ -392,8 +397,10 @@ class MeshInfo(BaseClass):
                     boxsize = delta.max() * boxpad
             if (boxsize < delta).any(): raise MeshError('boxsize too small to contain all data')
 
+        boxsize = _make_array(boxsize, self.ndim, dtype='f8')
         if nmesh is None:
             if cellsize is not None:
+                cellsize = _make_array(cellsize, self.ndim, dtype='f8')
                 nmesh = boxsize / cellsize
                 if provided_boxsize:
                     nmesh = np.rint(nmesh).astype('i8')
@@ -434,23 +441,17 @@ class MeshInfo(BaseClass):
     @SetterProperty
     def boxsize(self, boxsize):
         # Called when setting :attr:`boxsize`, enforcing array of shape (3,).
-        _boxsize = np.empty(self.ndim, dtype=self._type_float, order='C')
-        _boxsize[:] = boxsize
-        self.__dict__['boxsize'] = _boxsize
+        self.__dict__['boxsize'] = _make_array(boxsize, self.ndim, dtype=self._type_float, order='C')
 
     @SetterProperty
     def boxcenter(self, boxcenter):
         # Called when setting :attr:`boxcenter`, enforcing array of shape (3,).
-        _boxcenter = np.empty(self.ndim, dtype=self._type_float, order='C')
-        _boxcenter[:] = boxcenter
-        self.__dict__['boxcenter'] = _boxcenter
+        self.__dict__['boxcenter'] = _make_array(boxcenter, self.ndim, dtype=self._type_float, order='C')
 
     @SetterProperty
     def nmesh(self, nmesh):
         # Called when setting :attr:`nmesh`, enforcing array of shape (3,).
-        _nmesh = np.empty(self.ndim, dtype=ctypes.c_int, order='C')
-        _nmesh[:] = nmesh
-        self.__dict__['nmesh'] = _nmesh
+        self.__dict__['nmesh'] = _make_array(nmesh, self.ndim, dtype=ctypes.c_int, order='C')
 
     @property
     def offset(self):

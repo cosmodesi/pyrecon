@@ -1,10 +1,8 @@
 import os
 import sys
 import sysconfig
-import importlib
 import subprocess
 import shutil
-import glob
 from distutils.command.build import build
 from distutils.command.clean import clean
 from setuptools.command.bdist_egg import bdist_egg

@@ -73,3 +73,4 @@ See [pyrecon docs](https://pyrecon.readthedocs.io/en/latest/user/building.html).
 - Sesh Nadathur for careful checks against Revolver https://github.com/seshnadathur/Revolver/blob/main/python_tools/recon.py
 - Enrique Paillas for bug reports
 - Grant Merz for propagator https://github.com/grantmerz/DESI_Recon
+- Davide Bianchi for checks of pair counts and normalization with PIP weights
