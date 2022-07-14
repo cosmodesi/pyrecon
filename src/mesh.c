@@ -75,7 +75,7 @@ int convolve(FLOAT* mesh, const int* nmesh, const FLOAT* kernel, const int* nker
   size = nmesh[0]*nmesh[1]*nmesh[2];
   const size_t nmeshz = nmesh[2];
   const size_t nmeshyz = nmesh[2]*nmesh[1];
-  FLOAT *ss = (FLOAT *) malloc(size*sizeof(FLOAT));
+  FLOAT *ss = (FLOAT *) my_malloc(size, sizeof(FLOAT));
   for (size_t ii=0; ii<size; ii++) ss[ii] = mesh[ii];
   FLOAT rad[NDIM];
   for (int idim=0; idim<NDIM; idim++) {
@@ -125,7 +125,7 @@ int smooth_gaussian(FLOAT* mesh, const int* nmesh, const FLOAT* smoothing_radius
     nkernel[idim] = 2*rad[idim] + 1;
     fact[idim] = 1.0/(nmesh[idim]*smoothing_radius[idim])/(nmesh[idim]*smoothing_radius[idim]);
   }
-  FLOAT *kernel = (FLOAT *) malloc(nkernel[0]*nkernel[1]*nkernel[2]*sizeof(FLOAT));
+  FLOAT *kernel = (FLOAT *) my_malloc(nkernel[0]*nkernel[1]*nkernel[2], sizeof(FLOAT));
   #pragma omp parallel for shared(kernel)
   for (int dx=-rad[0]; dx<=rad[0]; dx++) {
     for (int dy=-rad[1]; dy<=rad[1]; dy++) {
@@ -137,7 +137,7 @@ int smooth_gaussian(FLOAT* mesh, const int* nmesh, const FLOAT* smoothing_radius
       }
     }
   }
-  convolve(mesh,nmesh,kernel,nkernel);
+  convolve(mesh, nmesh, kernel, nkernel);
   free(kernel);
   return 0;
 }
@@ -148,7 +148,7 @@ void smooth_fft_gaussian(FLOAT *mesh, const int* nmesh, const FLOAT* smoothing_r
   // installed already. Rf is assumed to be in box units.
   // Make temporary vectors. FFTW uses double precision.
   size_t size = nmesh[0]*nmesh[1]*nmesh[2];
-  fftw_complex * meshk = (fftw_complex *) malloc(nmesh[0]*nmesh[1]*(nmesh[2]/2+1)*sizeof(fftw_complex));
+  fftw_complex * meshk = (fftw_complex *) my_malloc(nmesh[0]*nmesh[1]*(nmesh[2]/2+1), sizeof(fftw_complex));
   // Generate the FFTW plan files.
   fftw_init_threads();
   fftw_plan_with_nthreads(omp_get_max_threads());

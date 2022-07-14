@@ -48,7 +48,7 @@ void jacobi(FLOAT *v, const FLOAT *f, const int* nmesh, const FLOAT* boxsize, co
   const size_t size = nmesh[0]*nmesh[1]*nmesh[2];
   const size_t nmeshz = nmesh[2];
   const size_t nmeshyz = nmesh[2]*nmesh[1];
-  FLOAT* jac = (FLOAT *) malloc(size*sizeof(FLOAT));
+  FLOAT* jac = (FLOAT *) my_malloc(size, sizeof(FLOAT));
   FLOAT cell, cell2[NDIM], icell2[NDIM], offset[NDIM], losn[NDIM];
   for (int idim=0; idim<NDIM; idim++) {
     cell = boxsize[idim]/nmesh[idim];
@@ -269,7 +269,7 @@ void reduce(const FLOAT* v1h, FLOAT* v2h, const int* nmesh) {
 
 void vcycle(FLOAT* v, const FLOAT* f, const int* nmesh, const FLOAT* boxsize, const FLOAT* boxcenter, const FLOAT beta, const FLOAT damping_factor, const int niterations, const FLOAT* los) {
   // Does one V-cycle, with a recursive strategy, replacing v in the process.
-  jacobi(v,f,nmesh,boxsize,boxcenter,beta,damping_factor,niterations,los);
+  jacobi(v, f, nmesh, boxsize, boxcenter, beta, damping_factor, niterations, los);
   const size_t size = nmesh[0]*nmesh[1]*nmesh[2];
   _Bool recurse = 1;
   for (int idim=0; idim<NDIM; idim++) recurse &= (nmesh[idim] > 4 && (nmesh[idim] % 2 == 0));
@@ -277,26 +277,26 @@ void vcycle(FLOAT* v, const FLOAT* f, const int* nmesh, const FLOAT* boxsize, co
     // Not at coarsest level -- recurse coarser.
     int nmesh2[NDIM];
     for (int idim=0; idim<NDIM; idim++) nmesh2[idim] = nmesh[idim]/2;
-    FLOAT* r = (FLOAT *) malloc(size*sizeof(FLOAT));
-    //FLOAT* r = (FLOAT *) calloc(size,sizeof(FLOAT));
-    residual(v,f,r,nmesh,boxsize,boxcenter,beta,los);
-    FLOAT* f2h = (FLOAT *) malloc(size/8*sizeof(FLOAT));
-    reduce(r,f2h,nmesh);
+    FLOAT* r = (FLOAT *) my_malloc(size, sizeof(FLOAT));
+    //FLOAT* r = (FLOAT *) my_calloc(size, sizeof(FLOAT));
+    residual(v, f, r, nmesh, boxsize, boxcenter, beta, los);
+    FLOAT* f2h = (FLOAT *) my_malloc(size/8, sizeof(FLOAT));
+    reduce(r, f2h, nmesh);
     free(r);
     // Make a vector of zeros as our first guess.
-    FLOAT* v2h = (FLOAT *) calloc(size/8,sizeof(FLOAT));
+    FLOAT* v2h = (FLOAT *) my_calloc(size/8, sizeof(FLOAT));
     // and recursively call ourself
-    vcycle(v2h,f2h,nmesh2,boxsize,boxcenter,beta,damping_factor,niterations,los);
+    vcycle(v2h, f2h, nmesh2, boxsize, boxcenter, beta, damping_factor, niterations, los);
     free(f2h);
     // take the residual and prolong it back to the finer grid
-    FLOAT* v1h = (FLOAT *) malloc(size*sizeof(FLOAT));
-    prolong(v2h,v1h,nmesh2);
+    FLOAT* v1h = (FLOAT *) my_malloc(size, sizeof(FLOAT));
+    prolong(v2h, v1h, nmesh2);
     free(v2h);
     // and correct our earlier guess.
     for (size_t ii=0; ii<size; ii++) v[ii] += v1h[ii];
     free(v1h);
   }
-  jacobi(v,f,nmesh,boxsize,boxcenter,beta,damping_factor,niterations,los);
+  jacobi(v, f, nmesh, boxsize, boxcenter, beta, damping_factor, niterations, los);
 }
 
 
@@ -311,18 +311,18 @@ FLOAT* fmg(FLOAT* f1h, FLOAT* v1h, const int* nmesh, const FLOAT* boxsize, const
     // Recurse to a coarser grid.
     int nmesh2[NDIM];
     for (int idim=0; idim<NDIM; idim++) nmesh2[idim] = nmesh[idim]/2;
-    FLOAT* f2h = (FLOAT *) malloc(size/8*sizeof(FLOAT));
-    reduce(f1h,f2h,nmesh);
-    FLOAT *v2h = fmg(f2h,NULL,nmesh2,boxsize,boxcenter,beta,jacobi_damping_factor,jacobi_niterations,vcycle_niterations,los);
+    FLOAT* f2h = (FLOAT *) my_malloc(size/8, sizeof(FLOAT));
+    reduce(f1h, f2h, nmesh);
+    FLOAT *v2h = fmg(f2h, NULL, nmesh2, boxsize, boxcenter, beta, jacobi_damping_factor, jacobi_niterations, vcycle_niterations, los);
     free(f2h);
-    if (v1h == NULL) v1h = (FLOAT *) calloc(size,sizeof(FLOAT));
-    prolong(v2h,v1h,nmesh2);
+    if (v1h == NULL) v1h = (FLOAT *) my_calloc(size, sizeof(FLOAT));
+    prolong(v2h, v1h, nmesh2);
     free(v2h);
   }
   else {
     // Start with a guess of zero
-    if (v1h == NULL) v1h = (FLOAT *) calloc(size,sizeof(FLOAT));
+    if (v1h == NULL) v1h = (FLOAT *) my_calloc(size, sizeof(FLOAT));
   }
-  for (int iter=0; iter<vcycle_niterations; iter++) vcycle(v1h,f1h,nmesh,boxsize,boxcenter,beta,jacobi_damping_factor,jacobi_niterations,los);
+  for (int iter=0; iter<vcycle_niterations; iter++) vcycle(v1h, f1h, nmesh, boxsize, boxcenter, beta, jacobi_damping_factor, jacobi_niterations, los);
   return v1h;
 }
