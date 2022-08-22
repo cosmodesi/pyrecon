@@ -41,7 +41,7 @@ int get_num_threads()
 }
 */
 
-void jacobi(FLOAT *v, const FLOAT *f, const int* nmesh, const FLOAT* boxsize, const FLOAT* boxcenter, const FLOAT beta, const FLOAT damping_factor, const int niterations, const FLOAT* los) {
+void jacobi(FLOAT *v, const FLOAT *f, const size_t* nmesh, const FLOAT* boxsize, const FLOAT* boxcenter, const FLOAT beta, const FLOAT damping_factor, const int niterations, const FLOAT* los) {
   // Does an update using damped Jacobi. This, and in residual below,
   // is where the explicit equation we are solving appears.
   // See notes for more details.
@@ -59,24 +59,24 @@ void jacobi(FLOAT *v, const FLOAT *f, const int* nmesh, const FLOAT* boxsize, co
   }
   for (int iter=0; iter<niterations; iter++) {
     #pragma omp parallel for shared(v,f,jac)
-    for (int ix=0; ix<nmesh[0]; ix++) {
+    for (size_t ix=0; ix<nmesh[0]; ix++) {
       FLOAT px = (los == NULL) ? ix + offset[0] : losn[0];
       size_t ix0 = nmeshyz*ix;
       size_t ixp = nmeshyz*((ix+1) % nmesh[0]);
-      size_t ixm = nmeshyz*((ix-1+nmesh[0]) % nmesh[0]);
-      for (int iy=0; iy<nmesh[1]; iy++) {
+      size_t ixm = nmeshyz*((ix+nmesh[0]-1) % nmesh[0]);
+      for (size_t iy=0; iy<nmesh[1]; iy++) {
         FLOAT py = (los == NULL) ? iy + offset[1] : losn[1];
         size_t iy0 = nmeshz*iy;
         size_t iyp = nmeshz*((iy+1) % nmesh[1]);
-        size_t iym = nmeshz*((iy-1+nmesh[1]) % nmesh[1]);
-        for (int iz0=0; iz0<nmesh[2]; iz0++) {
+        size_t iym = nmeshz*((iy+nmesh[1]-1) % nmesh[1]);
+        for (size_t iz0=0; iz0<nmesh[2]; iz0++) {
           FLOAT pz = (los == NULL) ? iz0 + offset[2] : losn[2];
           FLOAT g = beta/(cell2[0]*px*px+cell2[1]*py*py+cell2[2]*pz*pz);
           FLOAT gpx2 = icell2[0] + g*px*px;
           FLOAT gpy2 = icell2[1] + g*py*py;
           FLOAT gpz2 = icell2[2] + g*pz*pz;
           size_t izp = (iz0+1) % nmesh[2];
-          size_t izm = (iz0-1+nmesh[2]) % nmesh[2];
+          size_t izm = (iz0+nmesh[2]-1) % nmesh[2];
           size_t ii = ix0 + iy0 + iz0;
           jac[ii] = f[ii]+
                     gpx2*(v[ixp+iy0+iz0]+v[ixm+iy0+iz0])+
@@ -104,7 +104,7 @@ void jacobi(FLOAT *v, const FLOAT *f, const int* nmesh, const FLOAT* boxsize, co
 }
 
 
-void residual(const FLOAT* v, const FLOAT* f, FLOAT* r, const int* nmesh, const FLOAT* boxsize, const FLOAT* boxcenter, const FLOAT beta, const FLOAT* los) {
+void residual(const FLOAT* v, const FLOAT* f, FLOAT* r, const size_t* nmesh, const FLOAT* boxsize, const FLOAT* boxcenter, const FLOAT beta, const FLOAT* los) {
   // Returns the residual, r=f-Av, keeping track of factors of h = boxsize/nmesh
   // First compute the operator A on v, keeping track of periodic
   // boundary conditions and ignoring the 1/h terms.
@@ -121,24 +121,24 @@ void residual(const FLOAT* v, const FLOAT* f, FLOAT* r, const int* nmesh, const 
     if (los != NULL) losn[idim] = los[idim]/cell;
   }
   #pragma omp parallel for shared(v,r)
-  for (int ix=0; ix<nmesh[0]; ix++) {
+  for (size_t ix=0; ix<nmesh[0]; ix++) {
     FLOAT px = (los == NULL) ? ix + offset[0] : losn[0];
     size_t ix0 = nmeshyz*ix;
     size_t ixp = nmeshyz*((ix+1) % nmesh[0]);
-    size_t ixm = nmeshyz*((ix-1+nmesh[0]) % nmesh[0]);
-    for (int iy=0; iy<nmesh[1]; iy++) {
+    size_t ixm = nmeshyz*((ix+nmesh[0]-1) % nmesh[0]);
+    for (size_t iy=0; iy<nmesh[1]; iy++) {
       FLOAT py = (los == NULL) ? iy + offset[1] : losn[1];
       size_t iy0 = nmeshz*iy;
       size_t iyp = nmeshz*((iy+1) % nmesh[1]);
-      size_t iym = nmeshz*((iy-1+nmesh[1]) % nmesh[1]);
-      for (int iz0=0; iz0<nmesh[2]; iz0++) {
+      size_t iym = nmeshz*((iy+nmesh[1]-1) % nmesh[1]);
+      for (size_t iz0=0; iz0<nmesh[2]; iz0++) {
         FLOAT pz = (los == NULL) ? iz0 + offset[2] : losn[2];
         FLOAT g = beta/(cell2[0]*px*px+cell2[1]*py*py+cell2[2]*pz*pz);
         FLOAT gpx2 = icell2[0] + g*px*px;
         FLOAT gpy2 = icell2[1] + g*py*py;
         FLOAT gpz2 = icell2[2] + g*pz*pz;
         size_t izp = (iz0+1) % nmesh[2];
-        size_t izm = (iz0-1+nmesh[2]) % nmesh[2];
+        size_t izm = (iz0+nmesh[2]-1) % nmesh[2];
         size_t ii = ix0 + iy0 + iz0;
         r[ii] = 2*(gpx2 + gpy2 + gpz2)*v[ii] -
                (gpx2*(v[ixp+iy0+iz0]+v[ixm+iy0+iz0])+
@@ -164,7 +164,7 @@ void residual(const FLOAT* v, const FLOAT* f, FLOAT* r, const int* nmesh, const 
 }
 
 
-void prolong(const FLOAT* v2h, FLOAT* v1h, const int* nmesh) {
+void prolong(const FLOAT* v2h, FLOAT* v1h, const size_t* nmesh) {
   // Transfer a vector, v2h, from the coarse grid with spacing 2h to a
   // fine grid with spacing 1h using linear interpolation and periodic BC.
   // The length, N, is of the coarse-grid vector, v2h.
@@ -174,17 +174,17 @@ void prolong(const FLOAT* v2h, FLOAT* v1h, const int* nmesh) {
   const size_t nmesh2z = 2*nmesh[2];
   const size_t nmesh2yz = 4*nmesh[2]*nmesh[1];
   #pragma omp parallel for shared(v2h,v1h)
-  for (int ix=0; ix<nmesh[0]; ix++) {
+  for (size_t ix=0; ix<nmesh[0]; ix++) {
     size_t ix0 = nmeshyz*ix;
     size_t ixp = nmeshyz*((ix+1) % nmesh[0]);
     size_t i2x0 = nmesh2yz*2*ix;
     size_t i2xp = i2x0 + nmesh2yz;
-    for (int iy=0; iy<nmesh[1]; iy++) {
+    for (size_t iy=0; iy<nmesh[1]; iy++) {
       size_t iy0 = nmeshz*iy;
       size_t iyp = nmeshz*((iy+1) % nmesh[1]);
       size_t i2y0 = nmesh2z*2*iy;
       size_t i2yp = i2y0 + nmesh2z;
-      for (int iz0=0; iz0<nmesh[2]; iz0++) {
+      for (size_t iz0=0; iz0<nmesh[2]; iz0++) {
         size_t izp = (iz0+1) % nmesh[2];
         size_t i2z0 = 2*iz0;
         size_t i2zp = i2z0 + 1;
@@ -209,30 +209,30 @@ void prolong(const FLOAT* v2h, FLOAT* v1h, const int* nmesh) {
 }
 
 
-void reduce(const FLOAT* v1h, FLOAT* v2h, const int* nmesh) {
+void reduce(const FLOAT* v1h, FLOAT* v2h, const size_t* nmesh) {
   // Transfer a vector, v1h, from the fine grid with spacing 1h to a coarse
   // grid with spacing 2h using full weighting and periodic BC.
   // The length, N, is of the fine-grid vector (v1h) and is assumed even,
   // the code doesn't check.
   const size_t nmeshz = nmesh[2];
   const size_t nmeshyz = nmesh[2]*nmesh[1];
-  int nmesh2[NDIM];
+  size_t nmesh2[NDIM];
   for (int idim=0; idim<NDIM; idim++) nmesh2[idim] = nmesh[idim]/2;
   const size_t nmesh2z = nmesh2[2];
   const size_t nmesh2yz = nmesh2[2]*nmesh2[1];
   #pragma omp parallel for shared(v2h,v1h)
-  for (int ix=0; ix<nmesh2[0]; ix++) {
+  for (size_t ix=0; ix<nmesh2[0]; ix++) {
     size_t ix0 = nmeshyz*2*ix;
     size_t ixp = nmeshyz*((2*ix+1) % nmesh[0]);
-    size_t ixm = nmeshyz*((2*ix-1 + nmesh[0]) % nmesh[0]);
-    for (int iy=0; iy<nmesh2[1]; iy++) {
+    size_t ixm = nmeshyz*((2*ix+nmesh[0]-1) % nmesh[0]);
+    for (size_t iy=0; iy<nmesh2[1]; iy++) {
       size_t iy0 = nmeshz*2*iy;
       size_t iyp = nmeshz*((2*iy+1) % nmesh[1]);
-      size_t iym = nmeshz*((2*iy-1 + nmesh[1]) % nmesh[1]);
-      for (int iz=0; iz<nmesh2[2]; iz++) {
+      size_t iym = nmeshz*((2*iy+nmesh[1]-1) % nmesh[1]);
+      for (size_t iz=0; iz<nmesh2[2]; iz++) {
         size_t iz0 = 2*iz;
         size_t izp = (iz0+1) % nmesh[2];
-        size_t izm = (iz0-1 + nmesh[2]) % nmesh[2];
+        size_t izm = (iz0+nmesh[2]-1) % nmesh[2];
         v2h[nmesh2yz*ix+nmesh2z*iy+iz] = (8*v1h[ix0+iy0+iz0]+
                                           4*(v1h[ixp+iy0+iz0]+
                                           v1h[ixm+iy0+iz0]+
@@ -267,7 +267,7 @@ void reduce(const FLOAT* v1h, FLOAT* v2h, const int* nmesh) {
 
 
 
-void vcycle(FLOAT* v, const FLOAT* f, const int* nmesh, const FLOAT* boxsize, const FLOAT* boxcenter, const FLOAT beta, const FLOAT damping_factor, const int niterations, const FLOAT* los) {
+void vcycle(FLOAT* v, const FLOAT* f, const size_t* nmesh, const FLOAT* boxsize, const FLOAT* boxcenter, const FLOAT beta, const FLOAT damping_factor, const int niterations, const FLOAT* los) {
   // Does one V-cycle, with a recursive strategy, replacing v in the process.
   jacobi(v, f, nmesh, boxsize, boxcenter, beta, damping_factor, niterations, los);
   const size_t size = nmesh[0]*nmesh[1]*nmesh[2];
@@ -275,7 +275,7 @@ void vcycle(FLOAT* v, const FLOAT* f, const int* nmesh, const FLOAT* boxsize, co
   for (int idim=0; idim<NDIM; idim++) recurse &= (nmesh[idim] > 4 && (nmesh[idim] % 2 == 0));
   if (recurse) {
     // Not at coarsest level -- recurse coarser.
-    int nmesh2[NDIM];
+    size_t nmesh2[NDIM];
     for (int idim=0; idim<NDIM; idim++) nmesh2[idim] = nmesh[idim]/2;
     FLOAT* r = (FLOAT *) my_malloc(size, sizeof(FLOAT));
     //FLOAT* r = (FLOAT *) my_calloc(size, sizeof(FLOAT));
@@ -300,7 +300,7 @@ void vcycle(FLOAT* v, const FLOAT* f, const int* nmesh, const FLOAT* boxsize, co
 }
 
 
-FLOAT* fmg(FLOAT* f1h, FLOAT* v1h, const int* nmesh, const FLOAT* boxsize, const FLOAT* boxcenter, const FLOAT beta,
+FLOAT* fmg(FLOAT* f1h, FLOAT* v1h, const size_t* nmesh, const FLOAT* boxsize, const FLOAT* boxcenter, const FLOAT beta,
           const FLOAT jacobi_damping_factor, const int jacobi_niterations, const int vcycle_niterations, const FLOAT* los) {
   // The full multigrid cycle, also done recursively.
   //printf("NUMTHREADS %d\n", get_num_threads());
@@ -309,7 +309,7 @@ FLOAT* fmg(FLOAT* f1h, FLOAT* v1h, const int* nmesh, const FLOAT* boxsize, const
   for (int idim=0; idim<NDIM; idim++) recurse &= (nmesh[idim] > 4 && (nmesh[idim] % 2 == 0));
   if (recurse) {
     // Recurse to a coarser grid.
-    int nmesh2[NDIM];
+    size_t nmesh2[NDIM];
     for (int idim=0; idim<NDIM; idim++) nmesh2[idim] = nmesh[idim]/2;
     FLOAT* f2h = (FLOAT *) my_malloc(size/8, sizeof(FLOAT));
     reduce(f1h, f2h, nmesh);

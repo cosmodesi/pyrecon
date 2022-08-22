@@ -545,12 +545,12 @@ class RealMesh(BaseMesh):
         if self.value is None: self.value = 0.
         type_positions = ctypeslib.ndpointer(dtype=self._type_float, shape=positions.size, flags='C')
         type_weights = ctypeslib.ndpointer(dtype=self._type_float, shape=weights.size, flags='C')
-        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int, shape=self.ndim, flags='C')
+        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_size_t, shape=self.ndim, flags='C')
         func = self._lib.assign_cic
         func.argtypes = (self._type_float_mesh, type_nmesh, type_positions, type_weights, ctypes.c_size_t)
         func.restype = ctypes.c_int
         self.value.shape = -1
-        flag = func(self.value, self.nmesh.astype(ctypes.c_int, copy=False), positions, weights, size)
+        flag = func(self.value, self.nmesh.astype(ctypes.c_size_t, copy=False), positions, weights, size)
         if (flag != 0):
             raise MeshError('Issue with assign_cic')
         self.value.shape = self.shape
@@ -585,11 +585,11 @@ class RealMesh(BaseMesh):
         values = np.empty_like(positions, shape=size, order='C')
         type_positions = ctypeslib.ndpointer(dtype=self._type_float, shape=positions.size, flags='C')
         type_values = ctypeslib.ndpointer(dtype=self._type_float, shape=values.size, flags='C')
-        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int, shape=self.ndim, flags='C')
+        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_size_t, shape=self.ndim, flags='C')
         func = self._lib.read_cic
         func.argtypes = (self._type_float_mesh, type_nmesh, type_positions, type_values, ctypes.c_size_t)
         func.restype = ctypes.c_int
-        flag = func(self.value.ravel(order='C'), self.nmesh.astype(ctypes.c_int, copy=False), positions, values, size)
+        flag = func(self.value.ravel(order='C'), self.nmesh.astype(ctypes.c_size_t, copy=False), positions, values, size)
         if (flag != 0):
             raise MeshError('Issue with read_cic')
         return values.astype(dtype=dtype, copy=False)
@@ -623,12 +623,12 @@ class RealMesh(BaseMesh):
         positions = positions.astype(self._type_float, copy=False).ravel(order='C')
         values = np.empty_like(positions, order='C')
         type_positions = ctypeslib.ndpointer(dtype=self._type_float, shape=positions.size, flags='C')
-        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int, shape=self.ndim, flags='C')
+        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_size_t, shape=self.ndim, flags='C')
         type_boxsize = ctypeslib.ndpointer(dtype=self._type_float, shape=self.ndim, flags='C')
         func = self._lib.read_finite_difference_cic
         func.argtypes = (self._type_float_mesh, type_nmesh, type_boxsize, type_positions, type_positions, ctypes.c_size_t)
         func.restype = ctypes.c_int
-        flag = func(self.value.ravel(order='C'), self.nmesh.astype(ctypes.c_int, copy=False), self.boxsize.astype(self._type_float, copy=False), positions, values, size)
+        flag = func(self.value.ravel(order='C'), self.nmesh.astype(ctypes.c_size_t, copy=False), self.boxsize.astype(self._type_float, copy=False), positions, values, size)
         if (flag != 0):
             raise MeshError('Issue with read_finite_difference_cic')
         values.shape = (size, self.ndim)
@@ -665,13 +665,13 @@ class RealMesh(BaseMesh):
             # func(self.value.ravel(order='C'),self.nmesh,radius/self.boxsize)
         else:
             radius = radius_ / self.boxsize
-            type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int, shape=self.ndim, flags='C')
+            type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_size_t, shape=self.ndim, flags='C')
             type_boxsize = ctypeslib.ndpointer(dtype=self._type_float, shape=self.ndim, flags='C')
             func = self._lib.smooth_gaussian
             func.argtypes = (self._type_float_mesh, type_nmesh, type_boxsize, self._type_float)
             self.value.shape = -1
             func.restype = ctypes.c_int
-            flag = func(self.value, self.nmesh.astype(ctypes.c_int, copy=False), radius.astype(self._type_float, copy=False), nsigmas)
+            flag = func(self.value, self.nmesh.astype(ctypes.c_size_t, copy=False), radius.astype(self._type_float, copy=False), nsigmas)
             if (flag != 0):
                 raise MeshError('Issue with read_finite_difference_cic')
             self.value.shape = self.shape
@@ -706,13 +706,13 @@ class RealMesh(BaseMesh):
         arrays = np.concatenate([np.asarray(array, dtype=self._type_float) for array in arrays[::-1]], axis=0)
         if arrays.size != sum(self.shape):
             raise MeshError('Length of input arrays must match shape')
-        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int, shape=self.ndim, flags='C')
+        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_size_t, shape=self.ndim, flags='C')
         type_arrays = ctypeslib.ndpointer(dtype=self._type_float, shape=arrays.size, flags='C')
         func = self._lib.prod_sum
         func.argtypes = (self._type_float_mesh, type_nmesh, type_arrays, ctypes.c_int)
         func.restype = ctypes.c_int
         self.value.shape = -1
-        flag = func(self.value, self.nmesh.astype(ctypes.c_int, copy=False), arrays, exp)
+        flag = func(self.value, self.nmesh.astype(ctypes.c_size_t, copy=False), arrays, exp)
         self.value.shape = self.shape
         if (flag != 0):
             raise MeshError('Issue with prod_sum')
@@ -846,10 +846,10 @@ class ComplexMesh(BaseMesh):
         arrays = np.concatenate([np.asarray(array, dtype=self._type_float) for array in arrays[::-1]], axis=0)
         if arrays.size != sum(self.shape) + self.shape[-1]:
             raise MeshError('Length of input arrays must match shape')
-        shape = np.asarray(self.shape, dtype=ctypes.c_int)
+        shape = np.asarray(self.shape, dtype=ctypes.c_size_t)
         shape[-1] *= 2
         type_mesh = ctypeslib.ndpointer(dtype=self._type_float, shape=np.prod(shape), flags='C')
-        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int, shape=self.ndim, flags='C')
+        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_size_t, shape=self.ndim, flags='C')
         type_arrays = ctypeslib.ndpointer(dtype=self._type_float, shape=arrays.size, flags='C')
         func = self._lib.prod_sum
         func.argtypes = (type_mesh, type_nmesh, type_arrays, ctypes.c_int)

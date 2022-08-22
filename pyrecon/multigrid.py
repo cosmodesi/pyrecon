@@ -99,7 +99,7 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         """
         func = self._lib.fmg
         ndim = 3
-        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_int, shape=ndim)
+        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_size_t, shape=ndim)
         type_boxsize = ctypeslib.ndpointer(dtype=self._type_float, shape=ndim)
         type_pointer = ctypes.POINTER(self._type_float)
         func.argtypes = (self.mesh_delta._type_float_mesh, self.mesh_delta._type_float_mesh,
@@ -114,7 +114,7 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
             los = self.los.astype(self._type_float, copy=False)
         self.log_info('Computing displacement potential.')
         func(self.mesh_delta.value.ravel(order='C'), self.mesh_phi.value,
-             self.mesh_delta.nmesh.astype(ctypes.c_int, copy=False), self.mesh_delta.boxsize.astype(self._type_float, copy=False), self.mesh_delta.boxcenter.astype(self._type_float, copy=False),
+             self.mesh_delta.nmesh.astype(ctypes.c_size_t, copy=False), self.mesh_delta.boxsize.astype(self._type_float, copy=False), self.mesh_delta.boxcenter.astype(self._type_float, copy=False),
              self.beta, jacobi_damping_factor, jacobi_niterations, vcycle_niterations, los)
         del self.mesh_delta
         self.mesh_phi.value.shape = self.mesh_phi.shape

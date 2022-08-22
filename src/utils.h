@@ -18,7 +18,7 @@ typedef double FLOAT;
 #define POW pow
 #endif //_FLOAT32
 
-void* my_malloc(size_t size, size_t N)
+void* my_malloc(size_t N, size_t size)
 {
     void *x = malloc(N*size);
     if (x == NULL){
@@ -28,9 +28,9 @@ void* my_malloc(size_t size, size_t N)
     return x;
 }
 
-void* my_calloc(size_t size, size_t N)
+void* my_calloc(size_t N, size_t size)
 {
-    void *x = calloc(size, N);
+    void *x = calloc(N, size);
     if (x == NULL){
         fprintf(stderr, "calloc for %zu elements with %zu bytes failed...\n", N, size);
         perror(NULL);

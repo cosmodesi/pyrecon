@@ -23,7 +23,7 @@ int get_num_threads()
 }
 
 
-int assign_cic(FLOAT* mesh, const int* nmesh, const FLOAT* positions, const FLOAT* weights, size_t npositions) {
+int assign_cic(FLOAT* mesh, const size_t* nmesh, const FLOAT* positions, const FLOAT* weights, size_t npositions) {
   // Assign positions (weights) to mesh
   // Asumes periodic boundaries
   // Positions must be in [0,nmesh-1]
@@ -63,7 +63,7 @@ int assign_cic(FLOAT* mesh, const int* nmesh, const FLOAT* positions, const FLOA
 }
 
 
-int convolve(FLOAT* mesh, const int* nmesh, const FLOAT* kernel, const int* nkernel) {
+int convolve(FLOAT* mesh, const size_t* nmesh, const FLOAT* kernel, const int* nkernel) {
   // Performs a Gaussian smoothing using brute-force convolution.
   // Asumes periodic boundaries
   FLOAT sumw = 0;
@@ -87,9 +87,9 @@ int convolve(FLOAT* mesh, const int* nmesh, const FLOAT* kernel, const int* nker
     }
   }
   #pragma omp parallel for shared(mesh,ss,kernel)
-  for (int ix=0; ix<nmesh[0]; ix++) {
-    for (int iy=0; iy<nmesh[1]; iy++) {
-      for (int iz=0; iz<nmesh[2]; iz++) {
+  for (size_t ix=0; ix<nmesh[0]; ix++) {
+    for (size_t iy=0; iy<nmesh[1]; iy++) {
+      for (size_t iz=0; iz<nmesh[2]; iz++) {
         FLOAT sumd = 0;
         for (int dx=-rad[0]; dx<=rad[0]; dx++) {
           size_t iix = nmeshyz*((ix+dx+nmesh[0]) % nmesh[0]);
@@ -114,7 +114,7 @@ int convolve(FLOAT* mesh, const int* nmesh, const FLOAT* kernel, const int* nker
 }
 
 
-int smooth_gaussian(FLOAT* mesh, const int* nmesh, const FLOAT* smoothing_radius, const FLOAT nsigmas) {
+int smooth_gaussian(FLOAT* mesh, const size_t* nmesh, const FLOAT* smoothing_radius, const FLOAT nsigmas) {
   // Performs a Gaussian smoothing using brute-force convolution.
   // Now set up the smoothing stencil.
   // The number of grid points to search: >= nsigmas * smoothing_radius.
@@ -143,7 +143,7 @@ int smooth_gaussian(FLOAT* mesh, const int* nmesh, const FLOAT* smoothing_radius
 }
 
 /*
-void smooth_fft_gaussian(FLOAT *mesh, const int* nmesh, const FLOAT* smoothing_radius) {
+void smooth_fft_gaussian(FLOAT *mesh, const size_t* nmesh, const FLOAT* smoothing_radius) {
   // Performs a Gaussian smoothing using the FFTW library (v3), assumed to be
   // installed already. Rf is assumed to be in box units.
   // Make temporary vectors. FFTW uses double precision.
@@ -159,11 +159,11 @@ void smooth_fft_gaussian(FLOAT *mesh, const int* nmesh, const FLOAT* smoothing_r
   FLOAT fact[NDIM];
   for (int idim=0; idim<NDIM; idim++) fact[idim] = 0.5*smoothing_radius[idim]*smoothing_radius[idim]*(2*M_PI)*(2*M_PI);
   #pragma omp parallel for shared(meshk)
-  for (int ix=0; ix<nmesh[0]; ix++) {
+  for (size_t ix=0; ix<nmesh[0]; ix++) {
     int iix = (ix<=nmesh[0]/2) ? ix : ix-nmesh[0];
-    for (int iy=0; iy<nmesh[1]; iy++) {
+    for (size_t iy=0; iy<nmesh[1]; iy++) {
       int iiy = (iy<=nmesh[1]/2) ? iy : iy-nmesh[1];
-      for (int iz=0; iz<nmesh[2]/2+1; iz++) {
+      for (size_t iz=0; iz<nmesh[2]/2+1; iz++) {
         int iiz = iz;
         size_t ip = nmesh[1]*(nmesh[2]/2+1)*ix+(nmesh[2]/2+1)*iy+iz;
         FLOAT smth = exp(-fact[0]*iix*iix+fact[1]*iiy*iiy+fact[2]*iiz*iiz));
@@ -184,7 +184,7 @@ void smooth_fft_gaussian(FLOAT *mesh, const int* nmesh, const FLOAT* smoothing_r
 */
 
 
-int read_finite_difference_cic(const FLOAT* mesh, const int* nmesh, const FLOAT* boxsize, const FLOAT* positions, FLOAT* shifts, size_t npositions) {
+int read_finite_difference_cic(const FLOAT* mesh, const size_t* nmesh, const FLOAT* boxsize, const FLOAT* positions, FLOAT* shifts, size_t npositions) {
   // Computes the displacement field from mesh using second-order accurate
   // finite difference and shifts the data and randoms.
   // The displacements are pulled from the grid onto the positions of the
@@ -219,13 +219,13 @@ int read_finite_difference_cic(const FLOAT* mesh, const int* nmesh, const FLOAT*
     FLOAT dz = pos[2] - iz0;
     size_t ixp = nmeshyz*((ix0+1) % nmesh[0]);
     size_t ixpp = nmeshyz*((ix0+2) % nmesh[0]);
-    size_t ixm = nmeshyz*((ix0-1+nmesh[0]) % nmesh[0]);
+    size_t ixm = nmeshyz*((ix0+nmesh[0]-1) % nmesh[0]);
     size_t iyp = nmeshz*((iy0+1) % nmesh[1]);
     size_t iypp = nmeshz*((iy0+2) % nmesh[1]);
-    size_t iym = nmeshz*((iy0-1+nmesh[1]) % nmesh[1]);
+    size_t iym = nmeshz*((iy0+nmesh[1]-1) % nmesh[1]);
     size_t izp = (iz0+1) % nmesh[2];
     size_t izpp = (iz0+2) % nmesh[2];
-    size_t izm = (iz0-1+nmesh[2]) % nmesh[2];
+    size_t izm = (iz0+nmesh[2]-1) % nmesh[2];
     ix0 *= nmeshyz;
     iy0 *= nmeshz;
     FLOAT px,py,pz,wt;
@@ -274,7 +274,7 @@ int read_finite_difference_cic(const FLOAT* mesh, const int* nmesh, const FLOAT*
 }
 
 
-int read_cic(const FLOAT* mesh, const int* nmesh, const FLOAT* positions, FLOAT* shifts, size_t npositions) {
+int read_cic(const FLOAT* mesh, const size_t* nmesh, const FLOAT* positions, FLOAT* shifts, size_t npositions) {
   // Positions must be in [0,nmesh-1]
   const size_t nmeshz = nmesh[2];
   const size_t nmeshyz = nmesh[2]*nmesh[1];
@@ -332,7 +332,7 @@ int copy(FLOAT* input_array, FLOAT* output_array, const size_t size) {
 }
 
 
-int prod_sum(FLOAT* mesh, const int* nmesh, const FLOAT* coords, const int exp) {
+int prod_sum(FLOAT* mesh, const size_t* nmesh, const FLOAT* coords, const int exp) {
   // We expand everything to help compiler
   // Slightly faster than a numpy code
   // NOTE: coords should list arrays to apply along z, y and x, in this order
@@ -341,31 +341,31 @@ int prod_sum(FLOAT* mesh, const int* nmesh, const FLOAT* coords, const int exp) 
   const size_t nmeshyz = nmesh[2]*nmesh[1];
   if (exp == -1) {
     #pragma omp parallel for shared(mesh)
-    for (int ix=0; ix<nmesh[0]; ix++) {
-      for (int iy=0; iy<nmesh[1]; iy++) {
+    for (size_t ix=0; ix<nmesh[0]; ix++) {
+      for (size_t iy=0; iy<nmesh[1]; iy++) {
         FLOAT xy = coords[nmeshz + iy] + coords[nmeshypz + ix];
         size_t ixy = nmeshyz*ix + nmeshz*iy;
-        for (int iz=0; iz<nmesh[2]; iz++) mesh[ixy + iz] /= (xy + coords[iz]);
+        for (size_t iz=0; iz<nmesh[2]; iz++) mesh[ixy + iz] /= (xy + coords[iz]);
       }
     }
   }
   else if (exp == 1) {
     #pragma omp parallel for shared(mesh)
-    for (int ix=0; ix<nmesh[0]; ix++) {
-      for (int iy=0; iy<nmesh[1]; iy++) {
+    for (size_t ix=0; ix<nmesh[0]; ix++) {
+      for (size_t iy=0; iy<nmesh[1]; iy++) {
         FLOAT xy = coords[nmeshz + iy] + coords[nmeshypz + ix];
         size_t ixy = nmeshyz*ix + nmeshz*iy;
-        for (int iz=0; iz<nmesh[2]; iz++) mesh[ixy + iz] *= (xy + coords[iz]);
+        for (size_t iz=0; iz<nmesh[2]; iz++) mesh[ixy + iz] *= (xy + coords[iz]);
       }
     }
   }
   else {
     #pragma omp parallel for shared(mesh)
-    for (int ix=0; ix<nmesh[0]; ix++) {
-      for (int iy=0; iy<nmesh[1]; iy++) {
+    for (size_t ix=0; ix<nmesh[0]; ix++) {
+      for (size_t iy=0; iy<nmesh[1]; iy++) {
         FLOAT xy = coords[nmeshz + iy] + coords[nmeshypz + ix];
         size_t ixy = nmeshyz*ix + nmeshz*iy;
-        for (int iz=0; iz<nmesh[2]; iz++) mesh[ixy + iz] *= POW((xy + coords[iz]), exp);
+        for (size_t iz=0; iz<nmesh[2]; iz++) mesh[ixy + iz] *= POW((xy + coords[iz]), exp);
       }
     }
   }
