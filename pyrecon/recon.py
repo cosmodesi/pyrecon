@@ -109,7 +109,7 @@ class BaseReconstruction(BaseClass):
         self.info = self.mesh_randoms.info
         self.set_los(los)
         self.log_info('Using mesh {}.'.format(self.mesh_data))
-        self.log_info('Using {:d} nthreads.'.format(self.mesh_data.nthreads))
+        self.log_info('Using {:d} threads.'.format(self.mesh_data.nthreads))
         self.mesh_data.set_fft_engine(fft_engine, wisdom=fft_wisdom, save_wisdom=save_fft_wisdom, plan=fft_plan, hermitian=False)
         self.mesh_randoms.set_fft_engine(self.mesh_data.fft_engine)
         # Allow the wisdom to be accessed from outside if necessary
@@ -182,26 +182,27 @@ class BaseReconstruction(BaseClass):
 
     def assign_randoms(self, positions, weights=None):
         """Same as :meth:`assign_data`, but for random objects."""
+        if self.mesh_randoms.value is None:
+            self._size_randoms = 0
         self.mesh_randoms.assign_cic(positions, weights=weights, wrap=self.wrap)
+        self._size_randoms += len(positions)
 
     @property
     def has_randoms(self):
         return self.mesh_randoms.value is not None
 
-    def set_density_contrast(self, ran_min=0.75, smoothing_radius=15., **kwargs):
+    def set_density_contrast(self, ran_min=0.01, smoothing_radius=15., **kwargs):
         r"""
         Set :math:`\delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
-        Eventually we will probably converge on a base method for all reconstructions.
 
         Note
         ----
-        This method follows Martin's reconstruction code: we are not satisfied with the ``ran_min`` prescription.
-        At least ``ran_min`` should depend on random weights. See also Martin's notes below.
+        This method follows Julian's reconstruction code.
 
         Parameters
         ----------
-        ran_min : float, default=0.75
-            :attr:`mesh_randoms` points below this threshold have their density contrast set to 0.
+        ran_min : float, default=0.01
+            :attr:`mesh_randoms` points below this threshold times mean random weights have their density contrast set to 0.
 
         smoothing_radius : float, default=15
             Smoothing scale, see :meth:`RealMesh.smooth_gaussian`.
@@ -209,34 +210,16 @@ class BaseReconstruction(BaseClass):
         kwargs : dict
             Optional arguments for :meth:`RealMesh.smooth_gaussian`.
         """
-        if not self.has_randoms:
+        if self.has_randoms:
+            sum_data, sum_randoms = np.sum(self.mesh_data.value), np.sum(self.mesh_randoms.value)
+            alpha = sum_data * 1. / sum_randoms
+            self.mesh_delta = self.mesh_data - alpha * self.mesh_randoms
+            mask = self.mesh_randoms > ran_min * sum_randoms / self._size_randoms
+            self.mesh_delta[mask] /= (self.bias * alpha * self.mesh_randoms[mask])
+            self.mesh_delta[~mask] = 0.
+        else:
             self.mesh_delta = self.mesh_data / np.mean(self.mesh_data) - 1.
             self.mesh_delta /= self.bias
-            self.mesh_delta.smooth_gaussian(smoothing_radius, **kwargs)
-            return
-        # Martin's notes:
-        # We remove any points which have too few randoms for a decent
-        # density estimate -- this is "fishy", but it tames some of the
-        # worst swings due to 1/eps factors. Better would be an interpolation
-        # or a pre-smoothing (or many more randoms).
-        mask = self.mesh_randoms >= ran_min
-        alpha = np.sum(self.mesh_data[mask]) / np.sum(self.mesh_randoms[mask])
-        # Following two lines are how things are done in original code - does not seem exactly correct so commented out
-        # self.mesh_data[(self.mesh_randoms > 0) & (self.mesh_randoms < ran_min)] = 0.
-        # alpha = np.sum(self.mesh_data)/np.sum(self.mesh_randoms[mask])
-        self.mesh_data[mask] /= alpha * self.mesh_randoms[mask]
-        self.mesh_delta = self.mesh_data
-        del self.mesh_data
-        del self.mesh_randoms
-        self.mesh_delta -= 1
-        self.mesh_delta[~mask] = 0.
-        self.mesh_delta /= self.bias
-        # At this stage also remove the mean, so the source is genuinely mean 0.
-        # So as to not disturb the
-        # padding regions, we only compute and subtract the mean for the
-        # regions with delta != 0.
-        mask = self.mesh_delta != 0.
-        self.mesh_delta[mask] -= np.mean(self.mesh_delta[mask])
         self.mesh_delta.smooth_gaussian(smoothing_radius, **kwargs)
 
     def run(self, *args, **kwargs):

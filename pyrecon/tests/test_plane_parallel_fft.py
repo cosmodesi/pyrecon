@@ -92,33 +92,21 @@ def test_plane_parallel_fft(data_fn, randoms_fn):
     recon.set_density_contrast()
     recon.run()
 
+    from pypower import CatalogFFTPower
+    from matplotlib import pyplot as plt
+
     data['Position_rec'] = data['Position'] - recon.read_shifts(data['Position'])
     randoms['Position_rec'] = randoms['Position'] - recon.read_shifts(randoms['Position'], field='disp')
 
-    from matplotlib import pyplot as plt
-    from nbodykit.lab import ArrayCatalog, FKPCatalog, ConvolvedFFTPower
-    data = ArrayCatalog(data)
-    randoms = ArrayCatalog(randoms)
+    kwargs = dict(edges={'min': 0., 'step': 0.01}, ells=(0, 2, 4), boxsize=1000., nmesh=64, resampler='tsc', interlacing=3, position_type='pos')
+    power = CatalogFFTPower(data_positions1=data['Position'], randoms_positions1=randoms['Position'], **kwargs)
+    poles = power.poles
+    power = CatalogFFTPower(data_positions1=data['Position_rec'], randoms_positions1=randoms['Position_rec'], **kwargs)
+    poles_rec = power.poles
 
-    for catalog in [data, randoms]:
-        catalog['WEIGHT_FKP'] = np.ones(catalog.size, dtype='f8')
-        catalog['WEIGHT_COMP'] = catalog['Weight']
-
-    fkp = FKPCatalog(data, randoms)
-    BoxSize = 1000.
-    Nmesh = 128
-    ells = (0, 2)
-    mesh = fkp.to_mesh(position='Position', fkp_weight='WEIGHT_FKP', comp_weight='WEIGHT_COMP', nbar='NZ', BoxSize=BoxSize, Nmesh=Nmesh, resampler='tsc', interlaced=True, compensated=True)
-    power = ConvolvedFFTPower(mesh, poles=ells, kmin=0., dk=0.01)
-
-    mesh = fkp.to_mesh(position='Position_rec', fkp_weight='WEIGHT_FKP', comp_weight='WEIGHT_COMP', nbar='NZ', BoxSize=BoxSize, Nmesh=Nmesh, resampler='tsc', interlaced=True, compensated=True)
-    power_rec = ConvolvedFFTPower(mesh, poles=ells, kmin=0., dk=0.01)
-
-    for ill, ell in enumerate(ells):
-        pk = power.poles['power_{:d}'.format(ell)] - power.attrs['shotnoise'] if ell == 0 else power.poles['power_{:d}'.format(ell)]
-        plt.plot(power.poles['k'], power.poles['k'] * pk, color='C{:d}'.format(ill), linestyle='-')
-        pk = power_rec.poles['power_{:d}'.format(ell)] - power_rec.attrs['shotnoise'] if ell == 0 else power_rec.poles['power_{:d}'.format(ell)]
-        plt.plot(power_rec.poles['k'], power_rec.poles['k'] * pk, color='C{:d}'.format(ill), linestyle='--')
+    for ill, ell in enumerate(poles.ells):
+        plt.plot(poles.k, poles.k * poles(ell=ell), color='C{:d}'.format(ill), linestyle='-')
+        plt.plot(poles_rec.k, poles_rec.k * poles(ell=ell), color='C{:d}'.format(ill), linestyle='--')
 
     plt.show()
 

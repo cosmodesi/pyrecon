@@ -147,6 +147,6 @@ class MultiGridReconstruction(OriginalMultiGridReconstruction):
 
     """Any update / test / improvement upon original algorithm."""
 
-    def set_density_contrast(self, ran_min=0.75, smoothing_radius=15., **kwargs):
+    def set_density_contrast(self, *args, **kwargs):
         """See :class:`BaseReconstruction.set_density_contrast`."""
-        BaseReconstruction.set_density_contrast(self, ran_min=ran_min, smoothing_radius=smoothing_radius, **kwargs)
+        BaseReconstruction.set_density_contrast(self, *args, **kwargs)

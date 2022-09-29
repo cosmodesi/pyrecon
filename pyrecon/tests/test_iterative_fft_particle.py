@@ -303,7 +303,7 @@ def test_revolver(data_fn, randoms_fn=None):
             wisdom = json.load(file)
             return tuple(w.encode('utf-8') for w in wisdom)
 
-    wisdom_fn = 'wisdom.128.4'
+    wisdom_fn = 'wisdom.256.4'
     wisdom = load_wisdom(wisdom_fn)
 
     print('')

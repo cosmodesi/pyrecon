@@ -292,29 +292,19 @@ def test_script_no_randoms(data_fn, output_data_fn):
 
 def compute_power(*list_data_randoms):
 
+    from pypower import CatalogFFTPower
     from matplotlib import pyplot as plt
-    from nbodykit.lab import FITSCatalog, FKPCatalog, ConvolvedFFTPower
 
-    for linestyle, (datafn, randomsfn) in zip(['-', '--'], list_data_randoms):
+    for linestyle, (data_fn, randoms_fn) in zip(['-', '--'], list_data_randoms):
 
-        data = FITSCatalog(datafn)
-        randoms = FITSCatalog(randomsfn)
-
-        for catalog in [data, randoms]:
-            catalog['WEIGHT_FKP'] = np.ones(catalog.size, dtype='f8')
-            catalog['WEIGHT_COMP'] = catalog['Weight']
-
-        fkp = FKPCatalog(data, randoms)
-        BoxSize = 3000.
-        Nmesh = 128
-        ells = (0, 2, 4)
-        mesh = fkp.to_mesh(position='Position', fkp_weight='WEIGHT_FKP', comp_weight='WEIGHT_COMP', nbar='NZ', BoxSize=BoxSize, Nmesh=Nmesh, resampler='tsc', interlaced=True, compensated=True)
-        power = ConvolvedFFTPower(mesh, poles=ells, kmin=0., dk=0.01)
+        data = fitsio.read(data_fn)
+        randoms = fitsio.read(randoms_fn)
+        power = CatalogFFTPower(data_positions1=data['Position'], randoms_positions1=randoms['Position'], edges={'min': 0., 'step': 0.01},
+                                 ells=(0, 2, 4), boxsize=3000., nmesh=128, resampler='tsc', interlacing=3, position_type='pos')
         poles = power.poles
 
-        for ill, ell in enumerate(ells):
-            pk = poles['power_{:d}'.format(ell)] - power.attrs['shotnoise'] if ell == 0 else poles['power_{:d}'.format(ell)]
-            plt.plot(poles['k'], poles['k'] * pk, color='C{:d}'.format(ill), linestyle=linestyle)
+        for ill, ell in enumerate(poles.ells):
+            plt.plot(poles.k, poles.k * poles(ell=ell), color='C{:d}'.format(ill), linestyle=linestyle)
 
     plt.xlabel(r'$k$ [$h/\mathrm{Mpc}$]')
     plt.ylabel(r'$kP(k)$ [$(\mathrm{Mpc}/h)^{2}$]')
@@ -323,22 +313,18 @@ def compute_power(*list_data_randoms):
 
 def compute_power_no_randoms(list_data, list_positions):
 
+    from pypower import CatalogFFTPower
     from matplotlib import pyplot as plt
-    from nbodykit.lab import FITSCatalog, FFTPower
 
-    for linestyle, datafn, position in zip(['-', '--'], list_data, list_positions):
+    for linestyle, data_fn, position in zip(['-', '--'], list_data, list_positions):
 
-        data = FITSCatalog(datafn)
-        BoxSize = 800.
-        Nmesh = 128
-        ells = (0, 2, 4)
-        mesh = data.to_mesh(position=position, BoxSize=BoxSize, Nmesh=Nmesh, resampler='tsc', interlaced=True, compensated=True)
-        power = FFTPower(mesh, mode='2d', poles=ells, kmin=0., dk=0.01, los=[1, 0, 0])
+        data = fitsio.read(data_fn)
+        power = CatalogFFTPower(data_positions1=data[position], edges={'min': 0., 'step': 0.01}, los='x', wrap=True,
+                                 ells=(0, 2, 4), boxsize=800., nmesh=128, resampler='tsc', interlacing=3, position_type='pos')
         poles = power.poles
 
-        for ill, ell in enumerate(ells):
-            pk = poles['power_{:d}'.format(ell)] - power.attrs['shotnoise'] if ell == 0 else poles['power_{:d}'.format(ell)]
-            plt.plot(poles['k'], poles['k'] * pk, color='C{:d}'.format(ill), linestyle=linestyle)
+        for ill, ell in enumerate(poles.ells):
+            plt.plot(poles.k, poles.k * poles(ell=ell), color='C{:d}'.format(ill), linestyle=linestyle)
 
     plt.xlabel(r'$k$ [$h/\mathrm{Mpc}$]')
     plt.ylabel(r'$kP(k)$ [$(\mathrm{Mpc}/h)^{2}$]')

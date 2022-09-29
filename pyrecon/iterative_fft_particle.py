@@ -30,23 +30,6 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             self._weights_data = np.concatenate([self._weights_data, weights], axis=0)
         self.mesh_data.assign_cic(positions, weights=weights, wrap=self.wrap)
 
-    def assign_randoms(self, positions, weights=None):
-        """
-        Assign (paint) randoms to :attr:`mesh_randoms`.
-        Keeps track of sum of weights (for :meth:`set_density_contrast`).
-        See :meth:`BaseReconstruction.assign_randoms` for parameters.
-        """
-        if weights is None:
-            weights = np.ones_like(positions, shape=(len(positions),))
-        if self.wrap: positions = self.info.wrap(positions)
-        if self.mesh_randoms.value is None:
-            self._sum_randoms = 0.
-            self._size_randoms = 0
-        # super(OriginalIterativeFFTParticleReconstruction,self).assign_randoms(positions,weights=weights)
-        self.mesh_randoms.assign_cic(positions, weights=weights, wrap=self.wrap)
-        self._sum_randoms += np.sum(weights)
-        self._size_randoms += len(positions)
-
     def set_density_contrast(self, ran_min=0.01, smoothing_radius=15.):
         r"""
         Set :math:`\delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
@@ -54,7 +37,6 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         Note
         ----
         This method follows Julian's reconstruction code.
-        Handling of ``ran_min`` is better than in :meth:`BaseReconstruction.set_density_contrast`.
         :attr:`mesh_data` and :attr:`mesh_randoms` fields are assumed to be smoothed already.
 
         Parameters
@@ -68,9 +50,10 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             self.mesh_delta = self.mesh_data / np.mean(self.mesh_data) - 1.
             self.mesh_delta /= self.bias
             return
-        alpha = np.sum(self._weights_data) * 1. / self._sum_randoms
+        sum_data, sum_randoms = np.sum(self.mesh_data.value), np.sum(self.mesh_randoms.value)
+        alpha = sum_data * 1. / sum_randoms
         self.mesh_delta = self.mesh_data - alpha * self.mesh_randoms
-        mask = self.mesh_randoms > ran_min * self._sum_randoms / self._size_randoms
+        mask = self.mesh_randoms > ran_min * sum_randoms / self._size_randoms
         self.mesh_delta[mask] /= (self.bias * alpha * self.mesh_randoms[mask])
         self.mesh_delta[~mask] = 0.
 
