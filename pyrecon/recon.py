@@ -191,7 +191,7 @@ class BaseReconstruction(BaseClass):
     def has_randoms(self):
         return self.mesh_randoms.value is not None
 
-    def set_density_contrast(self, ran_min=0.01, smoothing_radius=15., **kwargs):
+    def set_density_contrast(self, ran_min=0.01, smoothing_radius=15., check=False, **kwargs):
         r"""
         Set :math:`\delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
 
@@ -207,20 +207,42 @@ class BaseReconstruction(BaseClass):
         smoothing_radius : float, default=15
             Smoothing scale, see :meth:`RealMesh.smooth_gaussian`.
 
+        check : bool, default=False
+            If ``True``, run some tests (printed in logger) to assess whether enough randoms have been used.
+
         kwargs : dict
             Optional arguments for :meth:`RealMesh.smooth_gaussian`.
         """
+        self.mesh_data.smooth_gaussian(smoothing_radius, **kwargs)
         if self.has_randoms:
+            if check:
+                mask_nonzero = self.mesh_randoms.value > 0.
+                nnonzero = mask_nonzero.sum()
+                if nnonzero < 2: raise ValueError('Very few randoms!')
+            self.mesh_randoms.smooth_gaussian(smoothing_radius, **kwargs)
             sum_data, sum_randoms = np.sum(self.mesh_data.value), np.sum(self.mesh_randoms.value)
             alpha = sum_data * 1. / sum_randoms
             self.mesh_delta = self.mesh_data - alpha * self.mesh_randoms
-            mask = self.mesh_randoms > ran_min * sum_randoms / self._size_randoms
+            threshold = ran_min * sum_randoms / self._size_randoms
+            if check:
+                mean_nran_per_cell = self.mesh_randoms.value[mask_nonzero].mean()
+                std_nran_per_cell = self.mesh_randoms.value[mask_nonzero].std(ddof=1)
+                self.log_info('Mean smoothed random density in non-empty cells is {:.4f} (std = {:.4f}), threshold is (ran_min * mean weight) = {:.4f}.'.format(mean_nran_per_cell, std_nran_per_cell, threshold))
+            mask = self.mesh_randoms > threshold
+            if check:
+                frac_nonzero_masked = 1. - mask[mask_nonzero].sum() / nnonzero
+                del mask_nonzero
+                if frac_nonzero_masked > 0.1:
+                    self.log_warning('Masking a large fraction {:.4f} of non-empty cells. You should probably increase the number of randoms.'.format(frac_nonzero_masked))
+                else:
+                    self.log_info('Masking a fraction {:.4f} of non-empty cells.'.format(frac_nonzero_masked))
             self.mesh_delta[mask] /= (self.bias * alpha * self.mesh_randoms[mask])
             self.mesh_delta[~mask] = 0.
         else:
             self.mesh_delta = self.mesh_data / np.mean(self.mesh_data) - 1.
             self.mesh_delta /= self.bias
-        self.mesh_delta.smooth_gaussian(smoothing_radius, **kwargs)
+        del self.mesh_data
+        del self.mesh_randoms
 
     def run(self, *args, **kwargs):
         """Run reconstruction; to be implemented in your algorithm."""

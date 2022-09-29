@@ -26,7 +26,7 @@ def test_random():
     recon.run(jacobi_niterations=1, vcycle_niterations=1)
     # recon.run()
     # print(recon.read_shifts(data['Position']))
-    assert np.all(np.abs(recon.read_shifts(data['Position'])) < 2.)
+    assert np.all(np.abs(recon.read_shifts(data['Position'])) < 10.)
 
 
 def test_no_nrandoms():

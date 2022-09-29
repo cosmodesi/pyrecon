@@ -46,16 +46,17 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         """
         self.ran_min = ran_min
         self.smoothing_radius = smoothing_radius
-        if not self.has_randoms:
+        if self.has_randoms:
+            sum_data, sum_randoms = np.sum(self.mesh_data.value), np.sum(self.mesh_randoms.value)
+            alpha = sum_data * 1. / sum_randoms
+            self.mesh_delta = self.mesh_data - alpha * self.mesh_randoms
+            threshold = ran_min * sum_randoms / self._size_randoms
+            mask = self.mesh_randoms > threshold
+            self.mesh_delta[mask] /= (self.bias * alpha * self.mesh_randoms[mask])
+            self.mesh_delta[~mask] = 0.
+        else:
             self.mesh_delta = self.mesh_data / np.mean(self.mesh_data) - 1.
             self.mesh_delta /= self.bias
-            return
-        sum_data, sum_randoms = np.sum(self.mesh_data.value), np.sum(self.mesh_randoms.value)
-        alpha = sum_data * 1. / sum_randoms
-        self.mesh_delta = self.mesh_data - alpha * self.mesh_randoms
-        mask = self.mesh_randoms > ran_min * sum_randoms / self._size_randoms
-        self.mesh_delta[mask] /= (self.bias * alpha * self.mesh_randoms[mask])
-        self.mesh_delta[~mask] = 0.
 
     def run(self, niterations=3):
         """

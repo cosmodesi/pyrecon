@@ -106,7 +106,7 @@ def test_plane_parallel_fft(data_fn, randoms_fn):
 
     for ill, ell in enumerate(poles.ells):
         plt.plot(poles.k, poles.k * poles(ell=ell), color='C{:d}'.format(ill), linestyle='-')
-        plt.plot(poles_rec.k, poles_rec.k * poles(ell=ell), color='C{:d}'.format(ill), linestyle='--')
+        plt.plot(poles_rec.k, poles_rec.k * poles_rec(ell=ell), color='C{:d}'.format(ill), linestyle='--')
 
     plt.show()
 
