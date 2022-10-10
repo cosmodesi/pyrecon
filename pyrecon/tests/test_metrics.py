@@ -20,7 +20,8 @@ def test_metrics():
     power = cosmo.get_fourier().pk_interpolator().to_1d(z=z)
     f = cosmo.sigma8_z(z=z, of='theta_cb') / cosmo.sigma8_z(z=z, of='delta_cb')  # growth rate
 
-    bias, nbar, nmesh, boxsize, boxcenter, los = 2.0, 1e-3, 128, 1000., 500., (1, 0, 0)
+    bias, nbar, nmesh, boxsize, boxcenter, los = 2.0, 1e-3, 128, 1000., (10000., 0., 0.), (1., 0, 0)
+    mock_los = los
     mock = LagrangianLinearMock(power, nmesh=nmesh, boxsize=boxsize, boxcenter=boxcenter, seed=42, unitary_amplitude=False)
     # This is Lagrangian bias, Eulerian bias - 1
     mock.set_real_delta_field(bias=bias - 1)
@@ -53,27 +54,29 @@ def test_metrics():
     muedges = np.linspace(-1., 1., 5)
     dtype = 'f8'
 
-    def get_correlator():
+    def get_correlator(los=los):
         mesh_recon = CatalogMesh(data['Position_rec'], shifted_positions=randoms['Position_rec'],
                                  boxsize=boxsize, boxcenter=boxcenter, nmesh=nmesh, resampler='cic', interlacing=2, position_type='pos', dtype=dtype)
         return MeshFFTCorrelator(mesh_recon, mesh_real, edges=(kedges, muedges), los=los)
 
-    def get_propagator(growth=1.):
+    def get_propagator(los=los, growth=1.):
         mesh_recon = CatalogMesh(data['Position_rec'], shifted_positions=randoms['Position_rec'],
                                  boxsize=boxsize, boxcenter=boxcenter, nmesh=nmesh, resampler='cic', interlacing=2, position_type='pos', dtype=dtype)
         return MeshFFTPropagator(mesh_recon, mesh_real, edges=(kedges, muedges), los=los, growth=growth)
 
-    def get_transfer(growth=1.):
+    def get_transfer(los=los, growth=1.):
         mesh_recon = CatalogMesh(data['Position_rec'], shifted_positions=randoms['Position_rec'],
                                  boxsize=boxsize, boxcenter=boxcenter, nmesh=nmesh, resampler='cic', interlacing=2, position_type='pos', dtype=dtype)
         return MeshFFTTransfer(mesh_recon, mesh_real, edges=(kedges, muedges), los=los, growth=growth)
 
-    def get_propagator_ref():
+    def get_propagator_ref(los=los):
         # Taken from https://github.com/cosmodesi/desi_cosmosim/blob/master/reconstruction/propagator_and_multipole/DESI_Recon/propagator_catalog_calc.py
         from nbodykit.lab import FFTPower
         from pmesh.pm import ParticleMesh
-        meshp = data.to_nbodykit().to_mesh(position='Position_rec', Nmesh=nmesh, BoxSize=boxsize, resampler='cic', compensated=True, interlaced=True, dtype='c16')
-        meshran = randoms.to_nbodykit().to_mesh(position='Position_rec', Nmesh=nmesh, BoxSize=boxsize, resampler='cic', compensated=True, interlaced=True, dtype='c16')
+        for cat in [data, randoms]:
+            cat['Position_rec_shifted'] = cat['Position_rec'] - boxcenter + boxsize / 2.
+        meshp = data.to_nbodykit().to_mesh(position='Position_rec_shifted', Nmesh=nmesh, BoxSize=boxsize, resampler='cic', compensated=True, interlaced=True, dtype='c16')
+        meshran = randoms.to_nbodykit().to_mesh(position='Position_rec_shifted', Nmesh=nmesh, BoxSize=boxsize, resampler='cic', compensated=True, interlaced=True, dtype='c16')
         # mesh_recon = ArrayMesh(meshp.compute() - meshran.compute(), BoxSize=boxsize)
         mesh_recon = meshp.compute() - meshran.compute()
         Nmu = len(muedges) - 1
@@ -87,63 +90,71 @@ def test_metrics():
         # print(r_auto_init.power['modes'])
         return (r_cross.power['power'] / r_auto_init.power['power']).real / bias, r_cross.power['power'].real, r_auto_init.power['power'].real
 
-    propagator_ref, cross_ref, auto_init_ref = get_propagator_ref()
-    correlator = get_correlator()
-
-    correlator_rebin = correlator.copy()
-    correlator_rebin.rebin((2, 1))
-    assert correlator_rebin.ratio.shape[0] == correlator.ratio.shape[0] // 2
-    correlator_rebin2 = correlator[::2]
-    assert np.allclose(correlator_rebin2.ratio, correlator_rebin.ratio, equal_nan=True)
-    correlator_rebin2.select((0., 0.1))
-    assert correlator_rebin2.k[0][-1] <= 0.1
+    propagator_ref, cross_ref, auto_init_ref = get_propagator_ref(los=mock_los)
+    correlator = get_correlator(los=mock_los)
     propagator = correlator.to_propagator(growth=bias)
     assert np.allclose(propagator.ratio, propagator_ref, atol=1e-6, rtol=1e-4, equal_nan=True)
-    transfer = correlator.to_transfer(growth=bias)
 
-    for complex in [False, True]:
-        assert correlator(k=[0.1, 0.2], complex=complex).shape == (2, correlator.shape[1])
-        assert correlator(k=[0.1, 0.2], mu=[0.3], complex=complex).shape == (2, 1)
-        assert correlator(k=[[0.1, 0.2]] * 3, mu=[[0.3]] * 2, complex=complex).shape == (3, 2, 2, 1)
-        assert correlator(k=[0.1, 0.2], mu=0., complex=complex).shape == (2, )
-        assert correlator(k=0.1, mu=0., complex=complex).shape == ()
-        assert correlator(k=0.1, mu=[0., 0.1], complex=complex).shape == (2, )
-        assert np.allclose(correlator(k=[0.2, 0.1], mu=[0.2, 0.1], complex=complex), correlator(k=[0.1, 0.2], mu=[0.1, 0.2], complex=complex)[::-1, ::-1], atol=0)
+    list_los = ['x', 'firstpoint']
+    assert np.allclose(*[get_correlator(los=los).ratio[2:] for los in list_los], atol=1e-6, rtol=0.3, equal_nan=True)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # tmp_dir = '_tests'
-        fn = correlator.num.mpicomm.bcast(os.path.join(tmp_dir, 'tmp.npy'), root=0)
-        fn_txt = correlator.num.mpicomm.bcast(os.path.join(tmp_dir, 'tmp.txt'), root=0)
+    for los in list_los:
 
-        correlator.save(fn)
-        correlator.save_txt(fn_txt)
-        correlator.mpicomm.Barrier()
-        test = np.loadtxt(fn_txt, unpack=True)
-        mids = np.meshgrid(*(correlator.modeavg(axis=axis, method='mid') for axis in range(correlator.ndim)), indexing='ij')
-        assert np.allclose([tt.reshape(correlator.shape) for tt in test], [correlator.nmodes, mids[0], correlator.modes[0], mids[1], correlator.modes[1], correlator.ratio.real], equal_nan=True)
-        correlator.save_txt(fn_txt, complex=True)
-        test = np.loadtxt(fn_txt, unpack=True, dtype=np.complex_)
-        assert np.allclose([tt.reshape(correlator.shape) for tt in test], [correlator.nmodes, mids[0], correlator.modes[0], mids[1], correlator.modes[1], correlator.get_ratio(complex=True)], equal_nan=True)
+        correlator = get_correlator(los=los)
+        correlator_rebin = correlator.copy()
+        correlator_rebin.rebin((2, 1))
+        assert correlator_rebin.ratio.shape[0] == correlator.ratio.shape[0] // 2
+        correlator_rebin2 = correlator[::2]
+        assert np.allclose(correlator_rebin2.ratio, correlator_rebin.ratio, equal_nan=True)
+        correlator_rebin2.select((0., 0.1))
+        assert correlator_rebin2.k[0][-1] <= 0.1
+        transfer = correlator.to_transfer(growth=bias)
+        propagator = correlator.to_propagator(growth=bias)
 
-        correlator = MeshFFTCorrelator.load(fn)
+        for complex in [False, True]:
+            assert correlator(k=[0.1, 0.2], complex=complex).shape == (2, correlator.shape[1])
+            assert correlator(k=[0.1, 0.2], mu=[0.3], complex=complex).shape == (2, 1)
+            assert correlator(k=[[0.1, 0.2]] * 3, mu=[[0.3]] * 2, complex=complex).shape == (3, 2, 2, 1)
+            assert correlator(k=[0.1, 0.2], mu=0., complex=complex).shape == (2, )
+            assert correlator(k=0.1, mu=0., complex=complex).shape == ()
+            assert correlator(k=0.1, mu=[0., 0.1], complex=complex).shape == (2, )
+            assert np.allclose(correlator(k=[0.2, 0.1], mu=[0.2, 0.1], complex=complex), correlator(k=[0.1, 0.2], mu=[0.1, 0.2], complex=complex)[::-1, ::-1], atol=0)
 
-        propagator.save(fn)
-        propagator.save_txt(fn_txt)
-        propagator.mpicomm.Barrier()
-        propagator = MeshFFTPropagator.load(fn)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            # tmp_dir = '_tests'
 
-        transfer.save(fn)
-        transfer.save_txt(fn_txt)
-        transfer.mpicomm.Barrier()
-        transfer = MeshFFTTransfer.load(fn)
+            fn = correlator.num.mpicomm.bcast(os.path.join(tmp_dir, 'tmp.npy'), root=0)
+            fn_txt = correlator.num.mpicomm.bcast(os.path.join(tmp_dir, 'tmp.txt'), root=0)
 
-        fn = os.path.join(tmp_dir, 'tmp.npy')
-        correlator.save(fn)
-        propagator.save(fn)
-        transfer.save(fn)
+            correlator.save(fn)
+            correlator.save_txt(fn_txt)
+            correlator.mpicomm.Barrier()
+            test = np.loadtxt(fn_txt, unpack=True)
+            mids = np.meshgrid(*(correlator.modeavg(axis=axis, method='mid') for axis in range(correlator.ndim)), indexing='ij')
+            assert np.allclose([tt.reshape(correlator.shape) for tt in test], [correlator.nmodes, mids[0], correlator.modes[0], mids[1], correlator.modes[1], correlator.ratio.real], equal_nan=True)
+            correlator.save_txt(fn_txt, complex=True)
+            test = np.loadtxt(fn_txt, unpack=True, dtype=np.complex_)
+            assert np.allclose([tt.reshape(correlator.shape) for tt in test], [correlator.nmodes, mids[0], correlator.modes[0], mids[1], correlator.modes[1], correlator.get_ratio(complex=True)], equal_nan=True)
 
-    assert np.allclose(get_propagator(growth=bias).ratio, propagator.ratio, equal_nan=True)
-    assert np.allclose(get_transfer(growth=bias).ratio, transfer.ratio, equal_nan=True)
+            correlator = MeshFFTCorrelator.load(fn)
+
+            propagator.save(fn)
+            propagator.save_txt(fn_txt)
+            propagator.mpicomm.Barrier()
+            propagator = MeshFFTPropagator.load(fn)
+
+            transfer.save(fn)
+            transfer.save_txt(fn_txt)
+            transfer.mpicomm.Barrier()
+            transfer = MeshFFTTransfer.load(fn)
+
+            fn = os.path.join(tmp_dir, 'tmp.npy')
+            correlator.save(fn)
+            propagator.save(fn)
+            transfer.save(fn)
+
+        assert np.allclose(get_propagator(los=los, growth=bias).ratio, propagator.ratio, equal_nan=True)
+        assert np.allclose(get_transfer(los=los, growth=bias).ratio, transfer.ratio, equal_nan=True)
 
     fig, lax = plt.subplots(nrows=1, ncols=3, figsize=(14, 4))
     fig.subplots_adjust(wspace=0.3)

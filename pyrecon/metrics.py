@@ -16,12 +16,58 @@ import os
 import numpy as np
 from scipy.interpolate import UnivariateSpline, RectBivariateSpline
 from pypower import MeshFFTPower, CatalogMesh, ParticleMesh, ArrayMesh, PowerSpectrumWedges
+from pypower.fft_power import _get_los
 
 from .utils import BaseClass
 from . import utils
 
 
-class BasePowerRatio(BaseClass):
+class MetaBasePowerRatio(type(BaseClass)):
+
+    """Metaclass adding to-wedges transforms, properties and methods to :class:`BasePowerRatio`-derived classes."""
+
+    def __new__(meta, name, bases, class_dict):
+        cls = super().__new__(meta, name, bases, class_dict)
+
+        def _make_property(name):
+
+            @property
+            def func(self):
+                result = getattr(self, 'source_{}'.format(name))
+                try:
+                    return result.wedges
+                except AttributeError:
+                    uname = '_{}'.format(name)
+                    tmp = getattr(self, uname, None)
+                    if tmp is not None:  # already computed
+                        return tmp
+                    tmp = result.poles.to_wedges(self._muedges)  # compute the first time
+                    setattr(self, uname, tmp)
+                    return tmp
+
+            return func
+
+        for name in cls._result_names:
+            setattr(cls, name, _make_property(name))
+
+        def _make_property(name):
+
+            @property
+            def func(self):
+                return getattr(self.num, name)
+
+            return func
+
+
+        for name in ['edges', 'shape', 'ndim', 'nmodes', 'modes', 'k', 'mu', 'kavg', 'muavg', 'with_mpi', 'mpicomm', 'attrs']:
+            setattr(cls, name, _make_property(name))
+
+        cls.modeavg = PowerSpectrumWedges.modeavg
+
+        return cls
+
+
+class BasePowerRatio(BaseClass, metaclass=MetaBasePowerRatio):
     """
     Base template class to compute power ratios.
     Specific statistic should extend this class.
@@ -149,6 +195,7 @@ class BasePowerRatio(BaseClass):
     def __copy__(self):
         new = super(BasePowerRatio, self).__copy__()
         for name in self._result_names:
+            name = 'source_{}'.format(name)
             setattr(new, name, getattr(self, name).__copy__())
         return new
 
@@ -156,9 +203,10 @@ class BasePowerRatio(BaseClass):
         """Return this class state dictionary."""
         state = {}
         for name in self._result_names:
+            name = 'source_{}'.format(name)
             if hasattr(self, name):
                 state[name] = getattr(self, name).__getstate__()
-        for name in self._attrs:
+        for name in ['_muedges'] + self._attrs:
             if hasattr(self, name):
                 state[name] = getattr(self, name)
         return state
@@ -167,8 +215,14 @@ class BasePowerRatio(BaseClass):
         """Set this class state."""
         self.__dict__.update(state)
         for name in self._result_names:
-            if name in state:
-                setattr(self, name, PowerSpectrumWedges.from_state(state[name]))
+            sname = 'source_{}'.format(name)
+            if sname in state:
+                value = state[sname]
+            # Backward-compatibility
+            elif name in state:
+                value = {'wedges': state[name]}
+                self._muedges = value['wedges']['edges'][1]
+            setattr(self, sname, MeshFFTPower.from_state(value))
 
     @classmethod
     def from_state(cls, state):
@@ -290,8 +344,26 @@ class BasePowerRatio(BaseClass):
             statistic.select(None, (0, 0.2)) # restrict second axis to (0, 0.2)
 
         """
+        ndim = 2
+        if len(xlims) > ndim:
+            raise IndexError('Too many limits: statistics is {:d}-dimensional, but {:d} were indexed'.format(ndim, len(xlims)))
+
         for name in self._result_names:
-            getattr(self, name).select(*xlims)
+            tmp = getattr(self, 'source_{}'.format(name))
+            if hasattr(tmp, 'wedges'):
+                tmp = getattr(self, name)
+                tmp.select(*xlims)
+                self._muedges = tmp.edges[1]
+            else:
+                if len(xlims) > 1:
+                    mulim = xlims[1]
+                    if mulim is not None:
+                        x = (self._muedges[:-1] + self._muedges[1:]) / 2.
+                        indices = np.flatnonzero((x >= xlim[0]) & (x <= xlim[1]))
+                        self._muedges = self._muedges[slice(indices[0], indices[-1] + 2, 1)]
+                xlims = xlims[:1]
+                tmp.poles.select(*xlims)
+                setattr(self, '_{}'.format(name), None)  # to force recomputation
 
     def slice(self, *slices):
         """
@@ -304,33 +376,56 @@ class BasePowerRatio(BaseClass):
             statistic[:10:2,:6:3] # same as above, but return new instance.
 
         """
+        ndim = 2
+        if len(slices) > ndim:
+            raise IndexError('Too many indices: statistics is {:d}-dimensional, but {:d} were indexed'.format(ndim, len(slices)))
+
         for name in self._result_names:
-            getattr(self, name).slice(*slices)
+            tmp = getattr(self, 'source_{}'.format(name))
+            if hasattr(tmp, 'wedges'):
+                tmp = getattr(self, name)
+                tmp.slice(*slices)
+                self._muedges = tmp.edges[1]
+            else:
+                if len(slices) > 1:
+                    muslice = slices[1]
+                    if muslice is not None:
+                        start, stop, step = muslice.indices(len(self._muedges) - 1)
+                        if step < 0:
+                            raise IndexError('Positive slicing step only supported')
+                        self._muedges = self._muedges[slice(start, stop + 1)]
+                        if len(self._muedges) - 1 % step:
+                            raise ValueError('Rebinning factor must divide shape')
+                slices = slices[:1]
+                tmp.poles.slice(*slices)
+                setattr(self, '_{}'.format(name), None)  # to force recomputation
 
     def rebin(self, factor=1):
         """
         Rebin statistic, by factor(s) ``factor``.
-        A tuple must be provided in case :attr:`ndim` is greater than 1.
         Input factors must divide :attr:`shape`.
         """
+        ndim = 2
+        if np.ndim(factor) == 0:
+            factor = (factor,)
+        if len(factor) > ndim:
+            raise ValueError('Too many rebinning factors: statistics is {:d}-dimensional, but got {:d} factors'.format(ndim, len(factor)))
+
         for name in self._result_names:
-            getattr(self, name).rebin(factor=factor)
-
-
-def _make_property(name):
-
-    @property
-    def func(self):
-        return getattr(self.num, name)
-
-    return func
-
-
-for name in ['edges', 'shape', 'ndim', 'nmodes', 'modes', 'k', 'mu', 'kavg', 'muavg', 'with_mpi', 'mpicomm', 'attrs']:
-    setattr(BasePowerRatio, name, _make_property(name))
-
-
-BasePowerRatio.modeavg = PowerSpectrumWedges.modeavg
+            tmp = getattr(self, 'source_{}'.format(name))
+            if hasattr(tmp, 'wedges'):
+                tmp = getattr(self, name)
+                tmp.rebin(factor)
+                self._muedges = tmp.edges[1]
+            else:
+                if len(factor) > 1:
+                    mufactor = factor[1]
+                    if (len(self._muedges) - 1) % mufactor:
+                        raise ValueError('Rebinning factor must divide shape')
+                    self._muedges = self._muedges[::mufactor]
+                factor = factor[:1]
+                tmp.poles.rebin(factor)
+                setattr(self, '_{}'.format(name), None)  # to force recomputation
 
 
 class MeshFFTCorrelator(BasePowerRatio):
@@ -344,7 +439,7 @@ class MeshFFTCorrelator(BasePowerRatio):
     _result_names = ['num', 'auto_reconstructed', 'auto_initial']
     _power_names = ['correlator']
 
-    def __init__(self, mesh_reconstructed, mesh_initial, edges=None, los=None, compensations=None):
+    def __init__(self, mesh_reconstructed, mesh_initial, edges=None, los=None, ells=None, compensations=None):
         r"""
         Initialize :class:`MeshFFTCorrelation`.
 
@@ -359,14 +454,19 @@ class MeshFFTCorrelator(BasePowerRatio):
             If ``RealField``, should be :math:`1 + \delta` or :math:`\bar{n} (1 + \delta)`.
 
         edges : tuple, array, default=None
-            :math:`k`-edges for :attr:`poles`.
-            One can also provide :math:`\mu-edges` (hence a tuple ``(kedges, muedges)``) for :attr:`wedges`.
+            :math:`k`-edges. One can also provide :math:`\mu-edges` (hence a tuple ``(kedges, muedges)``).
             ``kedges`` may be a dictionary, with keys 'min' (minimum :math:`k`, defaults to 0), 'max' (maximum :math:`k`, defaults to ``np.pi/(boxsize/nmesh)``),
             'step' (if not provided :func:`pypower.fft_power.find_unique_edges` is used to find unique :math:`k` (norm) values between 'min' and 'max').
 
-        los : array, default=None
-            May be 'x', 'y' or 'z', for one of the Cartesian axes.
+        los : string, array, default='firstpoint'
+            If ``los`` is 'firstpoint' (resp. 'endpoint'), use local (varying) first point (resp. end point) line-of-sight.
+            Else, may be 'x', 'y' or 'z', for one of the Cartesian axes.
             Else, a 3-vector.
+
+        ells : tuple, list, default=None
+            Multipoles to compute, which are used to compute wedges (using :meth:`PowerSpectrumMultipoles.to_wedges`)
+            when ``los`` is local (firstpoint, endpoint).
+            In this case, if ``None``, defaults to (0, 2, 4).
 
         compensations : list, tuple, default=None
             Compensations to apply to mesh to (optionally) correct for particle-mesh assignment scheme;
@@ -374,13 +474,16 @@ class MeshFFTCorrelator(BasePowerRatio):
             Provide a list (or tuple) of two such strings (for ``mesh_reconstructed`` and `mesh_initial``, respectively).
             Used only if provided ``mesh_reconstructed`` or ``mesh_initial`` are not ``CatalogMesh``.
         """
-        if los is None:
-            raise ValueError('Provide a box axis or a vector as line-of-sight (no varying line-of-sight accepted)')
-        num = MeshFFTPower(mesh_reconstructed, mesh2=mesh_initial, edges=edges, ells=None, los=los, compensations=compensations, shotnoise=0.)
-        self.num = num.wedges
+        self._muedges = np.array(edges[1])
+        los_type, los = _get_los(los)
+        if los_type != 'global':
+            edges = edges[0]
+            if ells is None: ells = (0, 2, 4)
+        num = MeshFFTPower(mesh_reconstructed, mesh2=mesh_initial, edges=edges, ells=ells, los=los, compensations=compensations, shotnoise=0.)
+        self.source_num = num
         # If compensations is a tuple, the code will anyway use the first element
-        self.auto_reconstructed = MeshFFTPower(mesh_reconstructed, edges=edges, ells=None, los=los, compensations=num.compensations).wedges
-        self.auto_initial = MeshFFTPower(mesh_initial, edges=edges, ells=None, los=los, compensations=num.compensations[::-1]).wedges
+        self.source_auto_reconstructed = MeshFFTPower(mesh_reconstructed, edges=edges, ells=ells, los=los, compensations=num.compensations)
+        self.source_auto_initial = MeshFFTPower(mesh_initial, edges=edges, ells=ells, los=los, compensations=num.compensations[::-1])
 
     def get_ratio(self, complex=False, **kwargs):
         """
@@ -416,8 +519,9 @@ class MeshFFTCorrelator(BasePowerRatio):
         propagator : MeshFFTPropagator
         """
         new = MeshFFTPropagator.__new__(MeshFFTPropagator)
-        new.num = self.num
-        new.denom = self.auto_initial
+        new._muedges = self._muedges.copy()
+        new.source_num = self.source_num.deepcopy()
+        new.source_denom = self.source_auto_initial.deepcopy()
         new.growth = growth
         return new
 
@@ -435,8 +539,9 @@ class MeshFFTCorrelator(BasePowerRatio):
         transfer : MeshFFTTransfer
         """
         new = MeshFFTTransfer.__new__(MeshFFTTransfer)
-        new.num = self.auto_reconstructed
-        new.denom = self.auto_initial
+        new._muedges = self._muedges.copy()
+        new.source_num = self.source_auto_reconstructed.deepcopy()
+        new.source_denom = self.source_auto_initial.deepcopy()
         new.growth = growth
         return new
 
@@ -452,7 +557,7 @@ class MeshFFTTransfer(BasePowerRatio):
     _power_names = ['transfer']
     _attrs = ['growth']
 
-    def __init__(self, mesh_reconstructed, mesh_initial, edges=None, los=None, compensations=None, growth=1.):
+    def __init__(self, mesh_reconstructed, mesh_initial, edges=None, los=None, ells=None, compensations=None, growth=1.):
         r"""
         Initialize :class:`MeshFFTTransfer`.
 
@@ -465,14 +570,19 @@ class MeshFFTTransfer(BasePowerRatio):
             Mesh with initial density field (before structure formation).
 
         edges : tuple, array, default=None
-            :math:`k`-edges for :attr:`poles`.
-            One can also provide :math:`\mu-edges` (hence a tuple ``(kedges, muedges)``) for :attr:`wedges`.
+            :math:`k`-edges. One can also provide :math:`\mu-edges` (hence a tuple ``(kedges, muedges)``).
             ``kedges`` may be a dictionary, with keys 'min' (minimum :math:`k`, defaults to 0), 'max' (maximum :math:`k`, defaults to ``np.pi/(boxsize/nmesh)``),
             'step' (if not provided :func:`pypower.fft_power.find_unique_edges` is used to find unique :math:`k` (norm) values between 'min' and 'max').
 
-        los : array, default=None
-            May be 'x', 'y' or 'z', for one of the Cartesian axes.
+        los : string, array, default='firstpoint'
+            If ``los`` is 'firstpoint' (resp. 'endpoint'), use local (varying) first point (resp. end point) line-of-sight.
+            Else, may be 'x', 'y' or 'z', for one of the Cartesian axes.
             Else, a 3-vector.
+
+        ells : tuple, list, default=None
+            Multipoles to compute, which are used to compute wedges (using :meth:`PowerSpectrumMultipoles.to_wedges`)
+            when ``los`` is local (firstpoint, endpoint).
+            In this case, if ``None``, defaults to (0, 2, 4).
 
         compensations : list, tuple, default=None
             Compensations to apply to mesh to (optionally) correct for particle-mesh assignment scheme;
@@ -483,9 +593,14 @@ class MeshFFTTransfer(BasePowerRatio):
         growth : float, default=1.
             Growth factor (and galaxy bias) to turn initial field to the linearly-evolved galaxy density field at the redshift of interest.
         """
-        num = MeshFFTPower(mesh_reconstructed, edges=edges, ells=None, los=los, compensations=compensations)
-        self.num = num.wedges
-        self.denom = MeshFFTPower(mesh_initial, edges=edges, ells=None, los=los, compensations=num.compensations[::-1]).wedges
+        self._muedges = np.array(edges[1])
+        los_type, los = _get_los(los)
+        if los_type != 'global':
+            edges = edges[0]
+            if ells is None: ells = (0, 2, 4)
+        num = MeshFFTPower(mesh_reconstructed, edges=edges, ells=ells, los=los, compensations=compensations)
+        self.source_num = num
+        self.source_denom = MeshFFTPower(mesh_initial, edges=edges, ells=ells, los=los, compensations=num.compensations[::-1])
         self.growth = growth
 
     def get_ratio(self, complex=False, **kwargs):
@@ -508,6 +623,7 @@ class MeshFFTTransfer(BasePowerRatio):
         return super(MeshFFTTransfer, self).get_ratio(complex=complex, **kwargs)**0.5 / self.growth
 
 
+
 class MeshFFTPropagator(BasePowerRatio):
     r"""
     Estimate propagator, i.e.:
@@ -519,7 +635,7 @@ class MeshFFTPropagator(BasePowerRatio):
     _power_names = ['propagator']
     _attrs = ['growth']
 
-    def __init__(self, mesh_reconstructed, mesh_initial, edges=None, los=None, compensations=None, growth=1.):
+    def __init__(self, mesh_reconstructed, mesh_initial, edges=None, los=None, ells=None, compensations=None, growth=1.):
         r"""
         Initialize :class:`MeshFFTPropagator`.
 
@@ -532,14 +648,19 @@ class MeshFFTPropagator(BasePowerRatio):
             Mesh with initial density field (before structure formation).
 
         edges : tuple, array, default=None
-            :math:`k`-edges for :attr:`poles`.
-            One can also provide :math:`\mu-edges` (hence a tuple ``(kedges, muedges)``) for :attr:`wedges`.
+            :math:`k`-edges. One can also provide :math:`\mu-edges` (hence a tuple ``(kedges, muedges)``).
             ``kedges`` may be a dictionary, with keys 'min' (minimum :math:`k`, defaults to 0), 'max' (maximum :math:`k`, defaults to ``np.pi/(boxsize/nmesh)``),
             'step' (if not provided :func:`pypower.fft_power.find_unique_edges` is used to find unique :math:`k` (norm) values between 'min' and 'max').
 
-        los : array, default=None
-            May be 'x', 'y' or 'z', for one of the Cartesian axes.
+        los : string, array, default='firstpoint'
+            If ``los`` is 'firstpoint' (resp. 'endpoint'), use local (varying) first point (resp. end point) line-of-sight.
+            Else, may be 'x', 'y' or 'z', for one of the Cartesian axes.
             Else, a 3-vector.
+
+        ells : tuple, list, default=None
+            Multipoles to compute, which are used to compute wedges (using :meth:`PowerSpectrumMultipoles.to_wedges`)
+            when ``los`` is local (firstpoint, endpoint).
+            In this case, if ``None``, defaults to (0, 2, 4).
 
         compensations : list, tuple, default=None
             Compensations to apply to mesh to (optionally) correct for particle-mesh assignment scheme;
@@ -550,9 +671,14 @@ class MeshFFTPropagator(BasePowerRatio):
         growth : float, default=1.
             Growth factor (and galaxy bias) to turn initial field to the linearly-evolved galaxy density field at the redshift of interest.
         """
-        num = MeshFFTPower(mesh_reconstructed, mesh2=mesh_initial, edges=edges, ells=None, los=los, compensations=compensations, shotnoise=0.)
-        self.num = num.wedges
-        self.denom = MeshFFTPower(mesh_initial, edges=edges, ells=None, los=los, compensations=num.compensations[::-1]).wedges
+        self._muedges = np.array(edges[1])
+        los_type, los = _get_los(los)
+        if los_type != 'global':
+            edges = edges[0]
+            if ells is None: ells = (0, 2, 4)
+        num = MeshFFTPower(mesh_reconstructed, mesh2=mesh_initial, edges=edges, ells=ells, los=los, compensations=compensations, shotnoise=0.)
+        self.source_num = num
+        self.source_denom = MeshFFTPower(mesh_initial, edges=edges, ells=ells, los=los, compensations=num.compensations[::-1])
         self.growth = growth
 
     def get_ratio(self, complex=False, **kwargs):
