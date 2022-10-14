@@ -168,19 +168,19 @@ class BasePowerRatio(BaseClass, metaclass=MetaBasePowerRatio):
         toret = np.nan * np.zeros((k.size, mu.size), dtype=power.dtype)
         mask_k = (k >= self.edges[0][0]) & (k <= self.edges[0][-1])
         mask_mu = (mu >= self.edges[1][0]) & (mu <= self.edges[1][-1])
-        k, mu = k[mask_k], mu[mask_mu]
+        k_masked, mu_masked = k[mask_k], mu[mask_mu]
         if mask_k.any() and mask_mu.any():
             if muavg.size == 1:
 
                 def interp(array):
-                    return UnivariateSpline(kavg, array, k=1, s=0, ext='const')(k)[:, None]
+                    return UnivariateSpline(kavg, array, k=1, s=0, ext='const')(k_masked)[:, None]
 
             else:
-                i_k = np.argsort(k); ii_k = np.argsort(i_k)
-                i_mu = np.argsort(mu); ii_mu = np.argsort(i_mu)
+                i_k = np.argsort(k_masked); ii_k = np.argsort(i_k)
+                i_mu = np.argsort(mu_masked); ii_mu = np.argsort(i_mu)
 
                 def interp(array):
-                    return RectBivariateSpline(kavg, muavg, array, kx=1, ky=1, s=0)(k[i_k], mu[i_mu], grid=True)[np.ix_(ii_k, ii_mu)]
+                    return RectBivariateSpline(kavg, muavg, array, kx=1, ky=1, s=0)(k_masked[i_k], mu_masked[i_mu], grid=True)[np.ix_(ii_k, ii_mu)]
 
             toret[np.ix_(mask_k, mask_mu)] = interp(power.real)
             if complex and np.iscomplexobj(power):

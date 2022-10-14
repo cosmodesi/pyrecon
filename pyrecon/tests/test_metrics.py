@@ -54,7 +54,7 @@ def test_metrics():
     muedges = np.linspace(-1., 1., 5)
     dtype = 'f8'
 
-    def get_correlator(los=los):
+    def get_correlator(los=los, kedges=kedges):
         mesh_recon = CatalogMesh(data['Position_rec'], shifted_positions=randoms['Position_rec'],
                                  boxsize=boxsize, boxcenter=boxcenter, nmesh=nmesh, resampler='cic', interlacing=2, position_type='pos', dtype=dtype)
         return MeshFFTCorrelator(mesh_recon, mesh_real, edges=(kedges, muedges), los=los)
@@ -156,6 +156,13 @@ def test_metrics():
         assert np.allclose(get_propagator(los=los, growth=bias).ratio, propagator.ratio, equal_nan=True)
         assert np.allclose(get_transfer(los=los, growth=bias).ratio, transfer.ratio, equal_nan=True)
 
+
+    correlator = get_correlator(los='firstpoint', kedges=np.linspace(0., 1., 61))
+    transfer = correlator.to_transfer(growth=bias)
+    propagator = correlator.to_propagator(growth=bias)
+    k, c = correlator(mu=0., return_k=True)
+    assert len(c) == len(k)
+
     fig, lax = plt.subplots(nrows=1, ncols=3, figsize=(14, 4))
     fig.subplots_adjust(wspace=0.3)
     lax = lax.flatten()
@@ -175,6 +182,7 @@ def test_metrics():
     lax[2].set_ylabel(r'$g(k) = P_{\mathrm{rec}, \mathrm{init}}/P_{\mathrm{init}}$')
     plt.show()
 
+    correlator = get_correlator()
     ax = plt.gca()
     auto = correlator.auto_initial
     auto.rebin((1, len(auto.edges[-1]) - 1))
