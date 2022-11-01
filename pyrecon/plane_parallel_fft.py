@@ -46,7 +46,7 @@ class PlaneParallelFFTReconstruction(BaseReconstruction):
         k2 = sum(kk**2 for kk in k)
         k2[0, 0, 0] = 1.  # to avoid dividing by 0
         delta_k /= k2
-        mu2 = sum(kk * ll for ll, kk in zip(k, self.los)) / k2**0.5
+        mu2 = sum(kk * ll for ll, kk in zip(k, self.los))**2 / k2
         psis = []
         for iaxis in range(delta_k.ndim):
             tmp = 1j * k[iaxis] * delta_k / (1. + self.beta * mu2)

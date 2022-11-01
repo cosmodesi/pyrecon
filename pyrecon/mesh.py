@@ -539,6 +539,8 @@ class RealMesh(BaseMesh):
             low, high = self.boxcenter - self.boxsize / 2., self.boxcenter + self.boxsize / 2.
             if not np.all((positions >= low) & (positions <= high)):
                 raise MeshError('positions not in box range {} - {}'.format(low, high))
+        if not (np.isfinite(positions).all() and np.isfinite(weights).all()):
+            raise MeshError('Some positions or weights are NaN/inf')
         positions = ((positions - self.boxcenter) / self.boxsize + 0.5) * self.nmesh
         positions = positions.astype(self._type_float, copy=False).ravel(order='C')
         weights = weights.astype(self._type_float, copy=False).ravel(order='C')
@@ -580,6 +582,9 @@ class RealMesh(BaseMesh):
             low, high = self.boxcenter - self.boxsize / 2., self.boxcenter + self.boxsize / 2.
             if not np.all((positions >= low) & (positions <= high)):
                 raise MeshError('positions not in box range {} - {}'.format(low, high))
+        if not np.isfinite(positions).all():
+            import warnings
+            warnings.warn('Some positions are NaN/inf')
         positions = ((positions - self.boxcenter) / self.boxsize + 0.5) * self.nmesh
         positions = positions.astype(self._type_float, copy=False).ravel(order='C')
         values = np.empty_like(positions, shape=size, order='C')
@@ -619,6 +624,9 @@ class RealMesh(BaseMesh):
             low, high = self.boxcenter - self.boxsize / 2., self.boxcenter + self.boxsize / 2.
             if not np.all((positions >= low) & (positions <= high)):
                 raise MeshError('positions not in box range {} - {}'.format(low, high))
+        if not np.isfinite(positions).all():
+            import warnings
+            warnings.warn('Some positions are NaN/inf')
         positions = ((positions - self.boxcenter) / self.boxsize + 0.5) * self.nmesh
         positions = positions.astype(self._type_float, copy=False).ravel(order='C')
         values = np.empty_like(positions, order='C')
