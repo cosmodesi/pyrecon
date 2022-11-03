@@ -25,6 +25,8 @@
 **/_tests
 **/_catalogs
 **/_codes
+**/*_multigrid.c
+**/*.so
 
 # Unit test / coverage reports
 **/.coverage

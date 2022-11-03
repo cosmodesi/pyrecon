@@ -4,12 +4,11 @@ input:
   randoms_fn: test_randoms.fits                                                 # randoms fits and hdf5 files are accepted
   rdz: [RA, DEC, Z_RSD]                                                         # data columns to get positions from
   rdz_randoms: [ra, dec, z]                                                     # random columns to get positions from
-  format: rdz                                                                   # file format (rdz, xyz), rdz required
+  position_type: rdz                                                            # column position type (rdz, xyz, pos), required
   weights: ${WEIGHT}                                                            # formula to get weight
   weights_randoms:                                                              # random columns to get weights from
   mask: (${RA}>0.) & (${RA}<30.) & (${DEC}>0.) & (${DEC}<30.)                   # mask for row selection
   mask_randoms: (${RA}>0.) & (${RA}<30.) & (${DEC}>0.) & (${DEC}<30.)           # same for randoms (defaults to mask)
-  hdf5_prefix: '/galaxies'                                                      # prefix for dataset holding on hdf5 files
 
 output:
   dir: ./test                                                                   # output directory to use as prefix
@@ -20,12 +19,10 @@ output:
   xyz: POSITION                                                                 # column name for input cartesian position
   columns: [NZ]                                                                 # from input to keep on output file (if null or unprovided, keep them all)
   columns_randoms: [nz]                                                         # from input to keep on output file (if null or unprovided, keep them all) (defaults to columns)
-  hdf5_prefix: '/galaxies'                                                      # prefix for dataset holding on hdf5 files
 
 algorithm:
   name: MultiGridReconstruction                                                 # name of reconstruction algorithm (Julian's IterativeFFTReconstruction, Martin's MultiGridReconstruction)
   convention: RecSym                                                            # RecSym = data and randoms shifted by 'disp+rsd', RecIso = randoms shifted by 'disp' only, RSD = data shifted by 'rsd', no shift on randoms
-  nthreads: 4                                                                   # number of OpenMP threads; defaults to OMP_NUM_THREADS if set, else OpenMP's default (usually number of cores)
   los: 'local'                                                                  # line-of-sight can be 'local' (default) or an axis ('x', 'y', 'z') or a 3-vector.
   # other algorithm-related parameters
 
@@ -36,7 +33,7 @@ delta:
 cosmology:
   bias: 1.4                                                                     # galaxy bias
   f: 0.87                                                                       # growth rate
-  Omega_m: 0.3                                                                  # for rdz <=> cartesian position conversion
+  fiducial: DESI                                                                # fiducial cosmology for rdz <=> cartesian position conversion
 
 mesh:
   nmesh: 512                                                                    # mesh size (int or list of 3 ints)
@@ -44,6 +41,4 @@ mesh:
   boxcenter:                                                                    # box center
   wrap: False                                                                   # whether to wrap positions using periodic boundary conditions over the box
   dtype: f4                                                                     # mesh data-type for f4 (float32) or f8 (float64)
-  fft_engine: 'fftw'                                                            # FFT engine, either 'numpy' or 'fftw' (recommended)
   fft_plan: 'estimate'                                                          # FFT planning for FFTW engine
-  save_fft_wisdom:                                                              # where to save (and try to load) wisdom for 'fftw' FFT engine (optional)

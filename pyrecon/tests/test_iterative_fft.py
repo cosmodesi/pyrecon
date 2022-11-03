@@ -1,44 +1,15 @@
 import numpy as np
-import fitsio
 
-from pyrecon import IterativeFFTReconstruction
+from pyrecon import IterativeFFTReconstruction, mpi
 from pyrecon.utils import MemoryMonitor
-from test_multigrid import get_random_catalog
-
-
-def test_dtype():
-    data = get_random_catalog(seed=42)
-    randoms = get_random_catalog(seed=81)
-    for los in [None, 'x']:
-        recon_f4 = IterativeFFTReconstruction(f=0.8, bias=2., nthreads=4, positions=randoms['Position'], nmesh=64, los=los, dtype='f4')
-        recon_f4.assign_data(data['Position'], data['Weight'])
-        recon_f4.assign_randoms(randoms['Position'], randoms['Weight'])
-        recon_f4.set_density_contrast()
-        assert recon_f4.mesh_delta.dtype.itemsize == 4
-        recon_f4.run()
-        assert recon_f4.mesh_psi[0].dtype.itemsize == 4
-        shifts_f4 = recon_f4.read_shifts(data['Position'].astype('f8'), field='disp+rsd')
-        assert shifts_f4.dtype.itemsize == 8
-        shifts_f4 = recon_f4.read_shifts(data['Position'].astype('f4'), field='disp+rsd')
-        assert shifts_f4.dtype.itemsize == 4
-        recon_f8 = IterativeFFTReconstruction(f=0.8, bias=2., nthreads=4, positions=randoms['Position'], nmesh=64, los=los, dtype='f8')
-        recon_f8.assign_data(data['Position'], data['Weight'])
-        recon_f8.assign_randoms(randoms['Position'], randoms['Weight'])
-        recon_f8.set_density_contrast()
-        assert recon_f8.mesh_delta.dtype.itemsize == 8
-        recon_f8.run()
-        assert recon_f8.mesh_psi[0].dtype.itemsize == 8
-        shifts_f8 = recon_f8.read_shifts(data['Position'], field='disp+rsd')
-        assert shifts_f8.dtype.itemsize == 8
-        assert not np.all(shifts_f4 == shifts_f8)
-        assert np.allclose(shifts_f4, shifts_f8, atol=1e-2, rtol=1e-2)
+from utils import get_random_catalog, Catalog
 
 
 def test_mem():
     data = get_random_catalog(seed=42)
     randoms = get_random_catalog(seed=84)
     with MemoryMonitor() as mem:
-        recon = IterativeFFTReconstruction(f=0.8, bias=2., nthreads=4, positions=randoms['Position'], nmesh=256, dtype='f8')
+        recon = IterativeFFTReconstruction(f=0.8, bias=2., positions=randoms['Position'], nmesh=256, dtype='f8')
         mem('init')
         recon.assign_data(data['Position'], data['Weight'])
         mem('data')
@@ -50,11 +21,35 @@ def test_mem():
         mem('recon')  # 3 meshes
 
 
-def test_iterative_fft_wrap():
+def test_dtype():
+    data = get_random_catalog(seed=42)
+    randoms = get_random_catalog(seed=81)
+    for los in [None, 'x']:
+        all_shifts = []
+        for dtype in ['f4', 'f8']:
+            dtype = np.dtype(dtype)
+            itemsize = np.empty(0, dtype=dtype).real.dtype.itemsize * 2
+            recon = IterativeFFTReconstruction(f=0.8, bias=2., positions=randoms['Position'], nmesh=64, los=los, dtype=dtype)
+            recon.assign_data(data['Position'], data['Weight'])
+            recon.assign_randoms(randoms['Position'], randoms['Weight'])
+            recon.set_density_contrast()
+            assert recon.mesh_delta.dtype.itemsize == itemsize
+            recon.run()
+            assert recon.mesh_psi[0].dtype.itemsize == itemsize
+            all_shifts2 = []
+            for dtype2 in ['f4', 'f8']:
+                dtype2 = np.dtype(dtype2)
+                shifts = recon.read_shifts(data['Position'].astype(dtype2), field='disp+rsd')
+                assert shifts.dtype.itemsize == dtype2.itemsize
+                all_shifts2.append(shifts)
+                if dtype2 == dtype: all_shifts.append(shifts)
+            assert np.allclose(*all_shifts2, atol=1e-2, rtol=1e-2)
+
+
+def test_wrap():
     size = 100000
     boxsize = 1000
-    for origin in [-500, 0, 500]:
-        boxcenter = boxsize / 2 + origin
+    for boxcenter in [-500, 0, 500]:
         data = get_random_catalog(size, boxsize, seed=42)
         # set one of the data positions to be outside the fiducial box by hand
         data['Position'][-1] = np.array([boxsize, boxsize, boxsize]) + 1
@@ -75,18 +70,36 @@ def test_iterative_fft_wrap():
             shifts = recon.read_shifts(data['Position'], field=field)
             diff = data['Position'] - shifts
             positions_rec = (diff - recon.offset) % recon.boxsize + recon.offset
-            assert np.all(positions_rec <= origin + boxsize) and np.all(positions_rec >= origin)
+            assert np.all(positions_rec >= boxcenter - boxsize / 2.) and np.all(positions_rec <= boxcenter + boxsize / 2.)
             assert np.allclose(recon.read_shifted_positions(data['Position'], field=field), positions_rec)
 
 
-def test_iterative_fft(data_fn, randoms_fn):
+def test_mpi():
+    data = get_random_catalog(seed=42)
+    randoms = get_random_catalog(seed=81)
+    mpicomm = data.mpicomm
+
+    def get_shifts(mpicomm=data.mpicomm):
+        recon = IterativeFFTReconstruction(f=0.8, bias=2., positions=randoms['Position'], nmesh=64, los='x', dtype='f8', mpicomm=mpicomm)
+        recon.assign_data(data['Position'], data['Weight'])
+        recon.assign_randoms(randoms['Position'], randoms['Weight'])
+        recon.set_density_contrast()
+        recon.run()
+        return recon.read_shifts(data['Position'], field='disp+rsd')
+
+    shifts = mpi.gather(get_shifts(mpicomm=mpicomm), mpicomm=mpicomm, mpiroot=0)
+    data, randoms = data.gather(mpiroot=0), randoms.gather(mpiroot=0)
+    if mpicomm.rank == 0:
+        shifts_ref = get_shifts(mpicomm=data.mpicomm)
+        assert np.allclose(shifts, shifts_ref)
+
+
+def test_iterative_fft(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
     boxsize = 1200.
-    boxcenter = [1754, 400, 400]
-    data = fitsio.read(data_fn)
-    randoms = fitsio.read(randoms_fn)
-    data = {name: data[name] for name in data.dtype.names}
-    randoms = {name: randoms[name] for name in randoms.dtype.names}
-    recon = IterativeFFTReconstruction(f=0.8, bias=2., los=None, nthreads=4, boxcenter=boxcenter, boxsize=boxsize, nmesh=128, dtype='f8')
+    boxcenter = [1754, 0, 0]
+    data = Catalog.read(data_fn)
+    randoms = Catalog.read(randoms_fn)
+    recon = IterativeFFTReconstruction(f=0.8, bias=2., los=None, boxcenter=boxcenter, boxsize=boxsize, nmesh=128, dtype='f8')
     recon.assign_data(data['Position'], data['Weight'])
     recon.assign_randoms(randoms['Position'], randoms['Weight'])
     recon.set_density_contrast()
@@ -95,8 +108,15 @@ def test_iterative_fft(data_fn, randoms_fn):
     from pypower import CatalogFFTPower
     from matplotlib import pyplot as plt
 
-    data['Position_rec'] = data['Position'] - recon.read_shifts(data['Position'])
-    randoms['Position_rec'] = randoms['Position'] - recon.read_shifts(randoms['Position'], field='disp')
+    for cat, fn in zip([data, randoms], [data_fn_rec, randoms_fn_rec]):
+        rec = recon.read_shifted_positions(cat['Position'])
+        if 'Position_rec' in cat:
+            if recon.mpicomm.rank == 0: print('Checking...')
+            assert np.allclose(rec, cat['Position_rec'], rtol=1e-4, atol=1e-4)
+        else:
+            cat['Position_rec'] = rec
+        if fn is not None:
+            cat.write(fn)
 
     kwargs = dict(edges={'min': 0., 'step': 0.01}, ells=(0, 2, 4), boxsize=1000., nmesh=64, resampler='tsc', interlacing=3, position_type='pos')
     power = CatalogFFTPower(data_positions1=data['Position'], randoms_positions1=randoms['Position'], **kwargs)
@@ -105,19 +125,22 @@ def test_iterative_fft(data_fn, randoms_fn):
     poles_rec = power.poles
 
     for ill, ell in enumerate(poles.ells):
-        plt.plot(poles.k, poles.k * poles(ell=ell), color='C{:d}'.format(ill), linestyle='-')
-        plt.plot(poles_rec.k, poles_rec.k * poles_rec(ell=ell), color='C{:d}'.format(ill), linestyle='--')
+        plt.plot(poles.k, poles.k * poles(ell=ell, complex=False), color='C{:d}'.format(ill), linestyle='-')
+        plt.plot(poles_rec.k, poles_rec.k * poles_rec(ell=ell, complex=False), color='C{:d}'.format(ill), linestyle='--')
 
-    plt.show()
+    if power.mpicomm.rank == 0:
+        plt.show()
 
 
 if __name__ == '__main__':
 
-    from utils import data_fn, randoms_fn
+    from utils import data_fn, randoms_fn, catalog_rec_fn
     from pyrecon.utils import setup_logging
 
     setup_logging()
     # test_mem()
     test_dtype()
-    test_iterative_fft_wrap()
-    test_iterative_fft(data_fn, randoms_fn)
+    test_wrap()
+    test_mpi()
+    data_fn_rec, randoms_fn_rec = [catalog_rec_fn(fn, 'iterative_fft') for fn in [data_fn, randoms_fn]]
+    test_iterative_fft(data_fn_rec, randoms_fn_rec, None, None)

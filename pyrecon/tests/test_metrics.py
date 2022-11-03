@@ -33,9 +33,9 @@ def test_metrics():
     offset = data.boxcenter - data.boxsize / 2.
     data['Position'] = (data['Position'] - offset) % data.boxsize + offset
 
-    # recon = MultiGridReconstruction(f=f, bias=bias, los=los, nmesh=nmesh, boxsize=boxsize, boxcenter=boxcenter, fft_engine='fftw')
-    recon = PlaneParallelFFTReconstruction(f=f, bias=bias, los=los, nmesh=nmesh, boxsize=boxsize, boxcenter=boxcenter, fft_engine='fftw')
-    recon.assign_data(data.cget('Position'))
+    # recon = MultiGridReconstruction(f=f, bias=bias, los=los, nmesh=nmesh, boxsize=boxsize, boxcenter=boxcenter)
+    recon = PlaneParallelFFTReconstruction(f=f, bias=bias, los=los, nmesh=nmesh, boxsize=boxsize, boxcenter=boxcenter)
+    recon.assign_data(data['Position'])
     recon.set_density_contrast()
     # Run reconstruction
     recon.run()

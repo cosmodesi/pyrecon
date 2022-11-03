@@ -1,7 +1,7 @@
 """Implementation of Burden et al. 2015 (https://arxiv.org/abs/1504.02591) algorithm."""
 
+
 from .recon import BaseReconstruction, ReconstructionError
-from . import utils
 
 
 class PlaneParallelFFTReconstruction(BaseReconstruction):
@@ -40,16 +40,16 @@ class PlaneParallelFFTReconstruction(BaseReconstruction):
 
     def run(self):
         """Run reconstruction, i.e. compute Zeldovich displacement fields :attr:`mesh_psi`."""
-        delta_k = self.mesh_delta.to_complex()
+        delta_k = self.mesh_delta.r2c()
         del self.mesh_delta
-        k = utils.broadcast_arrays(*delta_k.coords())
-        k2 = sum(kk**2 for kk in k)
-        k2[0, 0, 0] = 1.  # to avoid dividing by 0
-        delta_k /= k2
-        mu2 = sum(kk * ll for ll, kk in zip(k, self.los)) / k2**0.5
         psis = []
         for iaxis in range(delta_k.ndim):
-            tmp = 1j * k[iaxis] * delta_k / (1. + self.beta * mu2)
-            psi = tmp.to_real()
-            psis.append(psi)
+            psi = delta_k.copy()
+            for kslab, slab in zip(psi.slabs.x, psi.slabs):
+                k2 = sum(kk**2 for kk in kslab)
+                k2[k2 == 0.] = 1.  # avoid dividing by zero
+                mu2 = sum(kk * ll for kk, ll in zip(kslab, self.los))**2 / k2
+                slab[...] *= 1j * kslab[iaxis] / k2 / (1. + self.beta * mu2)
+            psis.append(psi.c2r())
+            del psi
         self.mesh_psi = psis

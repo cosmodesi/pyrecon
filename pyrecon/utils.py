@@ -122,27 +122,6 @@ class BaseClass(object, metaclass=BaseMetaClass):
         return self.__copy__()
 
 
-def broadcast_arrays(*arrays):
-    """
-    Return broadcastable arrays given input 1D arrays.
-
-    Parameters
-    ----------
-    arrays : 1D arrays
-        N 1D arrays of size (n1, n2, ...)
-
-    Returns
-    -------
-    arrays : ND arrays
-        N ND arrays of shape (n1,1,1,1...(N - 1 times)), etc.
-    """
-    toret = []
-    for iaxis, array in enumerate(arrays):
-        sl = [None] * len(arrays); sl[iaxis] = slice(None)
-        toret.append(array[tuple(sl)])
-    return tuple(toret)
-
-
 def distance(position):
     """Return cartesian distance, taking coordinates along ``position`` last axis."""
     return np.sqrt((position**2).sum(axis=-1))
@@ -263,51 +242,12 @@ def _make_array(value, shape, dtype='f8'):
     return toret
 
 
-def random_box_positions(boxsize, boxcenter=0., size=None, nbar=None, rng=None, seed=None, dtype=None):
-    """
-    Return Cartesian positions in a 3D box.
-
-    Parameters
-    ----------
-    boxsize : array, float
-        Physical size of the box.
-
-    boxcenter : array, float, default=0.
-        Box center.
-
-    size : float, default=None
-        Number of particles. See ``nbar``.
-
-    nbar : float, default=None
-        If ``size`` is ``None``, ``size`` is obtained as the nearest integer to ``nbar * volume``
-        where ``volume`` is the box volume.
-
-    rng : np.RandomState, default=None
-        Random generator, optional.
-
-    seed : int, default=None
-        If ``rng`` is ``None``, the random seed.
-
-    dtype : string, np.dtype, defaut=None
-        Type output array.
-
-    Returns
-    -------
-    positions : array of shape (size, 3)
-    """
-    if rng is None:
-        rng = np.random.RandomState(seed=seed)
-    ndim = 3
-    boxsize = _make_array(boxsize, ndim, dtype=dtype)
-    if size is None:
-        if nbar is None:
-            raise ValueError('Provide either size or nbar')
-        size = int(nbar * np.prod(boxsize) + 0.5)
-    positions = rng.uniform(0., 1., size=(size, ndim)).astype(dtype)
-    boxsize = boxsize.astype(dtype)
-    boxcenter = _make_array(boxcenter, ndim, dtype=positions.dtype)
-    offset = boxcenter - boxsize / 2.
-    return positions * boxsize + offset
+def _get_box(*positions):
+    """Return minimal box containing input positions."""
+    pos_min, pos_max = _make_array(np.inf, 3, dtype='f8'), _make_array(-np.inf, 3, dtype='f8')
+    for position in positions:
+        if position.shape[0] > 0: pos_min, pos_max = np.min([pos_min, position.min(axis=0)], axis=0), np.max([pos_max, position.max(axis=0)], axis=0)
+    return pos_min, pos_max
 
 
 class MemoryMonitor(object):

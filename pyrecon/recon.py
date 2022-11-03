@@ -1,10 +1,152 @@
 """Implementation of base reconstruction class."""
 
+import inspect
+import functools
+
 import numpy as np
 
-from .mesh import RealMesh
+from pmesh.pm import ParticleMesh
+
+from .mesh import _get_mesh_attrs, _get_resampler, _wrap_positions
 from .utils import BaseClass
-from . import utils
+from . import utils, mpi
+
+
+def _gaussian_kernel(smoothing_radius):
+
+    def kernel(k, v):
+        return v * np.exp(- 0.5 * sum((ki * smoothing_radius)**2 for ki in k))
+
+    return kernel
+
+
+def _get_real_dtype(dtype):
+    # Return real-dtype equivalent
+    return np.empty(0, dtype=dtype).real.dtype
+
+
+def _format_positions(positions, position_type='xyz', dtype=None, copy=True, mpicomm=None, mpiroot=None):
+    # Format input array of positions
+    # position_type in ["xyz", "rdd", "pos"]
+
+    def __format_positions(positions):
+        if position_type == 'pos':  # array of shape (N, 3)
+            positions = np.array(positions, dtype=dtype, copy=copy)
+            if not np.issubdtype(positions.dtype, np.floating):
+                return None, 'Input position arrays should be of floating type, not {}'.format(positions.dtype)
+            if positions.shape[-1] != 3:
+                return None, 'For position type = {}, please provide a (N, 3) array for positions'.format(position_type)
+            return positions, None
+        # Array of shape (3, N)
+        positions = list(positions)
+        for ip, p in enumerate(positions):
+            # Cast to the input dtype if exists (may be set by previous weights)
+            positions[ip] = np.asarray(p, dtype=dtype)
+        size = len(positions[0])
+        dt = positions[0].dtype
+        if not np.issubdtype(dt, np.floating):
+            return None, 'Input position arrays should be of floating type, not {}'.format(dt)
+        for p in positions[1:]:
+            if len(p) != size:
+                return None, 'All position arrays should be of the same size'
+            if p.dtype != dt:
+                return None, 'All position arrays should be of the same type, you can e.g. provide dtype'
+        if len(positions) != 3:
+            return None, 'For position type = {}, please provide a list of 3 arrays for positions (found {:d})'.format(position_type, len(positions))
+        if position_type == 'rdd':  # RA, Dec, distance
+            positions = utils.sky_to_cartesian(positions, degree=True)
+        elif position_type != 'xyz':
+            return None, 'Position type should be one of ["pos", "xyz", "rdd"]'
+        return np.asarray(positions).T, None
+
+    error = None
+    if mpiroot is None or (mpicomm.rank == mpiroot):
+        if positions is not None and (position_type == 'pos' or not all(position is None for position in positions)):
+            positions, error = __format_positions(positions)  # return error separately to raise on all processes
+    if mpicomm is not None:
+        error = mpicomm.allgather(error)
+    else:
+        error = [error]
+    errors = [err for err in error if err is not None]
+    if errors:
+        raise ValueError(errors[0])
+    if mpiroot is not None and mpicomm.bcast(positions is not None if mpicomm.rank == mpiroot else None, root=mpiroot):
+        positions = mpi.scatter(positions, mpicomm=mpicomm, mpiroot=mpiroot)
+    return positions
+
+
+def _format_weights(weights, weight_type='product_individual', size=None, dtype=None, copy=True, mpicomm=None, mpiroot=None):
+    # Format input weights, as a list of n_bitwise_weights uint8 arrays, and optionally a float array for individual weights.
+    # Return formated list of weights, and n_bitwise_weights.
+    def __format_weights(weights):
+        islist = isinstance(weights, (tuple, list)) or getattr(weights, 'ndim', 1) == 2
+        if not islist:
+            weights = [weights]
+        if all(weight is None for weight in weights):
+            return []
+        individual_weights = weights
+        weights = []
+        if individual_weights:
+            if len(individual_weights) > 1 or copy:
+                weight = np.prod(individual_weights, axis=0, dtype=dtype)
+            else:
+                weight = individual_weights[0].astype(dtype, copy=False)
+            weights += [weight]
+        return weights
+
+    weights = __format_weights(weights)
+    if mpiroot is None:
+        size_weights = mpicomm.allgather(len(weights))
+        if len(set(size_weights)) != 1:
+            raise ValueError('mpiroot = None but weights are None/empty on some ranks')
+    else:
+        n = mpicomm.bcast(len(weights) if mpicomm.rank == mpiroot else None, root=mpiroot)
+        if mpicomm.rank != mpiroot: weights = [None] * n
+        weights = [mpi.scatter(weight, mpicomm=mpicomm, mpiroot=mpiroot) for weight in weights]
+
+    if size is not None:
+        if not all(len(weight) == size for weight in weights):
+            raise ValueError('All weight arrays should be of the same size as position arrays')
+    weights = weights[0] if weights else None
+    return weights
+
+
+def format_positions_weights_wrapper(func):
+    """Method wrapper applying _format_positions and _format_weigths on input."""
+    @functools.wraps(func)
+    def wrapper(self, positions, weights=None, copy=False, **kwargs):
+        position_type = kwargs.pop('position_type', self.position_type)
+        mpiroot = kwargs.pop('mpiroot', self.mpiroot)
+        positions = _format_positions(positions, position_type=position_type, copy=copy, mpicomm=self.mpicomm, mpiroot=mpiroot)
+        if not self.wrap:
+            low, high = self.boxcenter - self.boxsize / 2., self.boxcenter + self.boxsize / 2.
+            if any(self.mpicomm.allgather(np.any((positions < low) | (positions > high)))):
+                raise ValueError('positions not in box range {} - {}'.format(low, high))
+        weights = _format_weights(weights, weight_type='product_individual', size=len(positions), copy=copy, mpicomm=self.mpicomm, mpiroot=mpiroot)
+        toret = func(self, positions=positions, weights=weights, **kwargs)
+        if toret is not None and mpiroot is not None:  # positions returned, gather on the same rank
+            return mpi.gather(toret, mpicomm=self.mpicomm, mpiroot=mpiroot)
+        return toret
+    return wrapper
+
+
+def format_positions_wrapper(func):
+    """Method wrapper applying _format_positions on input, and gathering result on mpiroot."""
+    @functools.wraps(func)
+    def wrapper(self, positions, copy=False, **kwargs):
+        position_type = kwargs.pop('position_type', self.position_type)
+        mpiroot = kwargs.pop('mpiroot', self.mpiroot)
+        if not all(self.mpicomm.allgather(isinstance(positions, str))):  # for IterativeFFTParticleReconstruction
+            positions = _format_positions(positions, position_type=position_type, copy=copy, mpicomm=self.mpicomm, mpiroot=mpiroot)
+            if not self.wrap:
+                low, high = self.boxcenter - self.boxsize / 2., self.boxcenter + self.boxsize / 2.
+                if any(self.mpicomm.allgather(np.any((positions < low) | (positions > high)))):
+                    raise ValueError('positions not in box range {} - {}'.format(low, high))
+        toret = func(self, positions=positions, **kwargs)
+        if toret is not None and mpiroot is not None:  # positions returned, gather on the same rank
+            return mpi.gather(toret, mpicomm=self.mpicomm, mpiroot=mpiroot)
+        return toret
+    return wrapper
 
 
 class ReconstructionError(Exception):
@@ -37,10 +179,10 @@ class BaseReconstruction(BaseClass):
 
     Attributes
     ----------
-    mesh_data : RealMesh
+    mesh_data : RealField
         Mesh (3D grid) to assign ("paint") galaxies to.
 
-    mesh_randoms : RealMesh
+    mesh_randoms : RealField
         Mesh (3D grid) to assign ("paint") randoms to.
 
     f : float
@@ -53,13 +195,15 @@ class BaseReconstruction(BaseClass):
         If ``None``, local (varying) line-of-sight.
         Else line-of-sight (unit) 3-vector.
 
-    info : MeshInfo
-        Mesh information (boxsize, boxcenter, nmesh, etc.).
-
     boxsize, boxcenter, cellsize, offset : array
-        Mesh properties; see :class:`MeshInfo`.
+        Mesh properties.
     """
-    def __init__(self, f=0., bias=1., los=None, fft_engine='numpy', fft_wisdom=None, save_fft_wisdom=None, fft_plan='measure', wrap=False, **kwargs):
+    _slab_npoints_max = int(1024 * 1024 * 4)
+    _compressed = False
+
+    def __init__(self, f=0., bias=1., los=None, nmesh=None, boxsize=None, boxcenter=None, cellsize=None, boxpad=2., wrap=False,
+                 data_positions=None, randoms_positions=None, data_weights=None, randoms_weights=None,
+                 positions=None, position_type='pos', resampler='cic', decomposition=None, fft_plan='estimate', dtype='f8', mpiroot=None, mpicomm=mpi.COMM_WORLD, **kwargs):
         """
         Initialize :class:`BaseReconstruction`.
 
@@ -76,44 +220,97 @@ class BaseReconstruction(BaseClass):
             Else, may be 'x', 'y' or 'z', for one of the Cartesian axes.
             Else, a 3-vector.
 
-        fft_engine : string, BaseFFTEngine, default='numpy'
-            Engine for fast Fourier transforms. See :class:`BaseFFTEngine`.
-            We strongly recommend using 'fftw' for multithreaded FFTs.
+        nmesh : array, int, default=None
+            Mesh size, i.e. number of mesh nodes along each axis.
 
-        fft_wisdom : string, tuple, default=None
-            Optionally, wisdom for FFTW, if ``fft_engine`` is 'fftw'.
-            If a string, should be a path to previously saved FFT wisdom (with :func:`numpy.save`).
-            If a tuple, directly corresponds to the wisdom.
-            By default the wisdom given in ``save_fft_wisdom`` will be loaded, if exists.
+        boxsize : array, float, default=None
+            Physical size of the box along each axis, defaults to maximum extent taken by all input positions, times ``boxpad``.
 
-        save_fft_wisdom : bool, string, default=None
-            If not ``None``, path where to save the wisdom for FFTW.
-            If ``True``, the wisdom will be saved in the default path: f'wisdom.shape-{nmesh[0]}-{nmesh[1]}-{nmesh[2]}.type-{type}.nthreads-{nthreads}.npy'.
+        boxcenter : array, float, default=None
+            Box center, defaults to center of the Cartesian box enclosing all input positions.
 
-        fft_plan : string, default='measure'
-            Only used for FFTW. Choices are ['estimate', 'measure', 'patient', 'exhaustive'].
-            The increasing amount of effort spent during the planning stage to create the fastest possible transform.
-            Usually 'measure' is a good compromise.
+        cellsize : array, float, default=None
+            Physical size of mesh cells.
+            If not ``None``, and mesh size ``nmesh`` is not ``None``, used to set ``boxsize`` as ``nmesh * cellsize``.
+            If ``nmesh`` is ``None``, it is set as (the nearest integer(s) to) ``boxsize / cellsize``.
 
-        wrap : boolean, default=False
-            If ``True``, wrap input particle positions into the box.
+        boxpad : float, default=2.
+            When ``boxsize`` is determined from input positions, take ``boxpad`` times the smallest box enclosing positions as ``boxsize``.
 
-        kwargs : dict
-            Arguments to build :attr:`mesh_data`, :attr:`mesh_randoms` (see :class:`RealMesh`).
+        wrap : bool, default=False
+            Whether to wrap input positions in [0, boxsize]?
+            If ``False`` and input positions do not fit in the the box size, raise a :class:`ValueError`.
+
+        positions : list, array, default=None
+            Optionally, positions  used to defined box size. Typically of shape (3, N) or (N, 3).
+
+        data_positions : list, array, default=None
+            Positions in the data catalog. Typically of shape (3, N) or (N, 3).
+            If provided, reconstruction will be run directly (and ``data_positions`` will be added to ``positions`` to define the box size).
+
+        randoms_positions : list, array, default=None
+            Positions in the randoms catalog. See ``data_positions``.
+
+        data_weights : array of shape (N,), default=None
+            Optionally, weights in the data catalog.
+
+        randoms_weights : array of shape (N,), default=None
+            Optionally, weights in the randoms catalog.
+
+        position_type : string, default='xyz'
+            Type of input positions, one of:
+
+                - "pos": Cartesian positions of shape (N, 3)
+                - "xyz": Cartesian positions of shape (3, N)
+                - "rdd": RA/Dec in degree, distance of shape (3, N)
+
+            If ``position_type`` is "pos", positions are of (real) type ``dtype``, and ``mpiroot`` is ``None``,
+            no internal copy of positions will be made, hence saving some memory.
+
+        fft_plan : string, default='estimate'
+            FFT planning. 'measure' may allow for faster FFTs, but is slower to set up than 'estimate'.
+
+        resampler : string, ResampleWindow, default='tsc'
+            Resampler used to assign particles to the mesh.
+            Choices are ['ngp', 'cic', 'tcs', 'pcs'].
+
+        dtype : string, dtype, default='f8'
+            The data type to use for the mesh.
+
+        mpiroot : int, default=None
+            If ``None``, input positions and weights are assumed to be scattered across all ranks.
+            Else the MPI rank where input positions and weights are gathered.
+
+        mpicomm : MPI communicator, default=MPI.COMM_WORLD
+            The MPI communicator.
         """
+        self.mpicomm = mpicomm
+        self.mpiroot = mpiroot
+        self.position_type = position_type
+        self.wrap = bool(wrap)
+        self.rdtype = _get_real_dtype(dtype)
+        self.dtype = np.dtype(dtype) if self._compressed else 'c{:d}'.format(2 * self.rdtype.itemsize)
         self.set_cosmo(f=f, bias=bias)
-        self.wrap = wrap
-        self.mesh_data = RealMesh(**kwargs)
-        self.mesh_randoms = RealMesh(**kwargs)
-        # record mesh boxsize, cellsize and offset for later use when the meshes themselves get deleted
-        self.info = self.mesh_randoms.info
+        positions = _format_positions(positions, position_type=self.position_type, copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
+        data_positions = _format_positions(data_positions, position_type=self.position_type, copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
+        randoms_positions = _format_positions(randoms_positions, position_type=self.position_type, copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
+        all_positions = [pos for pos in [positions, data_positions, randoms_positions] if pos is not None]
+        self.nmesh, self.boxsize, self.boxcenter = _get_mesh_attrs(nmesh=nmesh, boxsize=boxsize, boxcenter=boxcenter, cellsize=cellsize, positions=all_positions,
+                                                                   boxpad=boxpad, check=positions is not None and not self.wrap, mpicomm=self.mpicomm)
+        self.resampler = _get_resampler(resampler=resampler)
+        self.pm = ParticleMesh(BoxSize=self.boxsize, Nmesh=self.nmesh, dtype=self.dtype, comm=self.mpicomm, resampler=self.resampler, np=decomposition, plan_method=fft_plan)
         self.set_los(los)
-        self.log_info('Using mesh {}.'.format(self.mesh_data))
-        self.log_info('Using {:d} threads.'.format(self.mesh_data.nthreads))
-        self.mesh_data.set_fft_engine(fft_engine, wisdom=fft_wisdom, save_wisdom=save_fft_wisdom, plan=fft_plan, hermitian=False)
-        self.mesh_randoms.set_fft_engine(self.mesh_data.fft_engine)
-        # Allow the wisdom to be accessed from outside if necessary
-        self.fft_wisdom = getattr(self.mesh_data.fft_engine, 'wisdom', None)
+        if self.mpicomm.rank == 0:
+            self.log_info('Using mesh with nmesh={}, boxsize={}, boxcenter={}.'.format(self.nmesh, self.boxsize, self.boxcenter))
+        if data_positions is not None:
+            data_weights = _format_weights(data_weights, weight_type='product_individual', size=len(data_positions), copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
+            self.assign_data(data_positions, data_weights, position_type='pos', copy=False, mpiroot=None)
+            if randoms_positions is not None:
+                randoms_weights = _format_weights(randoms_weights, weight_type='product_individual', size=len(randoms_positions), copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
+                self.assign_data(randoms_positions, randoms_weights, position_type='pos', copy=False, mpiroot=None)
+            run_kwargs = {name: kwargs.pop(name) for name in kwargs if name not in inspect.getargspec(self.set_density_contrast).args}
+            self.set_density_contrast(**kwargs)
+            self.run(**run_kwargs)
 
     @property
     def beta(self):
@@ -160,38 +357,132 @@ class BaseReconstruction(BaseClass):
                 los = 'xyz'.index(los)
             if np.ndim(los) == 0:
                 ilos = los
-                los = np.zeros(3, dtype=self.mesh_data.dtype)
+                los = np.zeros(3, dtype='f8')
                 los[ilos] = 1.
-            los = np.array(los, dtype=self.mesh_data.dtype)
+            los = np.array(los, dtype='f8')
             self.los = los / utils.distance(los)
 
-    def assign_data(self, positions, weights=None):
+    @property
+    def cellsize(self):
+        return self.boxsize / self.nmesh
+
+    @property
+    def offset(self):
+        return self.boxcenter - self.boxsize / 2.
+
+    def _wrap(self, positions):
+        return _wrap_positions(positions, self.boxsize, self.offset)
+
+    def _transform_rslab(self, rslab):
+        toret = []
+        for ii, rr in enumerate(rslab):
+            mask = rr < 0.
+            rr = rr.copy()
+            rr[mask] += self.boxsize[ii]
+            rr += self.offset[ii]
+            toret.append(rr)
+        return toret
+
+    def _paint(self, positions, weights=None, out=None, transform=None):
+        positions = positions - self.offset
+        scalar_weights = weights is None
+
+        # We work by slab to limit memory footprint
+        # Merely copy-pasted from https://github.com/bccp/nbodykit/blob/4aec168f176939be43f5f751c90363b39ec6cf3a/nbodykit/source/mesh/catalog.py#L300
+        def paint_slab(sl):
+            # Decompose positions such that they live in the same region as the mesh in the current process
+            p = positions[sl]
+            size = len(p)
+            layout = self.pm.decompose(p, smoothing=self.resampler.support)
+            # If we are receiving too many particles, abort and retry with a smaller chunksize
+            recvlengths = self.pm.comm.allgather(layout.recvlength)
+            if any(recvlength > 2 * self._slab_npoints_max for recvlength in recvlengths):
+                if self.pm.comm.rank == 0:
+                    self.log_info('Throttling slab size as some ranks will receive too many particles. ({:d} > {:d})'.format(max(recvlengths), self._slab_npoints_max * 2))
+                raise StopIteration
+            p = layout.exchange(p)
+            w = weights if scalar_weights else layout.exchange(weights[sl])
+            # hold = True means no zeroing of out
+            self.pm.paint(p, mass=w, resampler=self.resampler, transform=transform, hold=True, out=out)
+            return size
+
+        islab = 0
+        slab_npoints = self._slab_npoints_max
+        sizes = self.pm.comm.allgather(len(positions))
+        csize = sum(sizes)
+        local_size_max = max(sizes)
+        painted_size = 0
+
+        import gc
+        while islab < local_size_max:
+
+            sl = slice(islab, islab + slab_npoints)
+
+            if self.pm.comm.rank == 0:
+                self.log_info('Slab {:d} ~ {:d} / {:d}.'.format(islab, islab + slab_npoints, local_size_max))
+            try:
+                painted_size_slab = paint_slab(sl)
+            except StopIteration:
+                slab_npoints = slab_npoints // 2
+                if slab_npoints < 1:
+                    raise RuntimeError('Cannot find a slab size that fits into memory.')
+                continue
+            finally:
+                # collect unfreed items
+                gc.collect()
+
+            painted_size += self.pm.comm.allreduce(painted_size_slab)
+
+            if self.pm.comm.rank == 0:
+                self.log_info('Painted {:d} out of {:d} objects to mesh.'.format(painted_size, csize))
+
+            islab += slab_npoints
+            slab_npoints = min(self._slab_npoints_max, int(slab_npoints * 1.2))
+
+    def _readout(self, mesh, positions):
+        positions = positions - self.offset
+        layout = self.pm.decompose(positions, smoothing=self.resampler)
+        positions = layout.exchange(positions)
+        values = mesh.readout(positions, resampler=self.resampler)
+        return layout.gather(values, mode='sum', out=None)
+
+    def _smooth_gaussian(self, mesh):
+        mesh = mesh.r2c()
+        mesh.apply(_gaussian_kernel(self.smoothing_radius), kind='wavenumber', out=Ellipsis)
+        return mesh.c2r()
+
+    @format_positions_weights_wrapper
+    def assign_data(self, positions, weights=None, **kwargs):
         """
         Assign (paint) data to :attr:`mesh_data`.
         This can be done slab-by-slab (e.g. to reduce memory footprint).
 
         Parameters
         ----------
-        positions : array of shape (N,3)
+        positions : array of shape (N, 3)
             Cartesian positions.
 
         weights : array of shape (N,), default=None
             Weights; default to 1.
         """
-        self.mesh_data.assign_cic(positions, weights=weights, wrap=self.wrap)
+        if not hasattr(self, 'mesh_data'):
+            self.mesh_data = self.pm.create(type='real', value=0.)
+        self._paint(positions, weights=weights, out=self.mesh_data)
 
+    @format_positions_weights_wrapper
     def assign_randoms(self, positions, weights=None):
         """Same as :meth:`assign_data`, but for random objects."""
-        if self.mesh_randoms.value is None:
+        if not hasattr(self, 'mesh_randoms'):
+            self.mesh_randoms = self.pm.create(type='real', value=0.)
             self._size_randoms = 0
-        self.mesh_randoms.assign_cic(positions, weights=weights, wrap=self.wrap)
-        self._size_randoms += len(positions)
+        self._paint(positions, weights=weights, out=self.mesh_randoms)
+        self._size_randoms += self.mpicomm.allreduce(len(positions))
 
     @property
     def has_randoms(self):
-        return self.mesh_randoms.value is not None
+        return hasattr(self, 'mesh_randoms')
 
-    def set_density_contrast(self, ran_min=0.01, smoothing_radius=15., check=False, **kwargs):
+    def set_density_contrast(self, ran_min=0.01, smoothing_radius=15., check=False):
         r"""
         Set :math:`\delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
 
@@ -205,49 +496,58 @@ class BaseReconstruction(BaseClass):
             :attr:`mesh_randoms` points below this threshold times mean random weights have their density contrast set to 0.
 
         smoothing_radius : float, default=15
-            Smoothing scale, see :meth:`RealMesh.smooth_gaussian`.
+            Smoothing scale.
 
         check : bool, default=False
             If ``True``, run some tests (printed in logger) to assess whether enough randoms have been used.
-
-        kwargs : dict
-            Optional arguments for :meth:`RealMesh.smooth_gaussian`.
         """
-        self.mesh_data.smooth_gaussian(smoothing_radius, **kwargs)
+        self.smoothing_radius = smoothing_radius
+        self.mesh_delta = self._smooth_gaussian(self.mesh_data)
+        del self.mesh_data
+
         if self.has_randoms:
             if check:
-                mask_nonzero = self.mesh_randoms.value > 0.
-                nnonzero = mask_nonzero.sum()
+                nnonzero = self.mpicomm.allreduce(sum(np.sum(randoms > 0.) for randoms in self.mesh_randoms))
                 if nnonzero < 2: raise ValueError('Very few randoms!')
-            self.mesh_randoms.smooth_gaussian(smoothing_radius, **kwargs)
-            sum_data, sum_randoms = np.sum(self.mesh_data.value), np.sum(self.mesh_randoms.value)
+
+            self.mesh_randoms = self._smooth_gaussian(self.mesh_randoms)
+
+            sum_data, sum_randoms = self.mesh_delta.csum(), self.mesh_randoms.csum()
             alpha = sum_data * 1. / sum_randoms
-            self.mesh_delta = self.mesh_data - alpha * self.mesh_randoms
+
+            for delta, randoms in zip(self.mesh_delta.slabs, self.mesh_randoms.slabs):
+                delta[...] -= alpha * randoms
+
             threshold = ran_min * sum_randoms / self._size_randoms
+
+            for delta, randoms in zip(self.mesh_delta.slabs, self.mesh_randoms.slabs):
+                mask = randoms > threshold
+                delta[mask] /= (self.bias * alpha * randoms[mask])
+                delta[~mask] = 0.
+
             if check:
-                mean_nran_per_cell = self.mesh_randoms.value[mask_nonzero].mean()
-                std_nran_per_cell = self.mesh_randoms.value[mask_nonzero].std(ddof=1)
-                self.log_info('Mean smoothed random density in non-empty cells is {:.4f} (std = {:.4f}), threshold is (ran_min * mean weight) = {:.4f}.'.format(mean_nran_per_cell, std_nran_per_cell, threshold))
-            mask = self.mesh_randoms > threshold
-            if check:
-                frac_nonzero_masked = 1. - mask[mask_nonzero].sum() / nnonzero
+                mean_nran_per_cell = self.mpicomm.allreduce(sum(randoms[randoms > 0] for randoms in self.mesh_randoms))
+                std_nran_per_cell = self.mpicomm.allreduce(sum(randoms[randoms > 0]**2 for randoms in self.mesh_randoms)) - mean_nran_per_cell**2
+                if self.mpicomm.rank == 0:
+                    self.log_info('Mean smoothed random density in non-empty cells is {:.4f} (std = {:.4f}), threshold is (ran_min * mean weight) = {:.4f}.'.format(mean_nran_per_cell, std_nran_per_cell, threshold))
+
+                frac_nonzero_masked = 1. - self.mpicomm.allreduce(sum(np.sum(randoms > 0.) for randoms in self.mesh_randoms)) / nnonzero
                 del mask_nonzero
-                if frac_nonzero_masked > 0.1:
-                    self.log_warning('Masking a large fraction {:.4f} of non-empty cells. You should probably increase the number of randoms.'.format(frac_nonzero_masked))
-                else:
-                    self.log_info('Masking a fraction {:.4f} of non-empty cells.'.format(frac_nonzero_masked))
-            self.mesh_delta[mask] /= (self.bias * alpha * self.mesh_randoms[mask])
-            self.mesh_delta[~mask] = 0.
+                if self.mpicomm.rank == 0:
+                    if frac_nonzero_masked > 0.1:
+                        self.log_warning('Masking a large fraction {:.4f} of non-empty cells. You should probably increase the number of randoms.'.format(frac_nonzero_masked))
+                    else:
+                        self.log_info('Masking a fraction {:.4f} of non-empty cells.'.format(frac_nonzero_masked))
+
         else:
-            self.mesh_delta = self.mesh_data / np.mean(self.mesh_data) - 1.
-            self.mesh_delta /= self.bias
-        del self.mesh_data
-        del self.mesh_randoms
+            self.mesh_delta /= (self.mesh_delta.cmean() * self.bias)
+            self.mesh_delta -= 1. / self.bias
 
     def run(self, *args, **kwargs):
         """Run reconstruction; to be implemented in your algorithm."""
         raise NotImplementedError('Implement method "run" in your "{}"-inherited algorithm'.format(self.__class__.___name__))
 
+    @format_positions_wrapper
     def read_shifts(self, positions, field='disp+rsd'):
         """
         Read displacement at input positions.
@@ -280,16 +580,16 @@ class BaseReconstruction(BaseClass):
         allowed_fields = ['disp', 'rsd', 'disp+rsd']
         if field not in allowed_fields:
             raise ReconstructionError('Unknown field {}. Choices are {}'.format(field, allowed_fields))
+
         shifts = np.empty_like(positions)
-        if self.wrap: positions = self.info.wrap(positions)  # wrap here for local los
         for iaxis, psi in enumerate(self.mesh_psi):
-            shifts[:, iaxis] = psi.read_cic(positions, wrap=False)  # already wrapped if required
+            shifts[:, iaxis] = self._readout(psi, positions)
         if field == 'disp':
             return shifts
         if self.los is None:
             los = positions / utils.distance(positions)[:, None]
         else:
-            los = self.los
+            los = self.los.astype(shifts.dtype)
         rsd = self.f * np.sum(shifts * los, axis=-1)[:, None] * los
         if field == 'rsd':
             return rsd
@@ -297,6 +597,7 @@ class BaseReconstruction(BaseClass):
         shifts += rsd
         return shifts
 
+    @format_positions_wrapper
     def read_shifted_positions(self, positions, field='disp+rsd'):
         """
         Read shifted positions i.e. the difference ``positions - self.read_shifts(positions, field=field)``.
@@ -317,18 +618,5 @@ class BaseReconstruction(BaseClass):
         """
         shifts = self.read_shifts(positions, field=field)
         positions = positions - shifts
-        if self.wrap: positions = self.info.wrap(positions)
+        if self.wrap: positions = self._wrap(positions)
         return positions
-
-
-def _make_property(name):
-
-    @property
-    def func(self):
-        return getattr(self.info, name)
-
-    return func
-
-
-for name in ['boxsize', 'boxcenter', 'nmesh', 'offset', 'cellsize']:
-    setattr(BaseReconstruction, name, _make_property(name))

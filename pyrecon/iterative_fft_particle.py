@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from .recon import BaseReconstruction, ReconstructionError
+from .recon import BaseReconstruction, ReconstructionError, format_positions_wrapper, format_positions_weights_wrapper
 from . import utils
 
 
@@ -13,6 +13,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
     Numerical agreement in the Zeldovich displacements between original codes and this re-implementation is machine precision
     (absolute and relative difference of 1e-12).
     """
+    @format_positions_weights_wrapper
     def assign_data(self, positions, weights=None):
         """
         Assign (paint) data to :attr:`mesh_data`.
@@ -21,16 +22,16 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         """
         if weights is None:
             weights = np.ones_like(positions, shape=(len(positions),))
-        if self.wrap: positions = self.info.wrap(positions)
-        if self.mesh_data.value is None:
+        if not hasattr(self, 'mesh_data'):
+            self.mesh_data = self.pm.create(type='real', value=0.)
             self._positions_data = positions
             self._weights_data = weights
         else:
             self._positions_data = np.concatenate([self._positions_data, positions], axis=0)
             self._weights_data = np.concatenate([self._weights_data, weights], axis=0)
-        self.mesh_data.assign_cic(positions, weights=weights, wrap=self.wrap)
+        self._paint(positions, weights=weights, out=self.mesh_data)
 
-    def set_density_contrast(self, ran_min=0.01, smoothing_radius=15.):
+    def set_density_contrast(self, ran_min=0.01, smoothing_radius=15., check=False):
         r"""
         Set :math:`\delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
 
@@ -43,20 +44,54 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         ----------
         ran_min : float, default=0.01
             :attr:`mesh_randoms` points below this threshold times mean random weights have their density contrast set to 0.
+
+        smoothing_radius : float, default=15
+            Smoothing scale, see :meth:`RealMesh.smooth_gaussian`.
+
+        check : bool, default=False
+            If ``True``, run some tests (printed in logger) to assess whether enough randoms have been used.
         """
         self.ran_min = ran_min
         self.smoothing_radius = smoothing_radius
+
+        self.mesh_delta = self.mesh_data.copy()
+
         if self.has_randoms:
-            sum_data, sum_randoms = np.sum(self.mesh_data.value), np.sum(self.mesh_randoms.value)
+
+            if check:
+                nnonzero = self.mpicomm.allreduce(sum(np.sum(randoms > 0.) for randoms in self.mesh_randoms))
+                if nnonzero < 2: raise ValueError('Very few randoms!')
+
+            sum_data, sum_randoms = self.mesh_data.csum(), self.mesh_randoms.csum()
             alpha = sum_data * 1. / sum_randoms
-            self.mesh_delta = self.mesh_data - alpha * self.mesh_randoms
+
+            for delta, randoms in zip(self.mesh_delta.slabs, self.mesh_randoms.slabs):
+                delta[...] -= alpha * randoms
+
             threshold = ran_min * sum_randoms / self._size_randoms
-            mask = self.mesh_randoms > threshold
-            self.mesh_delta[mask] /= (self.bias * alpha * self.mesh_randoms[mask])
-            self.mesh_delta[~mask] = 0.
+
+            for delta, randoms in zip(self.mesh_delta.slabs, self.mesh_randoms.slabs):
+                mask = randoms > threshold
+                delta[mask] /= (self.bias * alpha * randoms[mask])
+                delta[~mask] = 0.
+
+            if check:
+                mean_nran_per_cell = self.mpicomm.allreduce(sum(randoms[randoms > 0] for randoms in self.mesh_randoms))
+                std_nran_per_cell = self.mpicomm.allreduce(sum(randoms[randoms > 0]**2 for randoms in self.mesh_randoms)) - mean_nran_per_cell**2
+                if self.mpicomm.rank == 0:
+                    self.log_info('Mean smoothed random density in non-empty cells is {:.4f} (std = {:.4f}), threshold is (ran_min * mean weight) = {:.4f}.'.format(mean_nran_per_cell, std_nran_per_cell, threshold))
+
+                frac_nonzero_masked = 1. - self.mpicomm.allreduce(sum(np.sum(randoms > 0.) for randoms in self.mesh_randoms)) / nnonzero
+                del mask_nonzero
+                if self.mpicomm.rank == 0:
+                    if frac_nonzero_masked > 0.1:
+                        self.log_warning('Masking a large fraction {:.4f} of non-empty cells. You should probably increase the number of randoms.'.format(frac_nonzero_masked))
+                    else:
+                        self.log_info('Masking a fraction {:.4f} of non-empty cells.'.format(frac_nonzero_masked))
+
         else:
-            self.mesh_delta = self.mesh_data / np.mean(self.mesh_data) - 1.
-            self.mesh_delta /= self.bias
+            self.mesh_delta /= (self.mesh_delta.cmean() * self.bias)
+            self.mesh_delta -= 1. / self.bias
 
     def run(self, niterations=3):
         """
@@ -70,50 +105,55 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         """
         self._iter = 0
         # Gaussian smoothing before density contrast calculation
-        self.mesh_data.smooth_gaussian(self.smoothing_radius, method='fft')
-        if self.has_randoms: self.mesh_randoms.smooth_gaussian(self.smoothing_radius, method='fft')
+        self.mesh_data = self._smooth_gaussian(self.mesh_data)
+        if self.has_randoms:
+            self.mesh_randoms = self._smooth_gaussian(self.mesh_randoms)
         self._positions_rec_data = self._positions_data.copy()
         for iter in range(niterations):
             self.mesh_psi = self._iterate(return_psi=iter == niterations - 1)
-        del self.mesh_randoms
+        if self.has_randoms:
+            del self.mesh_randoms
 
     def _iterate(self, return_psi=False):
-        self.log_info('Running iteration {:d}.'.format(self._iter))
+        if self.mpicomm.rank == 0:
+            self.log_info('Running iteration {:d}.'.format(self._iter))
 
         if self._iter > 0:
-            self.mesh_data = self.mesh_randoms.copy()
-            self.mesh_data.value = None  # to reset mesh values
+            self.mesh_data[...] = 0.  # to reset mesh values
             # Painting reconstructed data real-space positions
-            wrap = self.wrap; self.wrap = True  # enforce wrapping
             super(OriginalIterativeFFTParticleReconstruction, self).assign_data(self._positions_rec_data, weights=self._weights_data)  # super in order not to save positions_rec_data
-            self.wrap = wrap
             # Gaussian smoothing before density contrast calculation
-            self.mesh_data.smooth_gaussian(self.smoothing_radius, method='fft')
+            self.mesh_data = self._smooth_gaussian(self.mesh_data)
 
         self.set_density_contrast(ran_min=self.ran_min, smoothing_radius=self.smoothing_radius)
-        del self.mesh_data
-        delta_k = self.mesh_delta.to_complex()
+        delta_k = self.mesh_delta.r2c()
         del self.mesh_delta
-        k = utils.broadcast_arrays(*delta_k.coords())
-        delta_k.prod_sum([k**2 for k in delta_k.coords()], exp=-1)
-        delta_k[0, 0, 0] = 0.
-        # k = utils.broadcast_arrays(*delta_k.coords())
-        # k2 = sum(kk**2 for kk in k)
-        # k2[0,0,0] = 1. # to avoid dividing by 0
-        # delta_k /= k2
-        self.log_info('Computing displacement field.')
+
+        for kslab, slab in zip(delta_k.slabs.x, delta_k.slabs):
+            k2 = sum(kk**2 for kk in kslab)
+            k2[k2 == 0.] = 1.  # avoid dividing by zero
+            slab[...] /= k2
+
+        if self.mpicomm.rank == 0:
+            self.log_info('Computing displacement field.')
+
         shifts = np.empty_like(self._positions_rec_data)
         psis = []
         for iaxis in range(delta_k.ndim):
-            # no need to compute psi on axis where los is 0
+            # No need to compute psi on axis where los is 0
             if not return_psi and self.los is not None and self.los[iaxis] == 0:
                 shifts[:, iaxis] = 0.
                 continue
-            psi = (delta_k * 1j * k[iaxis]).to_real()
-            # Reading shifts at reconstructed data real-space positions
-            shifts[:, iaxis] = psi.read_cic(self._positions_rec_data, wrap=True)
-            if return_psi: psis.append(psi)
 
+            psi = delta_k.copy()
+            for kslab, slab in zip(psi.slabs.x, psi.slabs):
+                slab[...] *= 1j * kslab[iaxis]
+
+            psi = psi.c2r()
+            # Reading shifts at reconstructed data real-space positions
+            shifts[:, iaxis] = self._readout(psi, self._positions_rec_data)
+            if return_psi: psis.append(psi)
+            del psi
         # self.log_info('A few displacements values:')
         # for s in shifts[:3]: self.log_info('{}'.format(s))
         if self.los is None:
@@ -131,13 +171,11 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         # assumed to not have RSD.
         # The iterative procedure then uses the new positions as if they'd been read in from the start
         self._positions_rec_data = self._positions_data - self.f * np.sum(shifts * los, axis=-1)[:, None] * los
-        diff = self._positions_rec_data - self.mesh_randoms.offset
-        if (not self.wrap) and np.any((diff < 0) | (diff > self.mesh_randoms.boxsize - self.mesh_randoms.cellsize)):
-            self.log_warning('Some particles are out-of-bounds.')
         self._iter += 1
         if return_psi:
             return psis
 
+    @format_positions_wrapper
     def read_shifts(self, positions, field='disp+rsd'):
         """
         Read displacement at input positions.
@@ -167,15 +205,15 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         if field not in allowed_fields:
             raise ReconstructionError('Unknown field {}. Choices are {}'.format(field, allowed_fields))
 
-        def read_cic(positions, wrap=False):
+        def _read_shifts(positions):
             shifts = np.empty_like(positions)
             for iaxis, psi in enumerate(self.mesh_psi):
-                shifts[:, iaxis] = psi.read_cic(positions, wrap=wrap)
+                shifts[:, iaxis] = self._readout(psi, positions)
             return shifts
 
         if isinstance(positions, str) and positions == 'data':
             # _positions_rec_data already wrapped during iteration
-            shifts = read_cic(self._positions_rec_data, wrap=True)
+            shifts = _read_shifts(self._positions_rec_data)
             if field == 'disp':
                 return shifts
             rsd = self._positions_data - self._positions_rec_data
@@ -185,8 +223,8 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             shifts += rsd
             return shifts
 
-        if self.wrap: positions = self.info.wrap(positions)  # wrap here for local los
-        shifts = read_cic(positions, wrap=False)  # aleady wrapped
+        if self.wrap: positions = self._wrap(positions)  # wrap here for local los
+        shifts = _read_shifts(positions)  # aleady wrapped
 
         if field == 'disp':
             return shifts
@@ -194,7 +232,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         if self.los is None:
             los = positions / utils.distance(positions)[:, None]
         else:
-            los = self.los
+            los = self.los.astype(positions.dtype)
         rsd = self.f * np.sum(shifts * los, axis=-1)[:, None] * los
 
         if field == 'rsd':
@@ -204,13 +242,15 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         # we follow convention of original algorithm: remove RSD first,
         # then remove Zeldovich displacement
         real_positions = positions - rsd
-        diff = real_positions - self.mesh_psi[0].offset
-        if (not self.wrap) and np.any((diff < 0) | (diff > self.mesh_psi[0].boxsize - self.mesh_psi[0].cellsize)):
-            self.log_warning('Some particles are out-of-bounds.')
-        shifts = read_cic(real_positions, wrap=True)
+        diff = real_positions - self.offset
+        if (not self.wrap) and any(self.mpicomm.allgather(np.any((diff < 0) | (diff > self.boxsize - self.cellsize)))):
+            if self.mpicomm.rank == 0:
+                self.log_warning('Some particles are out-of-bounds.')
+        shifts = _read_shifts(real_positions)
 
         return shifts + rsd
 
+    @format_positions_wrapper
     def read_shifted_positions(self, positions, field='disp+rsd'):
         """
         Read shifted positions i.e. the difference ``positions - self.read_shifts(positions, field=field)``.
@@ -235,7 +275,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         if isinstance(positions, str) and positions == 'data':
             positions = self._positions_data
         positions = positions - shifts
-        if self.wrap: positions = self.info.wrap(positions)
+        if self.wrap: positions = self._wrap(positions)
         return positions
 
 

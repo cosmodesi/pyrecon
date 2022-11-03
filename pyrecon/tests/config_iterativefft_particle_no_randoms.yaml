@@ -1,19 +1,18 @@
 input:
   dir: ./_catalogs
-  xyz: RSDPosition
+  pos: RSDPosition
   #rdz: [RA, DEC, Z]
   data_fn: box_data.fits
 
 output:
   dir: ./_catalogs
   data_fn: script_box_data_rec.fits
-  xyz_rec: Position_rec
+  pos_rec: Position_rec
   columns: [RSDPosition]
 
 algorithm:
   name: IterativeFFTParticleReconstruction
   convention: RecSym
-  nthreads: 4
   los: x
 
 delta:
@@ -28,5 +27,4 @@ mesh:
   boxcenter: 400.
   nmesh: 128
   dtype: f8
-  fft_engine: 'fftw'
   fft_plan: 'estimate'

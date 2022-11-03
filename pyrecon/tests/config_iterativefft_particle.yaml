@@ -1,7 +1,6 @@
 input:
   dir: ./_catalogs
-  xyz: Position
-  #rdz: [RA, DEC, Z]
+  pos: Position
   data_fn: data.fits
   randoms_fn: randoms.fits
   weight: ${Weight}
@@ -10,15 +9,14 @@ output:
   dir: ./_catalogs
   data_fn: data_rec_script.fits
   randoms_fn: randoms_rec_script.fits
-  xyz: Position
-  xyz_rec: Position_rec
+  pos: Position
+  pos_rec: Position_rec
   rdz_rec: [ra_rec, dec_rec, z_rec]
   columns: [NZ, Weight]
 
 algorithm:
   name: IterativeFFTParticleReconstruction
   convention: RecSym
-  nthreads: 4
   los: local
   # other algorithm-related parameters
 
@@ -28,10 +26,7 @@ delta:
 cosmology:
   bias: 2.0
   f: 0.8
-  Omega_m: 0.3
 
 mesh:
   nmesh: 128
   dtype: f8
-  #fft_engine: 'fftw'
-  #save_fft_wisdom: 'wisdom.iterative_fft_particle.npy'

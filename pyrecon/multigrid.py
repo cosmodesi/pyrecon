@@ -1,13 +1,9 @@
 """Re-implementation of Martin J. White's reconstruction code."""
 
-import os
-import ctypes
-
 import numpy as np
-from numpy import ctypeslib
 
-from .recon import BaseReconstruction, ReconstructionError
-from . import utils
+from .recon import BaseReconstruction, ReconstructionError, format_positions_wrapper
+from . import _multigrid, utils, mpi
 
 
 class OriginalMultiGridReconstruction(BaseReconstruction):
@@ -18,18 +14,11 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
     Numerical agreement in the Zeldovich displacements between original code and this re-implementation is numerical precision (absolute and relative difference of 1e-10).
     To test this, change float to double and increase precision in io.cpp/write_data in the original code.
     """
-    _path_lib = os.path.join(utils.lib_dir, 'multigrid_{}.so')
+    _compressed = True
 
-    def __init__(self, *args, **kwargs):
-        """
-        Initialize :class:`MultiGridReconstruction`.
-        See :class:`BaseReconstruction` for input parameters.
-        """
-        # Only 2 FFTs to perform, for the Gaussian smoothing, so no need to spend time on scheduling
-        kwargs.setdefault('fft_plan', 'estimate')
-        super(OriginalMultiGridReconstruction, self).__init__(*args, **kwargs)
-        self._type_float = self.mesh_data._type_float
-        self._lib = ctypes.CDLL(self._path_lib.format(self.mesh_data._precision), mode=ctypes.RTLD_LOCAL)
+    def __init__(self, *args, mpicomm=mpi.COMM_WORLD, **kwargs):
+        # We require a split, along axis x.
+        super(OriginalMultiGridReconstruction, self).__init__(*args, decomposition=(mpicomm.size, 1), mpicomm=mpicomm, **kwargs)
 
     def set_density_contrast(self, ran_min=0.75, smoothing_radius=15., **kwargs):
         r"""
@@ -51,35 +40,61 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         kwargs : dict
             Optional arguments for :meth:`RealMesh.smooth_gaussian`.
         """
-        if not self.has_randoms:
-            self.mesh_delta = self.mesh_data / np.mean(self.mesh_data) - 1.
-            self.mesh_delta /= self.bias
-            self.mesh_delta.smooth_gaussian(smoothing_radius, **kwargs)
-            return
-        # Martin's notes:
-        # We remove any points which have too few randoms for a decent
-        # density estimate -- this is "fishy", but it tames some of the
-        # worst swings due to 1/eps factors. Better would be an interpolation
-        # or a pre-smoothing (or many more randoms).
-        mask = self.mesh_randoms >= ran_min
-        # alpha = np.sum(self.mesh_data[mask])/np.sum(self.mesh_randoms[mask])
-        # Following two lines are how things are done in original code
-        self.mesh_data[(self.mesh_randoms > 0) & (self.mesh_randoms < ran_min)] = 0.
-        alpha = np.sum(self.mesh_data) / np.sum(self.mesh_randoms[mask])
-        self.mesh_data[mask] /= alpha * self.mesh_randoms[mask]
-        self.mesh_delta = self.mesh_data
-        del self.mesh_data
-        del self.mesh_randoms
-        self.mesh_delta -= 1
-        self.mesh_delta[~mask] = 0.
-        self.mesh_delta /= self.bias
-        # At this stage also remove the mean, so the source is genuinely mean 0.
-        # So as to not disturb the
-        # padding regions, we only compute and subtract the mean for the
-        # regions with delta != 0.
-        mask = self.mesh_delta != 0.
-        self.mesh_delta[mask] -= np.mean(self.mesh_delta[mask])
-        self.mesh_delta.smooth_gaussian(smoothing_radius, **kwargs)
+        self.smoothing_radius = smoothing_radius
+        if self.has_randoms:
+            # Martin's notes:
+            # We remove any points which have too few randoms for a decent
+            # density estimate -- this is "fishy", but it tames some of the
+            # worst swings due to 1/eps factors. Better would be an interpolation
+            # or a pre-smoothing (or many more randoms).
+            # alpha = np.sum(self.mesh_data[mask])/np.sum(self.mesh_randoms[mask])
+            # Following two lines are how things are done in original code
+            for data, randoms in zip(self.mesh_data.slabs, self.mesh_randoms.slabs):
+                data[(randoms > 0) & (randoms < ran_min)] = 0.
+            alpha = self.mesh_data.csum() / self.mpicomm.allreduce(sum(np.sum(randoms[randoms >= ran_min]) for randoms in self.mesh_randoms))
+            for data, randoms in zip(self.mesh_data.slabs, self.mesh_randoms.slabs):
+                mask = randoms >= ran_min
+                data[mask] /= alpha * randoms[mask]
+                data[...] -= 1.
+                data[~mask] = 0.
+                data[...] /= self.bias
+            self.mesh_delta = self.mesh_data
+            del self.mesh_data
+            del self.mesh_randoms
+            # At this stage also remove the mean, so the source is genuinely mean 0.
+            # So as to not disturb the padding regions, we only compute and subtract the mean for the regions with delta != 0.
+            mean = self.mesh_delta.csum() / self.mpicomm.allreduce(sum(np.sum(delta != 0.) for delta in self.mesh_delta))
+            for delta in self.mesh_delta.slabs:
+                mask = delta != 0.
+                delta[mask] -= mean
+        else:
+            self.mesh_delta /= (self.mesh_data.cmean() * self.bias)
+            self.mesh_delta -= 1. / self.bias
+        self.mesh_delta = self._smooth_gaussian(self.mesh_delta)
+
+    def _vcycle(self, v, f):
+        _multigrid.jacobi(v, f, self.boxcenter, self.beta, damping_factor=self.jacobi_damping_factor, niterations=self.jacobi_niterations, los=self.los)
+        nmesh = v.pm.Nmesh
+        recurse = np.all((nmesh > 4) & (nmesh % 2 == 0))
+        if recurse:
+            f2h = _multigrid.reduce(_multigrid.residual(v, f, self.boxcenter, self.beta, los=self.los))
+            v2h = f2h.pm.create(type='real', value=0.)
+            self._vcycle(v2h, f2h)
+            v.value += _multigrid.prolong(v2h).value
+        _multigrid.jacobi(v, f, self.boxcenter, self.beta, damping_factor=self.jacobi_damping_factor, niterations=self.jacobi_niterations, los=self.los)
+
+    def _fmg(self, f1h):
+        nmesh = f1h.pm.Nmesh
+        recurse = np.all((nmesh > 4) & (nmesh % 2 == 0))
+        if recurse:
+            # Recurse to a coarser grid
+            v1h = _multigrid.prolong(self._fmg(_multigrid.reduce(f1h)))
+        else:
+            # Start with a guess of zeros
+            v1h = f1h.pm.create(type='real', value=0.)
+        for iter in range(self.vcycle_niterations):
+            self._vcycle(v1h, f1h)
+        return v1h
 
     def run(self, jacobi_damping_factor=0.4, jacobi_niterations=5, vcycle_niterations=6):
         """
@@ -97,28 +112,13 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         vcycle_niterations : int, default=6
             Number of V-cycle calls.
         """
-        func = self._lib.fmg
-        ndim = 3
-        type_nmesh = ctypeslib.ndpointer(dtype=ctypes.c_size_t, shape=ndim)
-        type_boxsize = ctypeslib.ndpointer(dtype=self._type_float, shape=ndim)
-        type_pointer = ctypes.POINTER(self._type_float)
-        func.argtypes = (self.mesh_delta._type_float_mesh, self.mesh_delta._type_float_mesh,
-                         type_nmesh, type_boxsize, type_boxsize,
-                         self._type_float, self._type_float, ctypes.c_int, ctypes.c_int,
-                         type_pointer if self.los is None else type_boxsize)
-        self.mesh_phi = self.mesh_delta.zeros_like()
-        self.mesh_phi.value.shape = -1
-        if self.los is None:
-            los = type_pointer()
-        else:
-            los = self.los.astype(self._type_float, copy=False)
-        self.log_info('Computing displacement potential.')
-        func(self.mesh_delta.value.ravel(order='C'), self.mesh_phi.value,
-             self.mesh_delta.nmesh.astype(ctypes.c_size_t, copy=False), self.mesh_delta.boxsize.astype(self._type_float, copy=False), self.mesh_delta.boxcenter.astype(self._type_float, copy=False),
-             self.beta, jacobi_damping_factor, jacobi_niterations, vcycle_niterations, los)
-        del self.mesh_delta
-        self.mesh_phi.value.shape = self.mesh_phi.shape
+        self.jacobi_damping_factor = float(jacobi_damping_factor)
+        self.jacobi_niterations = int(jacobi_niterations)
+        self.vcycle_niterations = int(vcycle_niterations)
+        if self.mpicomm.rank == 0: self.log_info('Computing displacement potential.')
+        self.mesh_phi = self._fmg(self.mesh_delta)
 
+    @format_positions_wrapper
     def read_shifts(self, positions, field='disp+rsd'):
         """
         Read displacement at input positions by deriving the computed displacement potential :attr:`mesh_phi` (finite difference scheme).
@@ -128,13 +128,13 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         allowed_fields = ['disp', 'rsd', 'disp+rsd']
         if field not in allowed_fields:
             raise ReconstructionError('Unknown field {}. Choices are {}'.format(field, allowed_fields))
-        shifts = self.mesh_phi.read_finite_difference_cic(positions, wrap=self.wrap)
+        shifts = _multigrid.read_finite_difference_cic(self.mesh_phi, positions, self.boxcenter)
         if field == 'disp':
             return shifts
         if self.los is None:
             los = positions / utils.distance(positions)[:, None]
         else:
-            los = self.los
+            los = self.los.astype(shifts.dtype)
         rsd = self.f * np.sum(shifts * los, axis=-1)[:, None] * los
         if field == 'rsd':
             return rsd

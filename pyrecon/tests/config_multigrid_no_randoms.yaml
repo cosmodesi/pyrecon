@@ -1,6 +1,6 @@
 input:
   dir: ./_catalogs
-  xyz: RSDPosition
+  pos: Position
   #rdz: [RA, DEC, Z]
   data_fn: box_data.fits
   #randoms_fn: box_data.fits
@@ -8,21 +8,20 @@ input:
 output:
   dir: ./_catalogs
   data_fn: script_box_data_rec.fits
-  xyz_rec: Position_rec
-  columns: [RSDPosition]
+  pos_rec: Position_rec
+  columns: [Position]
   columns_randoms: [Position]
 
 algorithm:
   name: MultiGridReconstruction
   #name: IterativeFFTReconstruction
   convention: RecSym
-  nthreads: 4
   los: x
   # other algorithm-related parameters
 
 delta:
   smoothing_radius: 15
-  #selection_function: uniform
+  selection_function: uniform
 
 cosmology:
   bias: 2.0
@@ -30,6 +29,6 @@ cosmology:
 
 mesh:
   boxsize: 800.
-  boxcenter: 400.
+  boxcenter: 0.
   nmesh: 128
   dtype: f8

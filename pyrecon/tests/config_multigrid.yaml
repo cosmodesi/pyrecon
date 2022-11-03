@@ -1,6 +1,6 @@
 input:
   dir: ./_catalogs
-  xyz: Position
+  pos: Position
   #rdz: [RA, DEC, Z]
   data_fn: data.fits
   randoms_fn: randoms.fits
@@ -10,8 +10,8 @@ output:
   dir: ./_catalogs
   data_fn: data_rec_script.fits
   randoms_fn: randoms_rec_script.fits
-  xyz: Position
-  xyz_rec: Position_rec
+  pos: Position
+  pos_rec: Position_rec
   rdz_rec: [ra_rec, dec_rec, z_rec]
   columns: [NZ, Weight]
 
@@ -19,7 +19,6 @@ algorithm:
   name: MultiGridReconstruction
   #name: IterativeFFTReconstruction
   convention: RecSym
-  nthreads: 4
   los: local
   # other algorithm-related parameters
 
