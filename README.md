@@ -16,7 +16,9 @@ from pyrecon import MultiGridReconstruction
 # line-of-sight "los" can be local (None, default) or an axis, 'x', 'y', 'z', or a 3-vector
 # Instead of boxsize and boxcenter, one can provide a (N, 3) array of Cartesian positions: positions=
 recon = MultiGridReconstruction(f=0.8, bias=2.0, los=None, nmesh=512, boxsize=1000., boxcenter=2000.)
-recon.assign_data(positions_data, weights_data) # positions_data is a (N, 3) array of Cartesian positions, weights a (N,) array
+# Positions_data is a (N, 3) array of Cartesian positions (or (3, N) if you pass position_type='rdd'), weights a (N,) array
+# These arrays can be distributed on all MPI processes (default), or if gathered on a single rank, one can pass mpiroot=0
+recon.assign_data(positions_data, weights_data)
 # You can skip the following line if you assume uniform selection function (randoms)
 recon.assign_randoms(positions_randoms, weights_randoms)
 recon.set_density_contrast(smoothing_radius=15.)

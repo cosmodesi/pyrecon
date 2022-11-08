@@ -1,4 +1,5 @@
 import os
+import sys
 from distutils.extension import Extension
 from setuptools import setup
 
@@ -8,6 +9,7 @@ import numpy as np
 package_basedir = os.path.abspath(os.path.dirname(__file__))
 package_basename = 'pyrecon'
 
+sys.path.insert(0, os.path.join(package_basedir, package_basename))
 import _version
 version = _version.__version__
 

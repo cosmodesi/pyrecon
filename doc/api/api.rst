@@ -49,14 +49,6 @@ Metrics
   :inherited-members:
   :show-inheritance:
 
-Mesh
-----
-
-.. automodule:: pyrecon.mesh
-  :members:
-  :inherited-members:
-  :show-inheritance:
-
 
 Utilities
 ---------

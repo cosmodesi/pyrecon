@@ -27,7 +27,7 @@ Welcome to pyrecon's documentation!
 Introduction
 ************
 
-**pyrecon** is a Python package to perform reconstruction in BAO analyses with various algorithms.
+**pyrecon** is a Python package to perform reconstruction in BAO analyses with various algorithms with MPI.
 
 A typical reconstruction run is (e.g. for MultiGridReconstruction; the same works for other algorithms):
 
@@ -58,9 +58,10 @@ Code structure
 The code structure is the following:
 
   - recon.py implements the base reconstruction class
-  - mesh.py implements mesh object, with FFT engines
+  - mesh.py implements mesh utilies
   - utils.py implements various utilities
   - a module for each algorithm
+  - metrics.py implements calculation of correlator, propagator and transfer function
 
 
 Changelog
