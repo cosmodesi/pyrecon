@@ -47,14 +47,15 @@ Documentation is hosted on Read the Docs, [pyrecon docs](https://pyrecon.readthe
 
 # Requirements
 
-Only strict requirement is:
+Only strict requirements are:
 
   - numpy
+  - scipy
+  - pmesh
 
 Extra requirements are:
 
-  - [pyfftw](https://github.com/pyFFTW/pyFFTW) (for faster FFTs)
-  - fitsio, h5py, astropy to run **pyrecon** as a standalone
+  - mpytools, fitsio, h5py to run **pyrecon** as a standalone
   - pypower to evaluate reconstruction metrics (correlation, transfer function and propagator)
 
 ## Installation
@@ -73,4 +74,3 @@ See [pyrecon docs](https://pyrecon.readthedocs.io/en/latest/user/building.html).
 - Sesh Nadathur for careful checks against Revolver https://github.com/seshnadathur/Revolver/blob/main/python_tools/recon.py
 - Enrique Paillas for bug reports
 - Grant Merz for propagator https://github.com/grantmerz/DESI_Recon
-- Davide Bianchi for checks of pair counts and normalization with PIP weights

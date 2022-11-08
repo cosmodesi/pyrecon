@@ -156,7 +156,6 @@ def test_metrics():
         assert np.allclose(get_propagator(los=los, growth=bias).ratio, propagator.ratio, equal_nan=True)
         assert np.allclose(get_transfer(los=los, growth=bias).ratio, transfer.ratio, equal_nan=True)
 
-
     correlator = get_correlator(los='firstpoint', kedges=np.linspace(0., 1., 61))
     transfer = correlator.to_transfer(growth=bias)
     propagator = correlator.to_propagator(growth=bias)
@@ -180,7 +179,8 @@ def test_metrics():
     lax[0].set_ylabel(r'$r(k) = P_{\mathrm{rec}, \mathrm{init}}/\sqrt{P_{\mathrm{rec}}P_{\mathrm{init}}}$')
     lax[1].set_ylabel(r'$t(k) = \sqrt{P_{\mathrm{rec}}/P_{\mathrm{init}}}$')
     lax[2].set_ylabel(r'$g(k) = P_{\mathrm{rec}, \mathrm{init}}/P_{\mathrm{init}}$')
-    plt.show()
+    if correlator.mpicomm.rank == 0:
+        plt.show()
 
     correlator = get_correlator()
     ax = plt.gca()
@@ -191,7 +191,8 @@ def test_metrics():
     auto.rebin((1, len(auto.edges) - 1))
     ax.plot(auto.k[:, 0], auto.k[:, 0] * auto.power[:, 0].real, label='reconstructed')
     ax.legend()
-    plt.show()
+    if correlator.mpicomm.rank == 0:
+        plt.show()
 
 
 if __name__ == '__main__':

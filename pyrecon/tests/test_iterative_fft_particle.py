@@ -240,7 +240,11 @@ def test_revolver(data_fn, randoms_fn=None):
         for field in catalog:
             if catalog[field].dtype.byteorder == '>':
                 catalog[field] = np.array(catalog[field].byteswap().newbyteorder(), dtype='f8')
+        if isbox:
+            catalog['Position'] += boxsize / 2.
+            catalog['Position'] %= boxsize
         catalog['Distance'] = distance(catalog['Position'])
+        catalog['Weight'] = catalog.get('Weight', catalog.ones())
 
     class SimpleCatalog(object):
 
@@ -296,7 +300,7 @@ def test_revolver(data_fn, randoms_fn=None):
     nmesh = mpicomm.bcast(recon_ref.nbins if mpicomm.rank == 0 else None, root=0)
     boxsize, boxcenter, los, smooth = mpicomm.bcast((boxsize, boxcenter, los, smooth), root=0)
     t0 = time.time()
-    recon = OriginalIterativeFFTParticleReconstruction(f=f, bias=bias, boxsize=boxsize, boxcenter=boxcenter, nmesh=nmesh, los=los)
+    recon = OriginalIterativeFFTParticleReconstruction(f=f, bias=bias, boxsize=boxsize, boxcenter=boxcenter, nmesh=nmesh, los=los, wrap=True)
     # recon = OriginalIterativeFFTParticleReconstruction(f=recon_ref.f, bias=recon_ref.bias, boxsize=boxsize, boxcenter=boxcenter, nmesh=recon_ref.nbins, los=los)
     recon.assign_data(data['Position'], data['Weight'])
     if not isbox:
@@ -372,7 +376,7 @@ def test_script_no_randoms(data_fn, output_data_fn):
     assert np.allclose(ref_positions_rec_data, data['Position_rec'])
 
 
-def test_iterative_fft_particle(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
+def test_ref(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
     boxsize = 1200.
     boxcenter = [1754, 0, 0]
     data = Catalog.read(data_fn)
@@ -436,5 +440,5 @@ if __name__ == '__main__':
     # test_script(data_fn, randoms_fn, script_output_data_fn, script_output_randoms_fn)
     # test_script_no_randoms(box_data_fn, script_output_box_data_fn)
     data_fn_rec, randoms_fn_rec = [catalog_rec_fn(fn, 'iterative_fft_particle') for fn in [data_fn, randoms_fn]]
-    #test_iterative_fft_particle(data_fn, randoms_fn, data_fn_rec, randoms_fn_rec)
-    test_iterative_fft_particle(data_fn_rec, randoms_fn_rec, None, None)
+    #test_ref(data_fn, randoms_fn, data_fn_rec, randoms_fn_rec)
+    test_ref(data_fn_rec, randoms_fn_rec, None, None)

@@ -292,7 +292,7 @@ def test_script_no_randoms(data_fn, output_data_fn):
     assert np.allclose(ref_positions_rec_data, data['Position_rec'])
 
 
-def test_multigrid(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
+def test_ref(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
     boxsize = 1200.
     boxcenter = [1754, 0, 0]
     data = Catalog.read(data_fn)
@@ -385,6 +385,6 @@ if __name__ == '__main__':
     # compute_power((data_fn, randoms_fn), (ref_output_data_fn, ref_output_randoms_fn))
     # compute_power((ref_output_data_fn, ref_output_randoms_fn), (output_data_fn, output_randoms_fn))
     data_fn_rec, randoms_fn_rec = [catalog_rec_fn(fn, 'multigrid') for fn in [data_fn, randoms_fn]]
-    # test_multigrid(data_fn, randoms_fn, data_fn_rec, randoms_fn_rec)
-    test_multigrid(data_fn_rec, randoms_fn_rec, None, None)
+    # test_ref(data_fn, randoms_fn, data_fn_rec, randoms_fn_rec)
+    test_ref(data_fn_rec, randoms_fn_rec, None, None)
     '''

@@ -94,7 +94,7 @@ def test_mpi():
         assert np.allclose(shifts, shifts_ref)
 
 
-def test_iterative_fft(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
+def test_ref(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
     boxsize = 1200.
     boxcenter = [1754, 0, 0]
     data = Catalog.read(data_fn)
@@ -143,4 +143,4 @@ if __name__ == '__main__':
     test_wrap()
     test_mpi()
     data_fn_rec, randoms_fn_rec = [catalog_rec_fn(fn, 'iterative_fft') for fn in [data_fn, randoms_fn]]
-    test_iterative_fft(data_fn_rec, randoms_fn_rec, None, None)
+    test_ref(data_fn_rec, randoms_fn_rec, None, None)
