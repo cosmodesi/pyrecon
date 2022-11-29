@@ -129,10 +129,10 @@ def test_cslice():
     array = cslice(mesh, *sl)
     assert array[1:-1].shape == (1, nmesh, nmesh)
 
+
 if __name__ == '__main__':
-    """
+
     test_decode_eval_str()
     test_distance_to_redshift()
     test_cartesian_to_sky()
-    """
     test_cslice()

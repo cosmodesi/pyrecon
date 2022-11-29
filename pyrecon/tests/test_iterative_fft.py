@@ -1,8 +1,8 @@
 import numpy as np
 
-from pyrecon import IterativeFFTReconstruction, mpi
+from pyrecon import IterativeFFTReconstruction
 from pyrecon.utils import MemoryMonitor
-from utils import get_random_catalog, Catalog
+from utils import get_random_catalog, Catalog, test_mpi
 
 
 def test_mem():
@@ -74,26 +74,6 @@ def test_wrap():
             assert np.allclose(recon.read_shifted_positions(data['Position'], field=field), positions_rec)
 
 
-def test_mpi():
-    data = get_random_catalog(seed=42)
-    randoms = get_random_catalog(seed=81)
-    mpicomm = data.mpicomm
-
-    def get_shifts(mpicomm=data.mpicomm):
-        recon = IterativeFFTReconstruction(f=0.8, bias=2., positions=randoms['Position'], nmesh=64, los='x', dtype='f8', mpicomm=mpicomm)
-        recon.assign_data(data['Position'], data['Weight'])
-        recon.assign_randoms(randoms['Position'], randoms['Weight'])
-        recon.set_density_contrast()
-        recon.run()
-        return recon.read_shifts(data['Position'], field='disp+rsd')
-
-    shifts = mpi.gather(get_shifts(mpicomm=mpicomm), mpicomm=mpicomm, mpiroot=0)
-    data, randoms = data.gather(mpiroot=0), randoms.gather(mpiroot=0)
-    if mpicomm.rank == 0:
-        shifts_ref = get_shifts(mpicomm=data.mpicomm)
-        assert np.allclose(shifts, shifts_ref)
-
-
 def test_ref(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
     boxsize = 1200.
     boxcenter = [1754, 0, 0]
@@ -141,6 +121,6 @@ if __name__ == '__main__':
     # test_mem()
     test_dtype()
     test_wrap()
-    test_mpi()
+    test_mpi(IterativeFFTReconstruction)
     data_fn_rec, randoms_fn_rec = [catalog_rec_fn(fn, 'iterative_fft') for fn in [data_fn, randoms_fn]]
     test_ref(data_fn_rec, randoms_fn_rec, None, None)

@@ -118,7 +118,7 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         if self.mpicomm.rank == 0: self.log_info('Computing displacement potential.')
         self.mesh_phi = self._fmg(self.mesh_delta)
 
-    @format_positions_wrapper
+    @format_positions_wrapper(return_input_type=False)
     def read_shifts(self, positions, field='disp+rsd'):
         """
         Read displacement at input positions by deriving the computed displacement potential :attr:`mesh_phi` (finite difference scheme).

@@ -54,7 +54,7 @@ def _format_positions(positions, position_type='xyz', dtype=None, copy=True, mpi
         if len(positions) != 3:
             return None, 'For position type = {}, please provide a list of 3 arrays for positions (found {:d})'.format(position_type, len(positions))
         if position_type == 'rdd':  # RA, Dec, distance
-            positions = utils.sky_to_cartesian(positions, degree=True)
+            positions = utils.sky_to_cartesian(positions[2], *positions[:2], degree=True).T
         elif position_type != 'xyz':
             return None, 'Position type should be one of ["pos", "xyz", "rdd"]'
         return np.asarray(positions).T, None
@@ -75,39 +75,24 @@ def _format_positions(positions, position_type='xyz', dtype=None, copy=True, mpi
     return positions
 
 
-def _format_weights(weights, weight_type='product_individual', size=None, dtype=None, copy=True, mpicomm=None, mpiroot=None):
-    # Format input weights, as a list of n_bitwise_weights uint8 arrays, and optionally a float array for individual weights.
-    # Return formated list of weights, and n_bitwise_weights.
+def _format_weights(weights, size=None, dtype=None, copy=True, mpicomm=None, mpiroot=None):
+    # Format input weights.
     def __format_weights(weights):
-        islist = isinstance(weights, (tuple, list)) or getattr(weights, 'ndim', 1) == 2
-        if not islist:
-            weights = [weights]
-        if all(weight is None for weight in weights):
-            return []
-        individual_weights = weights
-        weights = []
-        if individual_weights:
-            if len(individual_weights) > 1 or copy:
-                weight = np.prod(individual_weights, axis=0, dtype=dtype)
-            else:
-                weight = individual_weights[0].astype(dtype, copy=False)
-            weights += [weight]
+        if weights is None:
+            return weights
+        weights = weights.astype(dtype, copy=copy)
         return weights
 
     weights = __format_weights(weights)
     if mpiroot is None:
-        size_weights = mpicomm.allgather(len(weights))
-        if len(set(size_weights)) != 1:
-            raise ValueError('mpiroot = None but weights are None/empty on some ranks')
+        is_none = mpicomm.allgather(weights is None)
+        if any(is_none) and not all(is_none):
+            raise ValueError('mpiroot = None but weights are None on some ranks')
     else:
-        n = mpicomm.bcast(len(weights) if mpicomm.rank == mpiroot else None, root=mpiroot)
-        if mpicomm.rank != mpiroot: weights = [None] * n
-        weights = [mpi.scatter(weight, mpicomm=mpicomm, mpiroot=mpiroot) for weight in weights]
+        weights = mpi.scatter(weights, mpicomm=mpicomm, mpiroot=mpiroot)
 
-    if size is not None:
-        if not all(len(weight) == size for weight in weights):
-            raise ValueError('All weight arrays should be of the same size as position arrays')
-    weights = weights[0] if weights else None
+    if size is not None and weights is not None and len(weights) != size:
+        raise ValueError('Weight arrays should be of the same size as position arrays')
     return weights
 
 
@@ -122,31 +107,36 @@ def format_positions_weights_wrapper(func):
             low, high = self.boxcenter - self.boxsize / 2., self.boxcenter + self.boxsize / 2.
             if any(self.mpicomm.allgather(np.any((positions < low) | (positions > high)))):
                 raise ValueError('positions not in box range {} - {}'.format(low, high))
-        weights = _format_weights(weights, weight_type='product_individual', size=len(positions), copy=copy, mpicomm=self.mpicomm, mpiroot=mpiroot)
-        toret = func(self, positions=positions, weights=weights, **kwargs)
-        if toret is not None and mpiroot is not None:  # positions returned, gather on the same rank
-            return mpi.gather(toret, mpicomm=self.mpicomm, mpiroot=mpiroot)
-        return toret
+        weights = _format_weights(weights, size=len(positions), copy=copy, mpicomm=self.mpicomm, mpiroot=mpiroot)
+        return func(self, positions=positions, weights=weights, **kwargs)
     return wrapper
 
 
-def format_positions_wrapper(func):
-    """Method wrapper applying _format_positions on input, and gathering result on mpiroot."""
-    @functools.wraps(func)
-    def wrapper(self, positions, copy=False, **kwargs):
-        position_type = kwargs.pop('position_type', self.position_type)
-        mpiroot = kwargs.pop('mpiroot', self.mpiroot)
-        if not all(self.mpicomm.allgather(isinstance(positions, str))):  # for IterativeFFTParticleReconstruction
-            positions = _format_positions(positions, position_type=position_type, copy=copy, mpicomm=self.mpicomm, mpiroot=mpiroot)
-            if not self.wrap:
-                low, high = self.boxcenter - self.boxsize / 2., self.boxcenter + self.boxsize / 2.
-                if any(self.mpicomm.allgather(np.any((positions < low) | (positions > high)))):
-                    raise ValueError('positions not in box range {} - {}'.format(low, high))
-        toret = func(self, positions=positions, **kwargs)
-        if toret is not None and mpiroot is not None:  # positions returned, gather on the same rank
-            return mpi.gather(toret, mpicomm=self.mpicomm, mpiroot=mpiroot)
-        return toret
-    return wrapper
+def format_positions_wrapper(return_input_type=True):
+    def format_positions(func):
+        """Method wrapper applying _format_positions on input, and gathering result on mpiroot."""
+        @functools.wraps(func)
+        def wrapper(self, positions, copy=False, **kwargs):
+            position_type = kwargs.pop('position_type', self.position_type)
+            mpiroot = kwargs.pop('mpiroot', self.mpiroot)
+            if not all(self.mpicomm.allgather(isinstance(positions, str))):  # for IterativeFFTParticleReconstruction
+                positions = _format_positions(positions, position_type=position_type, copy=copy, mpicomm=self.mpicomm, mpiroot=mpiroot)
+                if not self.wrap:
+                    low, high = self.boxcenter - self.boxsize / 2., self.boxcenter + self.boxsize / 2.
+                    if any(self.mpicomm.allgather(np.any((positions < low) | (positions > high)))):
+                        raise ValueError('positions not in box range {} - {}'.format(low, high))
+            toret = func(self, positions=positions, **kwargs)
+            if toret is not None and mpiroot is not None:  # positions returned, gather on the same rank
+                toret = mpi.gather(toret, mpicomm=self.mpicomm, mpiroot=mpiroot)
+            if toret is not None and return_input_type:
+                if position_type == 'rdd':
+                    dist, ra, dec = utils.cartesian_to_sky(toret)
+                    toret = [ra, dec, dist]
+                elif position_type == 'xyz':
+                    toret = toret.T
+            return toret
+        return wrapper
+    return format_positions
 
 
 class ReconstructionError(Exception):
@@ -201,7 +191,7 @@ class BaseReconstruction(BaseClass):
     _slab_npoints_max = int(1024 * 1024 * 4)
     _compressed = False
 
-    def __init__(self, f=0., bias=1., los=None, nmesh=None, boxsize=None, boxcenter=None, cellsize=None, boxpad=2., wrap=False,
+    def __init__(self, f=None, bias=None, los=None, nmesh=None, boxsize=None, boxcenter=None, cellsize=None, boxpad=2., wrap=False,
                  data_positions=None, randoms_positions=None, data_weights=None, randoms_weights=None,
                  positions=None, position_type='pos', resampler='cic', decomposition=None, fft_plan='estimate', dtype='f8', mpiroot=None, mpicomm=mpi.COMM_WORLD, **kwargs):
         """
@@ -209,10 +199,10 @@ class BaseReconstruction(BaseClass):
 
         Parameters
         ----------
-        f : float
+        f : float, default=None.
             Growth rate.
 
-        bias : float
+        bias : float, default=None.
             Galaxy bias.
 
         los : string, array_like, default=None
@@ -242,10 +232,10 @@ class BaseReconstruction(BaseClass):
             If ``False`` and input positions do not fit in the the box size, raise a :class:`ValueError`.
 
         positions : list, array, default=None
-            Optionally, positions  used to defined box size. Typically of shape (3, N) or (N, 3).
+            Optionally, positions used to defined box size. Of shape (3, N) or (N, 3), depending on ``position_type``.
 
         data_positions : list, array, default=None
-            Positions in the data catalog. Typically of shape (3, N) or (N, 3).
+            Positions in the data catalog. Of shape (3, N) or (N, 3), depending on ``position_type``.
             If provided, reconstruction will be run directly (and ``data_positions`` will be added to ``positions`` to define the box size).
 
         randoms_positions : list, array, default=None
@@ -263,9 +253,6 @@ class BaseReconstruction(BaseClass):
                 - "pos": Cartesian positions of shape (N, 3)
                 - "xyz": Cartesian positions of shape (3, N)
                 - "rdd": RA/Dec in degree, distance of shape (3, N)
-
-            If ``position_type`` is "pos", positions are of (real) type ``dtype``, and ``mpiroot`` is ``None``,
-            no internal copy of positions will be made, hence saving some memory.
 
         fft_plan : string, default='estimate'
             FFT planning. 'measure' may allow for faster FFTs, but is slower to set up than 'estimate'.
@@ -290,7 +277,8 @@ class BaseReconstruction(BaseClass):
         self.wrap = bool(wrap)
         self.rdtype = _get_real_dtype(dtype)
         self.dtype = np.dtype(dtype) if self._compressed else 'c{:d}'.format(2 * self.rdtype.itemsize)
-        self.set_cosmo(f=f, bias=bias)
+        self.f = f
+        self.bias = bias
         positions = _format_positions(positions, position_type=self.position_type, copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
         data_positions = _format_positions(data_positions, position_type=self.position_type, copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
         randoms_positions = _format_positions(randoms_positions, position_type=self.position_type, copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
@@ -303,11 +291,11 @@ class BaseReconstruction(BaseClass):
         if self.mpicomm.rank == 0:
             self.log_info('Using mesh with nmesh={}, boxsize={}, boxcenter={}.'.format(self.nmesh, self.boxsize, self.boxcenter))
         if data_positions is not None:
-            data_weights = _format_weights(data_weights, weight_type='product_individual', size=len(data_positions), copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
+            data_weights = _format_weights(data_weights, size=len(data_positions), copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
             self.assign_data(data_positions, data_weights, position_type='pos', copy=False, mpiroot=None)
             if randoms_positions is not None:
-                randoms_weights = _format_weights(randoms_weights, weight_type='product_individual', size=len(randoms_positions), copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
-                self.assign_data(randoms_positions, randoms_weights, position_type='pos', copy=False, mpiroot=None)
+                randoms_weights = _format_weights(randoms_weights, size=len(randoms_positions), copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
+                self.assign_randoms(randoms_positions, randoms_weights, position_type='pos', copy=False, mpiroot=None)
             run_kwargs = {name: kwargs.pop(name) for name in kwargs if name not in inspect.getargspec(self.set_density_contrast).args}
             self.set_density_contrast(**kwargs)
             self.run(**run_kwargs)
@@ -333,11 +321,17 @@ class BaseReconstruction(BaseClass):
         beta : float
             :math:`\beta` parameter. If not ``None``, overrides ``f`` as ``beta * bias``.
         """
-        if bias is None: bias = self.bias
+        if bias is None:
+            bias = self.bias
         if beta is not None: f = beta * bias
-        if f is None: f = self.f
+        if f is None:
+            f = self.f
         self.f = f
         self.bias = bias
+        if self.f is None:
+            raise ValueError('Provide f')
+        if self.bias is None:
+            raise ValueError('Provide bias')
 
     def set_los(self, los=None):
         """
@@ -386,6 +380,12 @@ class BaseReconstruction(BaseClass):
     def _paint(self, positions, weights=None, out=None, transform=None):
         positions = positions - self.offset
         scalar_weights = weights is None
+        if not all(self.mpicomm.allgather(np.isfinite(positions).all())):
+            raise ValueError('Some positions are NaN/inf')
+        if not scalar_weights and not all(self.mpicomm.allgather(np.isfinite(weights).all())):
+            raise ValueError('Some weights are NaN/inf')
+        if out is None:
+            out = self.pm.create('real', value=0.)
 
         # We work by slab to limit memory footprint
         # Merely copy-pasted from https://github.com/bccp/nbodykit/blob/4aec168f176939be43f5f751c90363b39ec6cf3a/nbodykit/source/mesh/catalog.py#L300
@@ -438,6 +438,7 @@ class BaseReconstruction(BaseClass):
 
             islab += slab_npoints
             slab_npoints = min(self._slab_npoints_max, int(slab_npoints * 1.2))
+        return out
 
     def _readout(self, mesh, positions):
         positions = positions - self.offset
@@ -547,7 +548,7 @@ class BaseReconstruction(BaseClass):
         """Run reconstruction; to be implemented in your algorithm."""
         raise NotImplementedError('Implement method "run" in your "{}"-inherited algorithm'.format(self.__class__.___name__))
 
-    @format_positions_wrapper
+    @format_positions_wrapper(return_input_type=False)
     def read_shifts(self, positions, field='disp+rsd'):
         """
         Read displacement at input positions.
@@ -570,6 +571,9 @@ class BaseReconstruction(BaseClass):
 
         field : string, default='disp+rsd'
             Either 'disp' (Zeldovich displacement), 'rsd' (RSD displacement), or 'disp+rsd' (Zeldovich + RSD displacement).
+
+        kwargs : dict
+            ``position_type``, ``mpiroot`` can be provided to override default :attr:`position_type`, :attr:`mpiroot`.
 
         Returns
         -------
@@ -597,7 +601,7 @@ class BaseReconstruction(BaseClass):
         shifts += rsd
         return shifts
 
-    @format_positions_wrapper
+    @format_positions_wrapper(return_input_type=True)
     def read_shifted_positions(self, positions, field='disp+rsd'):
         """
         Read shifted positions i.e. the difference ``positions - self.read_shifts(positions, field=field)``.
@@ -605,18 +609,21 @@ class BaseReconstruction(BaseClass):
 
         Parameters
         ----------
-        positions : array of shape (N, 3)
-            Cartesian positions.
+        positions : list, array
+            Positions of shape (3, N) or (N, 3), depending on ``position_type``.
 
         field : string, default='disp+rsd'
             Apply either 'disp' (Zeldovich displacement), 'rsd' (RSD displacement), or 'disp+rsd' (Zeldovich + RSD displacement).
 
+        kwargs : dict
+            ``position_type``, ``mpiroot`` can be provided to override default :attr:`position_type`, :attr:`mpiroot`.
+
         Returns
         -------
-        positions : array of shape (N, 3)
-            Shifted positions.
+        positions : list, array
+            Shifted positions, of same type as input.
         """
-        shifts = self.read_shifts(positions, field=field)
+        shifts = self.read_shifts(positions, field=field, position_type='pos', mpiroot=None)
         positions = positions - shifts
         if self.wrap: positions = self._wrap(positions)
         return positions

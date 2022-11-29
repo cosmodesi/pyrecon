@@ -7,7 +7,7 @@ import numpy as np
 from pyrecon.multigrid import OriginalMultiGridReconstruction, MultiGridReconstruction
 from pyrecon.utils import distance, MemoryMonitor
 from pyrecon import mpi
-from utils import get_random_catalog, Catalog
+from utils import get_random_catalog, Catalog, test_mpi
 
 
 def test_mem():
@@ -108,26 +108,6 @@ def test_wrap():
             positions_rec = (diff - recon.offset) % recon.boxsize + recon.offset
             assert np.all(positions_rec >= boxcenter - boxsize / 2.) and np.all(positions_rec <= boxcenter + boxsize / 2.)
             assert np.allclose(recon.read_shifted_positions(data['Position'], field=field), positions_rec)
-
-
-def test_mpi():
-    data = get_random_catalog(seed=42)
-    randoms = get_random_catalog(seed=81)
-    mpicomm = data.mpicomm
-
-    def get_shifts(mpicomm=data.mpicomm):
-        recon = MultiGridReconstruction(f=0.8, bias=2., positions=randoms['Position'], nmesh=64, los='x', dtype='f8', mpicomm=mpicomm)
-        recon.assign_data(data['Position'], data['Weight'])
-        recon.assign_randoms(randoms['Position'], randoms['Weight'])
-        recon.set_density_contrast()
-        recon.run()
-        return recon.read_shifts(data['Position'], field='disp+rsd')
-
-    shifts = mpi.gather(get_shifts(mpicomm=mpicomm), mpicomm=mpicomm, mpiroot=0)
-    data, randoms = data.gather(mpiroot=0), randoms.gather(mpiroot=0)
-    if mpicomm.rank == 0:
-        shifts_ref = get_shifts(mpicomm=data.mpicomm)
-        assert np.allclose(shifts, shifts_ref)
 
 
 def test_los():
@@ -364,10 +344,13 @@ if __name__ == '__main__':
     script_output_box_data_fn = os.path.join(catalog_dir, 'script_box_data_rec.fits')
     script_output_data_fn = os.path.join(catalog_dir, 'script_data_rec.fits')
     script_output_randoms_fn = os.path.join(catalog_dir, 'script_randoms_rec.fits')
+
+    test_mpi(MultiGridReconstruction)
+    exit()
     # test_mem()
     test_dtype()
     test_wrap()
-    test_mpi()
+    test_mpi(MultiGridReconstruction)
     test_random()
     test_no_nrandoms()
     '''

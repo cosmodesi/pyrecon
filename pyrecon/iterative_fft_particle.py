@@ -121,7 +121,8 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         if self._iter > 0:
             self.mesh_data[...] = 0.  # to reset mesh values
             # Painting reconstructed data real-space positions
-            super(OriginalIterativeFFTParticleReconstruction, self).assign_data(self._positions_rec_data, weights=self._weights_data)  # super in order not to save positions_rec_data
+            # super in order not to save positions_rec_data
+            super(OriginalIterativeFFTParticleReconstruction, self).assign_data(self._positions_rec_data, weights=self._weights_data, position_type='pos', mpiroot=None)
             # Gaussian smoothing before density contrast calculation
             self.mesh_data = self._smooth_gaussian(self.mesh_data)
 
@@ -175,7 +176,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         if return_psi:
             return psis
 
-    @format_positions_wrapper
+    @format_positions_wrapper(return_input_type=False)
     def read_shifts(self, positions, field='disp+rsd'):
         """
         Read displacement at input positions.
@@ -250,7 +251,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
 
         return shifts + rsd
 
-    @format_positions_wrapper
+    @format_positions_wrapper(return_input_type=True)
     def read_shifted_positions(self, positions, field='disp+rsd'):
         """
         Read shifted positions i.e. the difference ``positions - self.read_shifts(positions, field=field)``.
@@ -271,7 +272,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         positions : array of shape (N, 3)
             Shifted positions.
         """
-        shifts = self.read_shifts(positions, field=field)
+        shifts = self.read_shifts(positions, field=field, position_type='pos', mpiroot=None)
         if isinstance(positions, str) and positions == 'data':
             positions = self._positions_data
         positions = positions - shifts
