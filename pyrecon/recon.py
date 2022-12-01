@@ -296,7 +296,7 @@ class BaseReconstruction(BaseClass):
             if randoms_positions is not None:
                 randoms_weights = _format_weights(randoms_weights, size=len(randoms_positions), copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
                 self.assign_randoms(randoms_positions, randoms_weights, position_type='pos', copy=False, mpiroot=None)
-            run_kwargs = {name: kwargs.pop(name) for name in kwargs if name not in inspect.getargspec(self.set_density_contrast).args}
+            run_kwargs = {name: kwargs.pop(name) for name in list(kwargs.keys()) if name not in inspect.getargspec(self.set_density_contrast).args}
             self.set_density_contrast(**kwargs)
             self.run(**run_kwargs)
 
