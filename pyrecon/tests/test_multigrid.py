@@ -101,6 +101,16 @@ def test_dtype():
         assert np.allclose(shifts_f4, shifts_f8, atol=1e-2, rtol=1e-2)
 
 
+def test_nmesh():
+    randoms = get_random_catalog(seed=81)
+    recon = MultiGridReconstruction(f=0.8, bias=2., positions=randoms['Position'], cellsize=[10, 8, 9])
+    assert np.all(recon.nmesh % 2 == 0)
+
+    import pytest
+    with pytest.warns():
+        recon = MultiGridReconstruction(f=0.8, bias=2., positions=randoms['Position'], nmesh=[12, 13, 17])
+
+
 def test_mem():
     data = get_random_catalog(seed=42)
     randoms = get_random_catalog(seed=84)
@@ -338,7 +348,8 @@ if __name__ == '__main__':
 
     setup_logging()
     # Uncomment to compute catalogs needed for these tests
-    # utils.setup()
+    import utils
+    #utils.setup()
 
     recon_code = os.path.join(os.path.abspath(os.path.dirname(__file__)), '_codes', 'recon')
     output_data_fn = os.path.join(catalog_dir, 'data_rec.fits')
@@ -353,6 +364,7 @@ if __name__ == '__main__':
     test_random()
     test_no_nrandoms()
     test_dtype()
+    test_nmesh()
     test_multigrid_wrap()
     test_los()
     test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn)

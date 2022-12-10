@@ -59,6 +59,10 @@ class BaseReconstruction(BaseClass):
     boxsize, boxcenter, cellsize, offset : array
         Mesh properties; see :class:`MeshInfo`.
     """
+    @staticmethod
+    def _select_nmesh(nmesh):
+        return nmesh.copy()
+
     def __init__(self, f=0., bias=1., los=None, fft_engine='numpy', fft_wisdom=None, save_fft_wisdom=None, fft_plan='measure', wrap=False, **kwargs):
         """
         Initialize :class:`BaseReconstruction`.
@@ -103,8 +107,8 @@ class BaseReconstruction(BaseClass):
         """
         self.set_cosmo(f=f, bias=bias)
         self.wrap = wrap
-        self.mesh_data = RealMesh(**kwargs)
-        self.mesh_randoms = RealMesh(**kwargs)
+        self.mesh_data = RealMesh(select_nmesh=self._select_nmesh, **kwargs)
+        self.mesh_randoms = RealMesh(select_nmesh=self._select_nmesh, **kwargs)
         # record mesh boxsize, cellsize and offset for later use when the meshes themselves get deleted
         self.info = self.mesh_randoms.info
         self.set_los(los)

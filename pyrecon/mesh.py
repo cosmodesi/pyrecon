@@ -339,7 +339,7 @@ class MeshInfo(BaseClass):
     """
     _attrs = ['dtype', 'nmesh', 'boxsize', 'boxcenter']
 
-    def __init__(self, nmesh=None, boxsize=None, boxcenter=None, cellsize=None, value=None, positions=None, boxpad=1.5, dtype=None):
+    def __init__(self, nmesh=None, boxsize=None, boxcenter=None, cellsize=None, value=None, positions=None, boxpad=1.5, select_nmesh=None, dtype=None):
         """
         Initalize :class:`MeshInfo`.
 
@@ -373,6 +373,10 @@ class MeshInfo(BaseClass):
         boxpad : float, default=1.5
             When ``boxsize`` is determined from ``positions``, take ``boxpad`` times the smallest box enclosing ``positions`` as ``boxsize``.
 
+        select_nmesh : callable, default=True
+            Function that takes in a 3-array ``nmesh``, and returns the 3-array ``nmesh``.
+            Used by :class:`MultiGridReconstruction` to select mesh sizes compatible with the algorithm.
+
         dtype : string, np.dtype, defaut=None
             Type for :attr:`value` array.
             If ``None``, defaults to ``np.asarray(value).dtype`` if ``value`` is not ``None``, else 'f8'.
@@ -402,6 +406,7 @@ class MeshInfo(BaseClass):
                 cellsize = _make_array(cellsize, self.ndim, dtype='f8')
                 nmesh = boxsize / cellsize
                 nmesh = np.ceil(nmesh).astype('i8')
+                if select_nmesh is not None: nmesh = select_nmesh(nmesh)
                 boxsize = nmesh * cellsize  # enforce exact cellsize
             else:
                 raise MeshError('nmesh (or cellsize) must be specified')
@@ -410,6 +415,11 @@ class MeshInfo(BaseClass):
         self.boxsize = boxsize
         self.boxcenter = boxcenter
         self.nmesh = nmesh
+        if select_nmesh is not None:
+            recommended_nmesh = select_nmesh(self.nmesh)
+            if not np.all(recommended_nmesh == self.nmesh):
+                import warnings
+                warnings.warn('Recommended nmesh is {}, provided nmesh is {}'.format(recommended_nmesh, self.nmesh))
 
     def clone(self, **kwargs):
         """Clone current :class:`MeshInfo` instance, optionally updating attributes with ``kwargs``."""
