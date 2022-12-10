@@ -1,8 +1,4 @@
-import os
-
 import numpy as np
-from mpi4py import MPI
-from pmesh.pm import ParticleMesh
 from pmesh.window import FindResampler, ResampleWindow
 
 from .utils import _get_box, _make_array
@@ -30,7 +26,7 @@ def _wrap_positions(positions, boxsize, offset=0.):
     return np.asarray((positions - offset) % boxsize + offset, dtype=positions.dtype)
 
 
-def _get_mesh_attrs(nmesh=None, boxsize=None, boxcenter=None, cellsize=None, positions=None, boxpad=2., check=True, mpicomm=mpi.COMM_WORLD):
+def _get_mesh_attrs(nmesh=None, boxsize=None, boxcenter=None, cellsize=None, positions=None, boxpad=2., check=True, select_nmesh=None, mpicomm=mpi.COMM_WORLD):
     """
     Compute enclosing box.
 
@@ -63,6 +59,10 @@ def _get_mesh_attrs(nmesh=None, boxsize=None, boxcenter=None, cellsize=None, pos
 
     check : bool, default=True
         If ``True``, and input ``positions`` (if provided) are not contained in the box, raise a :class:`ValueError`.
+
+    select_nmesh : callable, default=True
+        Function that takes in a 3-array ``nmesh``, and returns the 3-array ``nmesh``.
+        Used by :class:`MultiGridReconstruction` to select mesh sizes compatible with the algorithm.
 
     mpicomm : MPI communicator, default=MPI.COMM_WORLD
         The MPI communicator.
@@ -106,6 +106,7 @@ def _get_mesh_attrs(nmesh=None, boxsize=None, boxcenter=None, cellsize=None, pos
             nmesh = boxsize / cellsize
             nmesh = np.ceil(nmesh).astype('i8')
             nmesh += nmesh % 2  # to make it even
+            if select_nmesh is not None: nmesh = select_nmesh(nmesh)
             boxsize = nmesh * cellsize  # enforce exact cellsize
         else:
             raise ValueError('nmesh (or cellsize) must be specified')

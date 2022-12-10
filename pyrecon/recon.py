@@ -191,6 +191,10 @@ class BaseReconstruction(BaseClass):
     _slab_npoints_max = int(1024 * 1024 * 4)
     _compressed = False
 
+    @staticmethod
+    def _select_nmesh(nmesh):
+        return nmesh.copy()
+
     def __init__(self, f=None, bias=None, los=None, nmesh=None, boxsize=None, boxcenter=None, cellsize=None, boxpad=2., wrap=False,
                  data_positions=None, randoms_positions=None, data_weights=None, randoms_weights=None,
                  positions=None, position_type='pos', resampler='cic', decomposition=None, fft_plan='estimate', dtype='f8', mpiroot=None, mpicomm=mpi.COMM_WORLD, **kwargs):
@@ -284,7 +288,11 @@ class BaseReconstruction(BaseClass):
         randoms_positions = _format_positions(randoms_positions, position_type=self.position_type, copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
         all_positions = [pos for pos in [positions, data_positions, randoms_positions] if pos is not None]
         self.nmesh, self.boxsize, self.boxcenter = _get_mesh_attrs(nmesh=nmesh, boxsize=boxsize, boxcenter=boxcenter, cellsize=cellsize, positions=all_positions,
-                                                                   boxpad=boxpad, check=positions is not None and not self.wrap, mpicomm=self.mpicomm)
+                                                                   boxpad=boxpad, check=positions is not None and not self.wrap, select_nmesh=self._select_nmesh, mpicomm=self.mpicomm)
+        recommended_nmesh = self._select_nmesh(self.nmesh)
+        if not np.all(recommended_nmesh == self.nmesh):
+            import warnings
+            warnings.warn('Recommended nmesh is {}, you provided nmesh = {}'.format(recommended_nmesh, self.nmesh))
         self.resampler = _get_resampler(resampler=resampler)
         self.pm = ParticleMesh(BoxSize=self.boxsize, Nmesh=self.nmesh, dtype=self.dtype, comm=self.mpicomm, resampler=self.resampler, np=decomposition, plan_method=fft_plan)
         self.set_los(los)

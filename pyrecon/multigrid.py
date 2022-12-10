@@ -16,6 +16,21 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
     """
     _compressed = True
 
+    @staticmethod
+    def _select_nmesh(nmesh):
+        # Return mesh size, equal or larger than nmesh, that can be written as 2**n, 3 * 2**n, 5 * 2**n or 7 * 2**n
+        toret = []
+        for n in nmesh:
+            nbits = int(n).bit_length() - 1
+            ntries = [2**nbits, 3 * 2**(nbits - 1), 5 * 2**(nbits - 2), 7 * 2**(nbits - 2), 2**(nbits + 1)]
+            mindiff, iclosest = n, None
+            for itry, ntry in enumerate(ntries):
+                diff = ntry - n
+                if diff >= 0 and diff < mindiff:
+                    mindiff, iclosest = diff, itry
+            toret.append(ntries[iclosest])
+        return np.array(toret, dtype='i8')
+
     def __init__(self, *args, mpicomm=mpi.COMM_WORLD, **kwargs):
         # We require a split, along axis x.
         super(OriginalMultiGridReconstruction, self).__init__(*args, decomposition=(mpicomm.size, 1), mpicomm=mpicomm, **kwargs)

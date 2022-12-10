@@ -82,6 +82,16 @@ def test_dtype():
         assert np.allclose(*all_shifts, atol=5e-2, rtol=5e-2)
 
 
+def test_nmesh():
+    randoms = get_random_catalog(seed=81)
+    recon = MultiGridReconstruction(f=0.8, bias=2., positions=randoms['Position'], cellsize=[10, 8, 9])
+    assert np.all(recon.nmesh % 2 == 0)
+
+    import pytest
+    with pytest.warns():
+        recon = MultiGridReconstruction(f=0.8, bias=2., positions=randoms['Position'], nmesh=[12, 13, 17])
+
+
 def test_wrap():
     size = 100000
     boxsize = 1000
@@ -112,20 +122,18 @@ def test_wrap():
 
 def test_los():
     boxsize = 1000.
-    boxcenter = [boxsize / 2] * 3
     data = get_random_catalog(boxsize=boxsize, seed=42)
     randoms = get_random_catalog(boxsize=boxsize, seed=84)
-    recon = MultiGridReconstruction(f=0.8, bias=2., los='x', boxcenter=boxcenter, boxsize=boxsize, nmesh=64, dtype='f8')
+    recon = MultiGridReconstruction(f=0.8, bias=2., los='x', boxcenter=0., boxsize=boxsize, nmesh=64, dtype='f8')
     recon.assign_data(data['Position'], data['Weight'])
     recon.assign_randoms(randoms['Position'], randoms['Weight'])
     recon.set_density_contrast()
     recon.run()
     shifts_global = recon.read_shifts(data['Position'], field='disp+rsd')
     offset = 1e8
-    boxcenter[0] += offset
     data['Position'][:, 0] += offset
     randoms['Position'][:, 0] += offset
-    recon = MultiGridReconstruction(f=0.8, bias=2., boxcenter=boxcenter, boxsize=boxsize, nmesh=64, dtype='f8')
+    recon = MultiGridReconstruction(f=0.8, bias=2., boxcenter=[offset, 0, 0], boxsize=boxsize, nmesh=64, dtype='f8')
     recon.assign_data(data['Position'], data['Weight'])
     recon.assign_randoms(randoms['Position'], randoms['Weight'])
     recon.set_density_contrast()
@@ -345,15 +353,13 @@ if __name__ == '__main__':
     script_output_data_fn = os.path.join(catalog_dir, 'script_data_rec.fits')
     script_output_randoms_fn = os.path.join(catalog_dir, 'script_randoms_rec.fits')
 
-    test_mpi(MultiGridReconstruction)
-    exit()
     # test_mem()
     test_dtype()
+    test_nmesh()
     test_wrap()
     test_mpi(MultiGridReconstruction)
     test_random()
     test_no_nrandoms()
-    '''
     test_los()
     # test_finite_difference()
     #test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn)
@@ -370,4 +376,3 @@ if __name__ == '__main__':
     data_fn_rec, randoms_fn_rec = [catalog_rec_fn(fn, 'multigrid') for fn in [data_fn, randoms_fn]]
     # test_ref(data_fn, randoms_fn, data_fn_rec, randoms_fn_rec)
     test_ref(data_fn_rec, randoms_fn_rec, None, None)
-    '''
