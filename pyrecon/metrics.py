@@ -58,7 +58,6 @@ class MetaBasePowerRatio(type(BaseClass)):
 
             return func
 
-
         for name in ['edges', 'shape', 'ndim', 'nmodes', 'modes', 'k', 'mu', 'kavg', 'muavg', 'with_mpi', 'mpicomm', 'attrs']:
             setattr(cls, name, _make_property(name))
 
@@ -359,7 +358,7 @@ class BasePowerRatio(BaseClass, metaclass=MetaBasePowerRatio):
                     mulim = xlims[1]
                     if mulim is not None:
                         x = (self._muedges[:-1] + self._muedges[1:]) / 2.
-                        indices = np.flatnonzero((x >= xlim[0]) & (x <= xlim[1]))
+                        indices = np.flatnonzero((x >= xlims[0]) & (x <= xlims[1]))
                         self._muedges = self._muedges[slice(indices[0], indices[-1] + 2, 1)]
                 xlims = xlims[:1]
                 tmp.poles.select(*xlims)
@@ -621,7 +620,6 @@ class MeshFFTTransfer(BasePowerRatio):
         ratio : array
         """
         return super(MeshFFTTransfer, self).get_ratio(complex=complex, **kwargs)**0.5 / self.growth
-
 
 
 class MeshFFTPropagator(BasePowerRatio):

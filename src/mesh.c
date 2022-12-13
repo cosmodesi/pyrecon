@@ -203,20 +203,12 @@ int read_finite_difference_cic(const FLOAT* mesh, const size_t* nmesh, const FLO
     // see what's going on and to encourage the compiler to optimize
     // and vectorize the code as much as possible.
     const FLOAT *pos = &(positions[ii*NDIM]);
+    FLOAT dx = pos[0] - (int) pos[0];
+    FLOAT dy = pos[1] - (int) pos[1];
+    FLOAT dz = pos[2] - (int) pos[2];
     size_t ix0 = ((int) pos[0]) % nmesh[0];
     size_t iy0 = ((int) pos[1]) % nmesh[1];
     size_t iz0 = ((int) pos[2]) % nmesh[2];
-    //size_t ix0 = (int) pos[0];
-    //size_t iy0 = (int) pos[1];
-    //size_t iz0 = (int) pos[2];
-    //if (ix0<0 || ix0>=nmesh[0] || iy0<0 || iy0>=nmesh[1] || iz0<0 || iz0>=nmesh[2]) {
-    //  printf("Index out of range: (ix,iy,iz) = (%zu,%zu,%zu) for (%.3f,%.3f,%.3f)\n",ix0,iy0,iz0,pos[0],pos[1],pos[2]);
-    //  flag = 1;
-    //  continue;
-    //}
-    FLOAT dx = pos[0] - ix0;
-    FLOAT dy = pos[1] - iy0;
-    FLOAT dz = pos[2] - iz0;
     size_t ixp = nmeshyz*((ix0+1) % nmesh[0]);
     size_t ixpp = nmeshyz*((ix0+2) % nmesh[0]);
     size_t ixm = nmeshyz*((ix0+nmesh[0]-1) % nmesh[0]);
@@ -283,6 +275,9 @@ int read_cic(const FLOAT* mesh, const size_t* nmesh, const FLOAT* positions, FLO
   for (size_t ii=0; ii<npositions; ii++) {
     if (flag) continue;
     const FLOAT *pos = &(positions[ii*NDIM]);
+    FLOAT dx = pos[0] - (int) pos[0];
+    FLOAT dy = pos[1] - (int) pos[1];
+    FLOAT dz = pos[2] - (int) pos[2];
     size_t ix0 = ((int) pos[0]) % nmesh[0];
     size_t iy0 = ((int) pos[1]) % nmesh[1];
     size_t iz0 = ((int) pos[2]) % nmesh[2];
@@ -294,9 +289,6 @@ int read_cic(const FLOAT* mesh, const size_t* nmesh, const FLOAT* positions, FLO
     //  flag = 1;
     //  continue;
     //}
-    FLOAT dx = pos[0] - ix0;
-    FLOAT dy = pos[1] - iy0;
-    FLOAT dz = pos[2] - iz0;
     size_t ixp = nmeshyz*((ix0+1) % nmesh[0]);
     size_t iyp = nmeshz*((iy0+1) % nmesh[1]);
     size_t izp = (iz0+1) % nmesh[2];

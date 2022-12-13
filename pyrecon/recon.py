@@ -230,7 +230,7 @@ class BaseReconstruction(BaseClass):
                 self.log_info('Mean smoothed random density in non-empty cells is {:.4f} (std = {:.4f}), threshold is (ran_min * mean weight) = {:.4f}.'.format(mean_nran_per_cell, std_nran_per_cell, threshold))
             mask = self.mesh_randoms > threshold
             if check:
-                frac_nonzero_masked = 1. - mask[mask_nonzero].sum() / nnonzero
+                frac_nonzero_masked = 1. - mask.sum() / nnonzero
                 del mask_nonzero
                 if frac_nonzero_masked > 0.1:
                     self.log_warning('Masking a large fraction {:.4f} of non-empty cells. You should probably increase the number of randoms.'.format(frac_nonzero_masked))

@@ -79,13 +79,14 @@ def test_iterative_fft_wrap():
             assert np.allclose(recon.read_shifted_positions(data['Position'], field=field), positions_rec)
 
 
-def test_iterative_fft(data_fn, randoms_fn):
+from mockfactory import Catalog
+
+def test_iterative_fft(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
     boxsize = 1200.
-    boxcenter = [1754, 400, 400]
-    data = fitsio.read(data_fn)
-    randoms = fitsio.read(randoms_fn)
-    data = {name: data[name] for name in data.dtype.names}
-    randoms = {name: randoms[name] for name in randoms.dtype.names}
+    boxcenter = [1754, 0, 0]
+    data = Catalog.read(data_fn)
+    randoms = Catalog.read(randoms_fn)
+    print(data['Position'].cmin(axis=0), data['Position'].cmax(axis=0))
     recon = IterativeFFTReconstruction(f=0.8, bias=2., los=None, nthreads=4, boxcenter=boxcenter, boxsize=boxsize, nmesh=128, dtype='f8')
     recon.assign_data(data['Position'], data['Weight'])
     recon.assign_randoms(randoms['Position'], randoms['Weight'])
@@ -95,8 +96,14 @@ def test_iterative_fft(data_fn, randoms_fn):
     from pypower import CatalogFFTPower
     from matplotlib import pyplot as plt
 
-    data['Position_rec'] = data['Position'] - recon.read_shifts(data['Position'])
-    randoms['Position_rec'] = randoms['Position'] - recon.read_shifts(randoms['Position'], field='disp')
+    for cat, fn in zip([data, randoms], [data_fn_rec, randoms_fn_rec]):
+        rec = recon.read_shifted_positions(cat['Position'])
+        if 'Position_rec' in cat:
+            assert np.allclose(rec, cat['Position_rec'])
+        #else:
+        cat['Position_rec'] = rec
+        if fn is not None:
+            cat.write(fn)
 
     kwargs = dict(edges={'min': 0., 'step': 0.01}, ells=(0, 2, 4), boxsize=1000., nmesh=64, resampler='tsc', interlacing=3, position_type='pos')
     power = CatalogFFTPower(data_positions1=data['Position'], randoms_positions1=randoms['Position'], **kwargs)
@@ -113,11 +120,15 @@ def test_iterative_fft(data_fn, randoms_fn):
 
 if __name__ == '__main__':
 
-    from utils import data_fn, randoms_fn
+    from utils import data_fn, randoms_fn, catalog_rec_fn
     from pyrecon.utils import setup_logging
 
     setup_logging()
+    """
     # test_mem()
     test_dtype()
     test_iterative_fft_wrap()
-    test_iterative_fft(data_fn, randoms_fn)
+    """
+    data_fn_rec, randoms_fn_rec = [catalog_rec_fn(fn, 'iterative_fft') for fn in [data_fn, randoms_fn]]
+    #data_fn_rec, randoms_fn_rec = None, None
+    test_iterative_fft(data_fn, randoms_fn, data_fn_rec, randoms_fn_rec)

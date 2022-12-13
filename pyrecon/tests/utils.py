@@ -12,6 +12,11 @@ randoms_fn = os.path.join(catalog_dir, 'randoms.fits')
 bias = 2.0
 
 
+def catalog_rec_fn(fn, algorithm):
+    base, ext = os.path.splitext(fn)
+    return '{}_{}{}'.format(base, algorithm, ext)
+
+
 def mkdir(dirname):
     try:
         os.makedirs(dirname)
@@ -64,7 +69,7 @@ def save_lognormal_catalogs(data_fn, randoms_fn, seed=42):
     # print(redshift, cosmo.scale_independent_growth_rate(redshift), cosmo.comoving_distance(redshift))
 
     offset = cosmo.comoving_distance(redshift) - BoxSize / 2.
-    offset = np.array([offset, 0, 0])
+    offset = np.array([offset, - BoxSize / 2., - BoxSize / 2.])
     catalog['Position'] += offset
     distance = np.sum(catalog['Position']**2, axis=-1)**0.5
     los = catalog['Position'] / distance[:, None]
