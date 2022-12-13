@@ -7,10 +7,10 @@ Not fully tested.
 """
 
 import os
+import re
 import logging
 import datetime
 import argparse
-import re
 from numbers import Number
 
 import numpy as np

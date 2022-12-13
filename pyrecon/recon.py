@@ -289,10 +289,6 @@ class BaseReconstruction(BaseClass):
         all_positions = [pos for pos in [positions, data_positions, randoms_positions] if pos is not None]
         self.nmesh, self.boxsize, self.boxcenter = _get_mesh_attrs(nmesh=nmesh, boxsize=boxsize, boxcenter=boxcenter, cellsize=cellsize, positions=all_positions,
                                                                    boxpad=boxpad, check=positions is not None and not self.wrap, select_nmesh=self._select_nmesh, mpicomm=self.mpicomm)
-        recommended_nmesh = self._select_nmesh(self.nmesh)
-        if not np.all(recommended_nmesh == self.nmesh):
-            import warnings
-            warnings.warn('Recommended nmesh is {}, you provided nmesh = {}'.format(recommended_nmesh, self.nmesh))
         self.resampler = _get_resampler(resampler=resampler)
         self.pm = ParticleMesh(BoxSize=self.boxsize, Nmesh=self.nmesh, dtype=self.dtype, comm=self.mpicomm, resampler=self.resampler, np=decomposition, plan_method=fft_plan)
         self.set_los(los)

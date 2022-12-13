@@ -111,5 +111,10 @@ def _get_mesh_attrs(nmesh=None, boxsize=None, boxcenter=None, cellsize=None, pos
         else:
             raise ValueError('nmesh (or cellsize) must be specified')
     nmesh = _make_array(nmesh, 3, dtype='i4')
+    if select_nmesh is not None:
+        recommended_nmesh = select_nmesh(nmesh)
+        if not np.all(recommended_nmesh == nmesh):
+            import warnings
+            warnings.warn('Recommended nmesh is {}, provided nmesh is {}'.format(recommended_nmesh, nmesh))
     boxcenter = _make_array(boxcenter, 3, dtype='f8')
     return nmesh, boxsize, boxcenter

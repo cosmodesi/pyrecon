@@ -92,7 +92,7 @@ def test_ref(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
         rec = recon.read_shifted_positions(cat['Position'])
         if 'Position_rec' in cat:
             if recon.mpicomm.rank == 0: print('Checking...')
-            assert np.allclose(rec, cat['Position_rec'], rtol=1e-4, atol=1e-4)
+            assert np.allclose(rec, cat['Position_rec'])
         else:
             cat['Position_rec'] = rec
         if fn is not None:

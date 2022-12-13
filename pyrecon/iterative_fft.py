@@ -23,7 +23,6 @@ class IterativeFFTReconstruction(BaseReconstruction):
             self._iterate()
         del self.mesh_delta
         self.mesh_psi = self._compute_psi()
-        # print([psi.value.std() for psi in self.mesh_psi])
         del self.mesh_delta_real
 
     def _iterate(self):
@@ -60,7 +59,6 @@ class IterativeFFTReconstruction(BaseReconstruction):
             # In the local los case, \beta \nabla \cdot (\nabla \phi_{\mathrm{est},n} \cdot \hat{r}) \hat{r} is:
             # \beta \partial_{i} \partial_{j} \phi_{\mathrm{est},n} \hat{r}_{j} \hat{r}_{i}
             # i.e. \beta IFFT(k_{i} k_{j} \delta(k) / k^{2}) \hat{r}_{i} \hat{r}_{j} => 6 FFTs
-            # print(self.boxsize, self.offset, [(xx.min(), xx.max()) for xx in self.mesh_delta_real.x])
             for iaxis in range(delta_k.ndim):
                 for jaxis in range(iaxis, delta_k.ndim):
                     disp_deriv = delta_k.copy()
@@ -78,6 +76,7 @@ class IterativeFFTReconstruction(BaseReconstruction):
                         factor /= (1. + self.beta)
                     # remove RSD part
                     self.mesh_delta_real -= factor * disp_deriv
+        self.mesh_delta_real[...].imag = 0.
         self._iter += 1
 
     def _compute_psi(self):
