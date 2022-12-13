@@ -2,7 +2,7 @@ import numpy as np
 
 from pyrecon import PlaneParallelFFTReconstruction
 from pyrecon.utils import MemoryMonitor
-from test_multigrid import get_random_catalog
+from utils import get_random_catalog, Catalog
 
 
 def test_dtype():
@@ -76,9 +76,6 @@ def test_plane_parallel_fft_wrap():
             positions_rec = (diff - recon.offset) % recon.boxsize + recon.offset
             assert np.all(positions_rec <= origin + boxsize) and np.all(positions_rec >= origin)
             assert np.allclose(recon.read_shifted_positions(data['Position'], field=field), positions_rec)
-
-
-from mockfactory import Catalog
 
 def test_plane_parallel_fft(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
     boxsize = 1200.

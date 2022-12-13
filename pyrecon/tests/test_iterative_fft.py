@@ -1,9 +1,8 @@
 import numpy as np
-import fitsio
 
 from pyrecon import IterativeFFTReconstruction
 from pyrecon.utils import MemoryMonitor
-from test_multigrid import get_random_catalog
+from utils import get_random_catalog, Catalog
 
 
 def test_dtype():
@@ -79,14 +78,11 @@ def test_iterative_fft_wrap():
             assert np.allclose(recon.read_shifted_positions(data['Position'], field=field), positions_rec)
 
 
-from mockfactory import Catalog
-
 def test_iterative_fft(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
     boxsize = 1200.
     boxcenter = [1754, 0, 0]
     data = Catalog.read(data_fn)
     randoms = Catalog.read(randoms_fn)
-    print(data['Position'].cmin(axis=0), data['Position'].cmax(axis=0))
     recon = IterativeFFTReconstruction(f=0.8, bias=2., los=None, nthreads=4, boxcenter=boxcenter, boxsize=boxsize, nmesh=128, dtype='f8')
     recon.assign_data(data['Position'], data['Weight'])
     recon.assign_randoms(randoms['Position'], randoms['Weight'])
@@ -124,11 +120,9 @@ if __name__ == '__main__':
     from pyrecon.utils import setup_logging
 
     setup_logging()
-    """
     # test_mem()
     test_dtype()
     test_iterative_fft_wrap()
-    """
     data_fn_rec, randoms_fn_rec = [catalog_rec_fn(fn, 'iterative_fft') for fn in [data_fn, randoms_fn]]
     #data_fn_rec, randoms_fn_rec = None, None
     test_iterative_fft(data_fn, randoms_fn, data_fn_rec, randoms_fn_rec)

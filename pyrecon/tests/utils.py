@@ -1,15 +1,13 @@
 import os
-import time
 
 import numpy as np
-import fitsio
+from mockfactory import LagrangianLinearMock, RandomBoxCatalog, Catalog, cartesian_to_sky, DistanceToRedshift, setup_logging
 
 
 catalog_dir = '_catalogs'
 box_data_fn = os.path.join(catalog_dir, 'box_data.fits')
 data_fn = os.path.join(catalog_dir, 'data.fits')
 randoms_fn = os.path.join(catalog_dir, 'randoms.fits')
-bias = 2.0
 
 
 def catalog_rec_fn(fn, algorithm):
@@ -24,72 +22,70 @@ def mkdir(dirname):
         pass
 
 
+def get_random_catalog(csize=100000, boxsize=1000., seed=42):
+    import mpytools as mpy
+    catalog = RandomBoxCatalog(csize=csize, boxsize=boxsize, seed=seed)
+    catalog['Weight'] = mpy.random.MPIRandomState(size=catalog.size, seed=seed).uniform(0.5, 1.)
+    return catalog
+
+
 def save_box_lognormal_catalogs(data_fn, seed=42):
-    from nbodykit.lab import cosmology, LogNormalCatalog
-    from nbodykit.utils import GatherArray
-
-    def save_fits(cat, fn):
-        array = np.empty(cat.size, dtype=[(col, cat[col].dtype, cat[col].shape[1:]) for col in cat.columns])
-        for col in cat.columns: array[col] = cat[col].compute()
-        array = GatherArray(array, comm=cat.comm)
-        if cat.comm.rank == 0:
-            fitsio.write(fn, array, clobber=True)
-
-    redshift = 0.7
-    cosmo = cosmology.Planck15.match(Omega0_m=0.3)
-    Plin = cosmology.LinearPower(cosmo, redshift, transfer='CLASS')
-    nbar = 3e-4
-    BoxSize = 800
-    catalog = LogNormalCatalog(Plin=Plin, nbar=nbar, BoxSize=BoxSize, Nmesh=256, bias=bias, seed=seed)
-    # print(redshift, cosmo.scale_independent_growth_rate(redshift), cosmo.comoving_distance(redshift))
-    los = [1, 0, 0]
-    catalog['RSDPosition'] = catalog['Position'] + (catalog['VelocityOffset'] * los).sum(axis=-1)[:, None] * los
-    catalog['RSDPosition'] %= BoxSize
-    save_fits(catalog, data_fn)
+    from cosmoprimo.fiducial import DESI
+    z, bias, nbar, nmesh, boxsize, boxcenter = 0.7, 2.0, 3e-4, 256, 800., 0.
+    cosmo = DESI()
+    pklin = cosmo.get_fourier().pk_interpolator().to_1d(z=z)
+    f = cosmo.sigma8_z(z=z, of='theta_cb') / cosmo.sigma8_z(z=z, of='delta_cb')  # growth rate
+    mock = LagrangianLinearMock(pklin, nmesh=nmesh, boxsize=boxsize, boxcenter=boxcenter, seed=42, unitary_amplitude=False)
+    offset = boxcenter - boxsize / 2.
+    # this is Lagrangian bias, Eulerian bias - 1
+    mock.set_real_delta_field(bias=bias - 1)
+    mock.set_analytic_selection_function(nbar=nbar)
+    mock.poisson_sample(seed=43)
+    mock.set_rsd(f=f, los='x')
+    catalog = mock.to_catalog()
+    catalog['Position'] = (catalog['Position'] - offset) % boxsize + offset
+    catalog.write(box_data_fn)
 
 
 def save_lognormal_catalogs(data_fn, randoms_fn, seed=42):
-    from nbodykit.lab import cosmology, LogNormalCatalog, UniformCatalog
-    from nbodykit.transform import CartesianToSky
-    from nbodykit.utils import GatherArray
+    from cosmoprimo.fiducial import DESI
+    z, bias, nbar, nmesh, boxsize = 0.7, 2.0, 3e-4, 256, 800.
+    cosmo = DESI()
+    d2z = DistanceToRedshift(cosmo.comoving_radial_distance)
+    pklin = cosmo.get_fourier().pk_interpolator().to_1d(z=z)
+    f = cosmo.sigma8_z(z=z, of='theta_cb') / cosmo.sigma8_z(z=z, of='delta_cb')  # growth rate
+    dist = cosmo.comoving_radial_distance(z)
+    boxcenter = [dist, 0, 0]
+    mock = LagrangianLinearMock(pklin, nmesh=nmesh, boxsize=boxsize, boxcenter=boxcenter, seed=42, unitary_amplitude=False)
+    # this is Lagrangian bias, Eulerian bias - 1
+    mock.set_real_delta_field(bias=bias - 1)
+    mock.set_analytic_selection_function(nbar=nbar)
+    mock.poisson_sample(seed=43)
+    mock.set_rsd(f=f, los=None)
+    data = mock.to_catalog()
 
-    def save_fits(cat, fn):
-        array = np.empty(cat.size, dtype=[(col, cat[col].dtype, cat[col].shape[1:]) for col in cat.columns])
-        for col in cat.columns: array[col] = cat[col].compute()
-        array = GatherArray(array, comm=cat.comm)
-        if cat.comm.rank == 0:
-            fitsio.write(fn, array, clobber=True)
+    # We've got data, now turn to randoms
+    randoms = RandomBoxCatalog(nbar=10. * nbar, boxsize=boxsize, boxcenter=boxcenter, seed=44)
+    # Add columns to test pyrecon script
+    for cat in [data, randoms]:
+        cat['Weight'] = cat.ones()
+        cat['NZ'] = nbar * cat.ones()
+        dist, cat['RA'], cat['DEC'] = cartesian_to_sky(cat['Position'])
+        cat['Z'] = d2z(dist)
+        #print(cat['Position'].cmin(axis=0), cat['Position'].cmax(axis=0))
 
-    redshift = 0.7
-    cosmo = cosmology.Planck15.match(Omega0_m=0.3)
-    Plin = cosmology.LinearPower(cosmo, redshift, transfer='CLASS')
-    nbar = 3e-4
-    BoxSize = 800
-    catalog = LogNormalCatalog(Plin=Plin, nbar=nbar, BoxSize=BoxSize, Nmesh=256, bias=bias, seed=seed)
-    # print(redshift, cosmo.scale_independent_growth_rate(redshift), cosmo.comoving_distance(redshift))
-
-    offset = cosmo.comoving_distance(redshift) - BoxSize / 2.
-    offset = np.array([offset, - BoxSize / 2., - BoxSize / 2.])
-    catalog['Position'] += offset
-    distance = np.sum(catalog['Position']**2, axis=-1)**0.5
-    los = catalog['Position'] / distance[:, None]
-    catalog['Position'] += (catalog['VelocityOffset'] * los).sum(axis=-1)[:, None] * los
-    # mask = (catalog['Position'] >= offset) & (catalog['Position'] < offset + BoxSize)
-    # catalog = catalog[np.all(mask, axis=-1)]
-    catalog['NZ'] = nbar * np.ones(catalog.size, dtype='f8')
-    catalog['Weight'] = np.ones(catalog.size, dtype='f8')
-    catalog['RA'], catalog['DEC'], catalog['Z'] = CartesianToSky(catalog['Position'], cosmo)
-    save_fits(catalog, data_fn)
-
-    catalog = UniformCatalog(BoxSize=BoxSize, nbar=10 * nbar, seed=seed)
-    catalog['Position'] += offset
-    catalog['Weight'] = np.ones(catalog.size, dtype='f8')
-    catalog['NZ'] = nbar * np.ones(catalog.size, dtype='f8')
-    catalog['RA'], catalog['DEC'], catalog['Z'] = CartesianToSky(catalog['Position'], cosmo)
-    save_fits(catalog, randoms_fn)
+    data.write(data_fn)
+    randoms.write(randoms_fn)
 
 
-def setup():
+def main():
+
+    setup_logging()
     mkdir(catalog_dir)
     save_box_lognormal_catalogs(box_data_fn, seed=42)
     save_lognormal_catalogs(data_fn, randoms_fn, seed=42)
+
+
+if __name__ == '__main__':
+
+    main()

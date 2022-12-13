@@ -7,10 +7,11 @@ Not fully tested.
 """
 
 import os
+import re
 import logging
 import datetime
 import argparse
-import re
+from numbers import Number
 
 import numpy as np
 import yaml
@@ -100,7 +101,7 @@ def main(args=None, **input_config):
         # Turn empty things (dict, list, str) to None
         for section in c1:
             for name, value in c1[section].items():
-                if not value: c1[section][name] = None
+                if not isinstance(value, Number) and not value: c1[section][name] = None
 
     update_config(config, input_config)
 

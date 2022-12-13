@@ -271,15 +271,14 @@ def test_script_no_randoms(data_fn, output_data_fn):
     subprocess.call(command, shell=True)
     data = fitsio.read(data_fn)
     boxsize = 800
-    boxcenter = boxsize / 2.
-    recon = MultiGridReconstruction(nthreads=4, los=0, boxcenter=boxcenter, boxsize=boxsize, nmesh=128, dtype='f8')
+    recon = MultiGridReconstruction(nthreads=4, los=0, boxcenter=0., boxsize=boxsize, nmesh=128, dtype='f8')
     recon.set_cosmo(f=0.8, bias=2.)
-    recon.assign_data(data['RSDPosition'])
+    recon.assign_data(data['Position'])
     recon.set_density_contrast()
     recon.run()
 
-    ref_positions_rec_data = data['RSDPosition'] - recon.read_shifts(data['RSDPosition'])
-    # velocityoffset = recon.read_shifts(data['RSDPosition'], field='disp+rsd') - recon.read_shifts(data['RSDPosition'], field='disp')
+    ref_positions_rec_data = data['Position'] - recon.read_shifts(data['Position'])
+    # velocityoffset = recon.read_shifts(data['Position'], field='disp+rsd') - recon.read_shifts(data['Position'], field='disp')
     # print(velocityoffset)
     # print(data['VelocityOffset'])
     # assert np.all(np.abs(velocityoffset[:, 0] - data['VelocityOffset'][:, 0]) < np.abs(data['VelocityOffset'][:, 0]))
@@ -337,8 +336,6 @@ if __name__ == '__main__':
     from pyrecon.utils import setup_logging
 
     setup_logging()
-    # Uncomment to compute catalogs needed for these tests
-    # utils.setup()
 
     recon_code = os.path.join(os.path.abspath(os.path.dirname(__file__)), '_codes', 'recon')
     output_data_fn = os.path.join(catalog_dir, 'data_rec.fits')
@@ -349,8 +346,6 @@ if __name__ == '__main__':
     script_output_data_fn = os.path.join(catalog_dir, 'script_data_rec.fits')
     script_output_randoms_fn = os.path.join(catalog_dir, 'script_randoms_rec.fits')
 
-    test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn)
-    exit()
     # test_mem()
     test_random()
     test_no_nrandoms()
@@ -363,7 +358,7 @@ if __name__ == '__main__':
     compare_ref(randoms_fn, output_randoms_fn, ref_output_randoms_fn)
     test_script(data_fn, randoms_fn, script_output_data_fn, script_output_randoms_fn)
     test_script_no_randoms(box_data_fn, script_output_box_data_fn)
-    # compute_power_no_randoms([script_output_box_data_fn]*2, ['RSDPosition', 'Position_rec'])
+    # compute_power_no_randoms([script_output_box_data_fn]*2, ['Position', 'Position_rec'])
     # compute_power((data_fn, randoms_fn), (output_data_fn, output_randoms_fn))
     # compute_power((data_fn, randoms_fn), (ref_output_data_fn, ref_output_randoms_fn))
     # compute_power((ref_output_data_fn, ref_output_randoms_fn), (output_data_fn, output_randoms_fn))

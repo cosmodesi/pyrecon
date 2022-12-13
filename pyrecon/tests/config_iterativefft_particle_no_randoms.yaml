@@ -1,6 +1,6 @@
 input:
   dir: ./_catalogs
-  xyz: RSDPosition
+  xyz: Position
   #rdz: [RA, DEC, Z]
   data_fn: box_data.fits
 
@@ -8,7 +8,7 @@ output:
   dir: ./_catalogs
   data_fn: script_box_data_rec.fits
   xyz_rec: Position_rec
-  columns: [RSDPosition]
+  columns: [Position]
 
 algorithm:
   name: IterativeFFTParticleReconstruction
@@ -25,7 +25,7 @@ cosmology:
 
 mesh:
   boxsize: 800.
-  boxcenter: 400.
+  boxcenter: 0.
   nmesh: 128
   dtype: f8
   fft_engine: 'fftw'

@@ -9,7 +9,7 @@ import fitsio
 
 from pyrecon.iterative_fft_particle import OriginalIterativeFFTParticleReconstruction, IterativeFFTParticleReconstruction
 from pyrecon.utils import distance
-from test_multigrid import get_random_catalog
+from utils import get_random_catalog, Catalog
 
 
 def test_no_nrandoms():
@@ -243,7 +243,7 @@ def test_revolver(data_fn, randoms_fn=None):
     niter = 3
 
     data = fitsio.read(data_fn)
-    fields = ['Position', 'Weight']
+    fields = ['Position']
     data = {field: data[field] for field in fields}
 
     if isbox:
@@ -253,9 +253,13 @@ def test_revolver(data_fn, randoms_fn=None):
         randoms = {field: randoms[field] for field in fields}
 
     for catalog in [data, randoms]:
+        catalog['Weight'] = np.ones_like(catalog['Position'], shape=len(catalog['Position']))
         for field in catalog:
             if catalog[field].dtype.byteorder == '>':
                 catalog[field] = np.array(catalog[field].byteswap().newbyteorder(), dtype='f8')
+        if isbox:
+            catalog['Position'] += boxsize / 2.
+            catalog['Position'] %= boxsize
         catalog['Distance'] = distance(catalog['Position'])
 
     class Catalog(object):
@@ -373,14 +377,13 @@ def test_script_no_randoms(data_fn, output_data_fn):
     subprocess.call(command, shell=True)
     data = fitsio.read(data_fn)
     boxsize = 800
-    boxcenter = boxsize / 2.
-    recon = IterativeFFTParticleReconstruction(nthreads=4, los='x', boxcenter=boxcenter, boxsize=boxsize, nmesh=128, dtype='f8')
+    recon = IterativeFFTParticleReconstruction(nthreads=4, los='x', boxcenter=0., boxsize=boxsize, nmesh=128, dtype='f8')
     recon.set_cosmo(f=0.8, bias=2.)
-    recon.assign_data(data['RSDPosition'])
+    recon.assign_data(data['Position'])
     recon.set_density_contrast()
     recon.run()
 
-    ref_positions_rec_data = data['RSDPosition'] - recon.read_shifts('data')
+    ref_positions_rec_data = data['Position'] - recon.read_shifts('data')
     data = fitsio.read(output_data_fn, columns=['Position_rec'])
     assert np.allclose(ref_positions_rec_data, data['Position_rec'])
 

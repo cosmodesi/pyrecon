@@ -41,16 +41,14 @@ class IterativeFFTReconstruction(BaseReconstruction):
         # In the plane-parallel case (self.los is a given vector), this is simply \beta IFFT((\hat{k} \cdot \hat{\eta})^{2} \delta(k))
         if self.los is not None:
             # global los
-            for i in range(delta_k.ndim):
-                if self.los[i] == 0.: continue
-                disp_deriv_k = (self.los[i] * k[i])**2 * delta_k  # delta_k already divided by k^{2}
-                delta_rsd = disp_deriv_k.to_real()
-                factor = self.beta
-                # remove RSD part
-                if self._iter == 0:
-                    # Burden et al. 2015: 1504.02591, eq. 12 (flat sky approximation)
-                    factor /= (1. + self.beta)
-                self.mesh_delta_real -= factor * delta_rsd
+            disp_deriv_k = sum(kk * ll for ll, kk in zip(k, self.los))**2 * delta_k  # delta_k already divided by k^{2}
+            delta_rsd = disp_deriv_k.to_real()
+            factor = self.beta
+            # remove RSD part
+            if self._iter == 0:
+                # Burden et al. 2015: 1504.02591, eq. 12 (flat sky approximation)
+                factor /= (1. + self.beta)
+            self.mesh_delta_real -= factor * delta_rsd
         else:
             # In the local los case, \beta \nabla \cdot (\nabla \phi_{\mathrm{est},n} \cdot \hat{r}) \hat{r} is:
             # \beta \partial_{i} \partial_{j} \phi_{\mathrm{est},n} \hat{r}_{j} \hat{r}_{i}
