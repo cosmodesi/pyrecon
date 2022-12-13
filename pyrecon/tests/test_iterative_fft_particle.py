@@ -15,7 +15,7 @@ from utils import get_random_catalog, Catalog
 def test_no_nrandoms():
     boxsize = 1000.
     data = get_random_catalog(boxsize=boxsize, seed=42)
-    recon = IterativeFFTParticleReconstruction(f=0.8, bias=2., los='x', nthreads=4, boxcenter=boxsize / 2., boxsize=boxsize, nmesh=8, dtype='f8')
+    recon = IterativeFFTParticleReconstruction(f=0.8, bias=2., los='x', nthreads=4, boxcenter=0., boxsize=boxsize, nmesh=8, dtype='f8')
     recon.assign_data(data['Position'], data['Weight'])
     assert not recon.has_randoms
     recon.set_density_contrast()
@@ -113,8 +113,7 @@ def test_wisdom():
 def test_iterative_fft_particle_wrap():
     size = 100000
     boxsize = 1000
-    for origin in [-500, 0, 500]:
-        boxcenter = boxsize / 2 + origin
+    for boxcenter in [-500, 0, 500]:
         data = get_random_catalog(size, boxsize, seed=42)
         # set one of the data positions to be outside the fiducial box by hand
         data['Position'][-1] = np.array([boxsize, boxsize, boxsize]) + 1
@@ -135,13 +134,13 @@ def test_iterative_fft_particle_wrap():
             shifts = recon.read_shifts('data', field=field)
             diff = data['Position'] - shifts
             positions_rec = (diff - recon.offset) % recon.boxsize + recon.offset
-            assert np.all(positions_rec <= origin + boxsize) and np.all(positions_rec >= origin)
+            assert np.all(positions_rec >= boxcenter - boxsize / 2.) and np.all(positions_rec <= boxcenter + boxsize / 2.)
             assert np.allclose(recon.read_shifted_positions('data', field=field), positions_rec)
 
 
 def test_los():
     boxsize = 1000.
-    boxcenter = [boxsize / 2] * 3
+    boxcenter = [0.] * 3
     data = get_random_catalog(boxsize=boxsize, seed=42)
     randoms = get_random_catalog(boxsize=boxsize, seed=84)
     recon = IterativeFFTParticleReconstruction(f=0.8, bias=2., los='x', nthreads=4, boxcenter=boxcenter, boxsize=boxsize, nmesh=64, dtype='f8')
