@@ -57,7 +57,7 @@ def save_lognormal_catalogs(data_fn, randoms_fn, seed=42):
     dist = cosmo.comoving_radial_distance(z)
     boxcenter = [dist, 0, 0]
     mock = LagrangianLinearMock(pklin, nmesh=nmesh, boxsize=boxsize, boxcenter=boxcenter, seed=42, unitary_amplitude=False)
-    # this is Lagrangian bias, Eulerian bias - 1
+    # This is Lagrangian bias, Eulerian bias - 1
     mock.set_real_delta_field(bias=bias - 1)
     mock.set_analytic_selection_function(nbar=nbar)
     mock.poisson_sample(seed=43)
@@ -72,7 +72,6 @@ def save_lognormal_catalogs(data_fn, randoms_fn, seed=42):
         cat['NZ'] = nbar * cat.ones()
         dist, cat['RA'], cat['DEC'] = cartesian_to_sky(cat['Position'])
         cat['Z'] = d2z(dist)
-        print(cat['Position'].cmin(axis=0), cat['Position'].cmax(axis=0))
 
     data.write(data_fn)
     randoms.write(randoms_fn)
