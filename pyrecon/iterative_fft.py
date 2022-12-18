@@ -8,6 +8,8 @@ class IterativeFFTReconstruction(BaseReconstruction):
     Implementation of Burden et al. 2015 (https://arxiv.org/abs/1504.02591)
     field-level (as opposed to :class:`IterativeFFTParticleReconstruction`) algorithm.
     """
+    _compressed = True
+
     def run(self, niterations=3):
         """
         Run reconstruction, i.e. compute Zeldovich displacement fields :attr:`mesh_psi`.
@@ -62,8 +64,10 @@ class IterativeFFTReconstruction(BaseReconstruction):
             for iaxis in range(delta_k.ndim):
                 for jaxis in range(iaxis, delta_k.ndim):
                     disp_deriv = delta_k.copy()
-                    for kslab, slab in zip(disp_deriv.slabs.x, disp_deriv.slabs):
-                        slab[...] *= kslab[iaxis] * kslab[jaxis]  # delta_k already divided by k^{2}
+                    for kslab, islab, slab in zip(disp_deriv.slabs.x, disp_deriv.slabs.i, disp_deriv.slabs):
+                        mask = (islab[iaxis] != self.nmesh[iaxis] // 2) & (islab[jaxis] != self.nmesh[jaxis] // 2)
+                        mask |= (islab[iaxis] == self.nmesh[iaxis] // 2) & (islab[jaxis] == self.nmesh[jaxis] // 2)
+                        slab[...] *= kslab[iaxis] * kslab[jaxis] * mask  # delta_k already divided by k^{2}
                     disp_deriv = disp_deriv.c2r()
                     for rslab, slab in zip(disp_deriv.slabs.x, disp_deriv.slabs):
                         rslab = self._transform_rslab(rslab)
@@ -76,7 +80,6 @@ class IterativeFFTReconstruction(BaseReconstruction):
                         factor /= (1. + self.beta)
                     # remove RSD part
                     self.mesh_delta_real -= factor * disp_deriv
-        self.mesh_delta_real[...].imag = 0.
         self._iter += 1
 
     def _compute_psi(self):
@@ -85,10 +88,11 @@ class IterativeFFTReconstruction(BaseReconstruction):
         psis = []
         for iaxis in range(delta_k.ndim):
             psi = delta_k.copy()
-            for kslab, slab in zip(psi.slabs.x, psi.slabs):
+            for kslab, islab, slab in zip(psi.slabs.x, psi.slabs.i, psi.slabs):
                 k2 = sum(kk**2 for kk in kslab)
                 k2[k2 == 0.] = 1.  # avoid dividing by zero
-                slab[...] *= 1j * kslab[iaxis] / k2
+                mask = islab[iaxis] != self.nmesh[iaxis] // 2
+                slab[...] *= 1j * kslab[iaxis] / k2 * mask
             psis.append(psi.c2r())
             del psi
         return psis

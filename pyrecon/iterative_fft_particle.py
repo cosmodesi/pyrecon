@@ -13,6 +13,8 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
     Numerical agreement in the Zeldovich displacements between original codes and this re-implementation is machine precision
     (absolute and relative difference of 1e-12).
     """
+    _compressed = True
+
     @format_positions_weights_wrapper
     def assign_data(self, positions, weights=None):
         """
@@ -147,8 +149,9 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
                 continue
 
             psi = delta_k.copy()
-            for kslab, slab in zip(psi.slabs.x, psi.slabs):
-                slab[...] *= 1j * kslab[iaxis]
+            for kslab, islab, slab in zip(psi.slabs.x, psi.slabs.i, psi.slabs):
+                mask = islab[iaxis] != self.nmesh[iaxis] // 2
+                slab[...] *= 1j * kslab[iaxis] * mask
 
             psi = psi.c2r()
             # Reading shifts at reconstructed data real-space positions

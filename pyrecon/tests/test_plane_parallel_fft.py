@@ -12,7 +12,7 @@ def test_dtype():
         all_shifts = []
         for dtype in ['f4', 'f8']:
             dtype = np.dtype(dtype)
-            itemsize = np.empty(0, dtype=dtype).real.dtype.itemsize * 2
+            itemsize = np.empty(0, dtype=dtype).real.dtype.itemsize
             recon = PlaneParallelFFTReconstruction(f=0.8, bias=2., positions=randoms['Position'], nmesh=64, los=los, dtype=dtype)
             recon.assign_data(data['Position'], data['Weight'])
             recon.assign_randoms(randoms['Position'], randoms['Weight'])

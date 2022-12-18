@@ -117,4 +117,6 @@ def _get_mesh_attrs(nmesh=None, boxsize=None, boxcenter=None, cellsize=None, pos
             import warnings
             warnings.warn('Recommended nmesh is {}, provided nmesh is {}'.format(recommended_nmesh, nmesh))
     boxcenter = _make_array(boxcenter, 3, dtype='f8')
+    if np.any(nmesh % 2):
+        raise NotImplementedError('Odd sizes not supported by pmesh for now')
     return nmesh, boxsize, boxcenter

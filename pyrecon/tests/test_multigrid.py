@@ -48,7 +48,7 @@ def test_no_nrandoms():
     recon.assign_data(data['Position'], data['Weight'])
     assert not recon.has_randoms
     recon.set_density_contrast()
-    assert np.allclose(np.mean(recon.mesh_delta), 0.)
+    assert np.allclose(recon.mesh_delta.csum(), 0.)
     recon.run(jacobi_niterations=1, vcycle_niterations=1)
     # recon.run()
     assert np.all(np.abs(recon.read_shifts(data['Position'])) < 2.)
@@ -89,7 +89,7 @@ def test_nmesh():
 
     import pytest
     with pytest.warns():
-        recon = MultiGridReconstruction(f=0.8, bias=2., positions=randoms['Position'], nmesh=[12, 13, 17])
+        recon = MultiGridReconstruction(f=0.8, bias=2., positions=randoms['Position'], nmesh=[12, 14, 18])
 
 
 def test_wrap():

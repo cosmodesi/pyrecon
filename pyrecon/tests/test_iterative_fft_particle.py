@@ -36,7 +36,7 @@ def test_dtype():
         all_shifts = []
         for dtype in ['f4', 'f8']:
             dtype = np.dtype(dtype)
-            itemsize = np.empty(0, dtype=dtype).real.dtype.itemsize * 2
+            itemsize = np.empty(0, dtype=dtype).real.dtype.itemsize
             recon = IterativeFFTParticleReconstruction(f=0.8, bias=2., positions=randoms['Position'], nmesh=64, los=los, dtype=dtype)
             positions_bak, weights_bak = data['Position'].copy(), data['Weight'].copy()
             recon.assign_data(data['Position'], data['Weight'])

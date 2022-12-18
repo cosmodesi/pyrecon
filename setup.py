@@ -25,9 +25,9 @@ if __name__ == '__main__':
           url='http://github.com/cosmodesi/pyrecon',
           install_requires=['numpy', 'scipy', 'pmesh'],
           extras_require={'extras': ['mpytools', 'fitsio', 'h5py'], 'metrics': ['pypower @ git+https://github.com/cosmodesi/pypower']},
-          ext_modules=[Extension('pyrecon._multigrid', ['pyrecon/_multigrid.pyx'],
-                       depends=['pyrecon/_multigrid_imp.h', 'pyrecon/_multigrid_generics.h'],
+          ext_modules=[Extension(f'{package_basename}._multigrid', [f'{package_basename}/_multigrid.pyx'],
+                       depends=[f'{package_basename}/_multigrid_imp.h', f'{package_basename}/_multigrid_generics.h'],
                        libraries=['m'],
-                       include_dirs=["./", np.get_include()])],
+                       include_dirs=['./', np.get_include()])],
           packages=[package_basename],
-          scripts=['bin/pyrecon'])
+          scripts=[f'bin/{package_basename}'])

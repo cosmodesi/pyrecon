@@ -97,7 +97,7 @@ def jacobi(v, f, np.ndarray[double, ndim=1, mode='c'] boxcenter, double beta, do
     cdef np.ndarray[double, ndim=1, mode='c'] boxsize = v.pm.BoxSize
     cdef double * plos = NULL
     if los is not None:
-      plos = &los[0]
+        plos = &los[0]
     cdef int offsetx = v.start[0] - 1
 
     for iter in range(niterations):
