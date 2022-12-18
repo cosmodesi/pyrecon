@@ -15,7 +15,7 @@ def test_mem():
     randoms = get_random_catalog(seed=84)
 
     with MemoryMonitor() as mem:
-        recon = MultiGridReconstruction(f=0.8, bias=2., nthreads=4, positions=randoms['Position'], nmesh=256, dtype='f8')
+        recon = MultiGridReconstruction(f=0.8, bias=2., positions=randoms['Position'], nmesh=256, dtype='f8')
         mem('init')
         recon.assign_data(data['Position'], data['Weight'])
         mem('data')

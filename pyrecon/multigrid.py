@@ -85,6 +85,7 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         else:
             self.mesh_delta /= (self.mesh_data.cmean() * self.bias)
             self.mesh_delta -= 1. / self.bias
+            del self.mesh_data
         self.mesh_delta = self._smooth_gaussian(self.mesh_delta)
 
     def _vcycle(self, v, f):
@@ -132,6 +133,7 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         self.vcycle_niterations = int(vcycle_niterations)
         if self.mpicomm.rank == 0: self.log_info('Computing displacement potential.')
         self.mesh_phi = self._fmg(self.mesh_delta)
+        del self.mesh_delta
 
     @format_positions_wrapper(return_input_type=False)
     def read_shifts(self, positions, field='disp+rsd'):

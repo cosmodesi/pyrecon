@@ -113,6 +113,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         self._positions_rec_data = self._positions_data.copy()
         for iter in range(niterations):
             self.mesh_psi = self._iterate(return_psi=iter == niterations - 1)
+        del self.mesh_data
         if self.has_randoms:
             del self.mesh_randoms
 

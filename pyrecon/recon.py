@@ -544,6 +544,7 @@ class BaseReconstruction(BaseClass):
                     else:
                         self.log_info('Masking a fraction {:.4f} of non-empty cells.'.format(frac_nonzero_masked))
 
+            del self.mesh_randoms
         else:
             self.mesh_delta /= (self.mesh_delta.cmean() * self.bias)
             self.mesh_delta -= 1. / self.bias

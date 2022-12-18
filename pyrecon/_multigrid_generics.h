@@ -106,6 +106,7 @@ void mkname(_jacobi)(FLOAT *v, const FLOAT *f, const size_t* nmesh, const size_t
   #pragma omp parallel for shared(v, jac)
 #endif
   for (size_t ii=0; ii<localsize; ii++) v[ii] = (1-damping_factor)*v[ii] + damping_factor*jac[ii];
+  free(jac);
 }
 
 
