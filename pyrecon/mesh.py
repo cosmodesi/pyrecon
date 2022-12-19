@@ -1092,9 +1092,9 @@ class FFTWEngine(BaseFFTEngine):
         else:
             fun = fun.astype(self.type_complex, copy=False)
         if self.fftw_forward_object is None:
-            fftw_forward_object = pyfftw.FFTW(fun, output_array, axes=range(self.ndim), direction='FFTW_FORWARD', flags=self.flags, threads=self.nthreads)
+            self.fftw_forward_object = pyfftw.FFTW(fun, output_array, axes=range(self.ndim), direction='FFTW_FORWARD', flags=self.flags, threads=self.nthreads)
             # input_array[...] = fun
-            toret = fftw_forward_object(normalise_idft=True)
+            toret = self.fftw_forward_object(normalise_idft=True)
         else:
             toret = self.fftw_forward_object(input_array=fun, output_array=output_array, normalise_idft=True)
         return toret
@@ -1111,8 +1111,8 @@ class FFTWEngine(BaseFFTEngine):
         else:
             output_array = pyfftw.empty_aligned(self.shape, dtype=self.type_complex, order='C')
         if self.fftw_backward_object is None:
-            fftw_backward_object = pyfftw.FFTW(input_array, output_array, axes=range(self.ndim), direction='FFTW_BACKWARD', flags=self.flags, threads=self.nthreads)
-            toret = fftw_backward_object(normalise_idft=True)
+            self.fftw_backward_object = pyfftw.FFTW(input_array, output_array, axes=range(self.ndim), direction='FFTW_BACKWARD', flags=self.flags, threads=self.nthreads)
+            toret = self.fftw_backward_object(normalise_idft=True)
         else:
             toret = self.fftw_backward_object(input_array=fun, output_array=output_array, normalise_idft=True)
         return toret

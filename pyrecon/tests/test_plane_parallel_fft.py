@@ -82,7 +82,7 @@ def test_ref(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
     boxcenter = [1754, 0., 0.]
     data = Catalog.read(data_fn)
     randoms = Catalog.read(randoms_fn)
-    recon = PlaneParallelFFTReconstruction(f=0.8, bias=2., los='x', nthreads=4, boxcenter=boxcenter, boxsize=boxsize, nmesh=128, dtype='f8')
+    recon = PlaneParallelFFTReconstruction(f=0.8, bias=2., los='x', fft_engine='fftw', nthreads=4, boxcenter=boxcenter, boxsize=boxsize, nmesh=128, dtype='f8')
     recon.assign_data(data['Position'], data['Weight'])
     recon.assign_randoms(randoms['Position'], randoms['Weight'])
     recon.set_density_contrast()
@@ -94,6 +94,7 @@ def test_ref(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
     for cat, fn in zip([data, randoms], [data_fn_rec, randoms_fn_rec]):
         rec = recon.read_shifted_positions(cat['Position'])
         if 'Position_rec' in cat:
+            print('Checking...')
             assert np.allclose(rec, cat['Position_rec'])
         else:
             cat['Position_rec'] = rec
@@ -126,5 +127,6 @@ if __name__ == '__main__':
     test_wrap()
     #test_ref(data_fn, randoms_fn)
     data_fn_rec, randoms_fn_rec = [catalog_rec_fn(fn, 'plane_parallel_fft') for fn in [data_fn, randoms_fn]]
+    data_fn, randoms_fn = data_fn_rec, randoms_fn_rec
     data_fn_rec, randoms_fn_rec = None, None
     test_ref(data_fn, randoms_fn, data_fn_rec, randoms_fn_rec)
