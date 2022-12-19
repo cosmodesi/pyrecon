@@ -49,7 +49,7 @@ def test_mem():
         mem('recon')  # 3 meshes
 
 
-def test_iterative_fft_wrap():
+def test_wrap():
     size = 100000
     boxsize = 1000
     for origin in [-500, 0, 500]:
@@ -78,7 +78,7 @@ def test_iterative_fft_wrap():
             assert np.allclose(recon.read_shifted_positions(data['Position'], field=field), positions_rec)
 
 
-def test_iterative_fft(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
+def test_ref(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
     boxsize = 1200.
     boxcenter = [1754, 0, 0]
     data = Catalog.read(data_fn)
@@ -122,7 +122,7 @@ if __name__ == '__main__':
     setup_logging()
     # test_mem()
     test_dtype()
-    test_iterative_fft_wrap()
+    test_wrap()
     data_fn_rec, randoms_fn_rec = [catalog_rec_fn(fn, 'iterative_fft') for fn in [data_fn, randoms_fn]]
     #data_fn_rec, randoms_fn_rec = None, None
-    test_iterative_fft(data_fn, randoms_fn, data_fn_rec, randoms_fn_rec)
+    test_ref(data_fn, randoms_fn, data_fn_rec, randoms_fn_rec)

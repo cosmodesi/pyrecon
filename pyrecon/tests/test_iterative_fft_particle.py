@@ -110,7 +110,7 @@ def test_wisdom():
     remove(new_wisdom_fn)
 
 
-def test_iterative_fft_particle_wrap():
+def test_wrap():
     size = 100000
     boxsize = 1000
     for boxcenter in [-500, 0, 500]:
@@ -162,7 +162,7 @@ def test_los():
     assert np.allclose(shifts_local, shifts_global, rtol=1e-3, atol=1e-3)
 
 
-def test_iterative_fft_particle(data_fn, randoms_fn):
+def test_ref(data_fn, randoms_fn):
     # here path to reference Julian's code: https://github.com/julianbautista/eboss_clustering/blob/master/python (python setup.py build_ext --inplace)
     sys.path.insert(0, '../../../../reconstruction/eboss_clustering/python')
     from cosmo import CosmoSimple
@@ -406,8 +406,8 @@ if __name__ == '__main__':
     test_no_nrandoms()
     test_dtype()
     test_los()
-    test_iterative_fft_particle_wrap()
-    test_iterative_fft_particle(data_fn, randoms_fn)
+    test_wrap()
+    test_ref(data_fn, randoms_fn)
     test_revolver(data_fn, randoms_fn)
     test_revolver(box_data_fn)
     test_script(data_fn, randoms_fn, script_output_data_fn, script_output_randoms_fn)

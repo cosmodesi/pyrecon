@@ -42,7 +42,7 @@ def test_no_nrandoms():
     assert np.all(np.abs(recon.read_shifts(data['Position'])) < 2.)
 
 
-def test_multigrid_wrap():
+def test_wrap():
     size = 100000
     boxsize = 1000
     for origin in [-500, 0, 500]:
@@ -361,7 +361,7 @@ if __name__ == '__main__':
     test_no_nrandoms()
     test_dtype()
     test_nmesh()
-    test_multigrid_wrap()
+    test_wrap()
     test_los()
     test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn)
     compute_ref(data_fn, randoms_fn, ref_output_data_fn, ref_output_randoms_fn)
