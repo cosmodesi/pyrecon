@@ -126,5 +126,5 @@ if __name__ == '__main__':
     test_wrap()
     #test_ref(data_fn, randoms_fn)
     data_fn_rec, randoms_fn_rec = [catalog_rec_fn(fn, 'plane_parallel_fft') for fn in [data_fn, randoms_fn]]
-    #data_fn_rec, randoms_fn_rec = None, None
+    data_fn_rec, randoms_fn_rec = None, None
     test_ref(data_fn, randoms_fn, data_fn_rec, randoms_fn_rec)

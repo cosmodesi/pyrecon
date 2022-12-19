@@ -387,9 +387,45 @@ def test_script_no_randoms(data_fn, output_data_fn):
     assert np.allclose(ref_positions_rec_data, data['Position_rec'])
 
 
+def test_ref(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
+    boxsize = 1200.
+    boxcenter = [1754, 0, 0]
+    data = Catalog.read(data_fn)
+    randoms = Catalog.read(randoms_fn)
+    recon = IterativeFFTParticleReconstruction(f=0.8, bias=2., los=None, nthreads=4, boxcenter=boxcenter, boxsize=boxsize, nmesh=128, dtype='f8')
+    recon.assign_data(data['Position'], data['Weight'])
+    recon.assign_randoms(randoms['Position'], randoms['Weight'])
+    recon.set_density_contrast()
+    recon.run(niterations=3)
+
+    from pypower import CatalogFFTPower
+    from matplotlib import pyplot as plt
+
+    for cat, fn in zip([data, randoms], [data_fn_rec, randoms_fn_rec]):
+        rec = recon.read_shifted_positions(cat['Position'])
+        if 'Position_rec' in cat:
+            assert np.allclose(rec, cat['Position_rec'])
+        #else:
+        cat['Position_rec'] = rec
+        if fn is not None:
+            cat.write(fn)
+
+    kwargs = dict(edges={'min': 0., 'step': 0.01}, ells=(0, 2, 4), boxsize=1000., nmesh=64, resampler='tsc', interlacing=3, position_type='pos')
+    power = CatalogFFTPower(data_positions1=data['Position'], randoms_positions1=randoms['Position'], **kwargs)
+    poles = power.poles
+    power = CatalogFFTPower(data_positions1=data['Position_rec'], randoms_positions1=randoms['Position_rec'], **kwargs)
+    poles_rec = power.poles
+
+    for ill, ell in enumerate(poles.ells):
+        plt.plot(poles.k, poles.k * poles(ell=ell), color='C{:d}'.format(ill), linestyle='-')
+        plt.plot(poles_rec.k, poles_rec.k * poles_rec(ell=ell), color='C{:d}'.format(ill), linestyle='--')
+
+    plt.show()
+
+
 if __name__ == '__main__':
 
-    from utils import box_data_fn, data_fn, randoms_fn, catalog_dir
+    from utils import box_data_fn, data_fn, randoms_fn, catalog_dir, catalog_rec_fn
     from pyrecon.utils import setup_logging
 
     setup_logging()
@@ -412,3 +448,7 @@ if __name__ == '__main__':
     test_revolver(box_data_fn)
     test_script(data_fn, randoms_fn, script_output_data_fn, script_output_randoms_fn)
     test_script_no_randoms(box_data_fn, script_output_box_data_fn)
+
+    data_fn_rec, randoms_fn_rec = [catalog_rec_fn(fn, 'iterative_fft_particle') for fn in [data_fn, randoms_fn]]
+    data_fn_rec, randoms_fn_rec = None, None
+    test_ref(data_fn, randoms_fn, data_fn_rec, randoms_fn_rec)
