@@ -352,7 +352,7 @@ if __name__ == '__main__':
     script_output_box_data_fn = os.path.join(catalog_dir, 'script_box_data_rec.fits')
     script_output_data_fn = os.path.join(catalog_dir, 'script_data_rec.fits')
     script_output_randoms_fn = os.path.join(catalog_dir, 'script_randoms_rec.fits')
-    """
+
     # test_mem()
     test_dtype()
     test_nmesh()
@@ -361,7 +361,6 @@ if __name__ == '__main__':
     test_random()
     test_no_nrandoms()
     test_los()
-    """
     # test_finite_difference()
     #test_recon(data_fn, randoms_fn, output_data_fn, output_randoms_fn)
     #compute_ref(data_fn, randoms_fn, ref_output_data_fn, ref_output_randoms_fn)
