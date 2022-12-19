@@ -26,7 +26,7 @@ def _wrap_positions(positions, boxsize, offset=0.):
     return np.asarray((positions - offset) % boxsize + offset, dtype=positions.dtype)
 
 
-def _get_mesh_attrs(nmesh=None, boxsize=None, boxcenter=None, cellsize=None, positions=None, boxpad=2., check=True, select_nmesh=None, mpicomm=mpi.COMM_WORLD):
+def _get_mesh_attrs(nmesh=None, boxsize=None, boxcenter=None, cellsize=None, positions=None, boxpad=1.5, check=True, select_nmesh=None, mpicomm=mpi.COMM_WORLD):
     """
     Compute enclosing box.
 
@@ -54,7 +54,7 @@ def _get_mesh_attrs(nmesh=None, boxsize=None, boxcenter=None, cellsize=None, pos
         If ``boxsize`` and / or ``boxcenter`` is ``None``, use this (list of) position arrays
         to determine ``boxsize`` and / or ``boxcenter``.
 
-    boxpad : float, default=2.
+    boxpad : float, default=1.5
         When ``boxsize`` is determined from ``positions``, take ``boxpad`` times the smallest box enclosing ``positions`` as ``boxsize``.
 
     check : bool, default=True
