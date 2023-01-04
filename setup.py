@@ -1,7 +1,6 @@
 import os
 import sys
-from distutils.extension import Extension
-from setuptools import setup
+from setuptools import setup, Extension
 
 import numpy as np
 
