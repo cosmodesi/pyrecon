@@ -470,14 +470,14 @@ class BaseReconstruction(BaseClass):
         weights : array of shape (N,), default=None
             Weights; default to 1.
         """
-        if not hasattr(self, 'mesh_data'):
+        if getattr(self, 'mesh_data', None) is None:
             self.mesh_data = self.pm.create(type='real', value=0.)
         self._paint(positions, weights=weights, out=self.mesh_data)
 
     @format_positions_weights_wrapper
     def assign_randoms(self, positions, weights=None):
         """Same as :meth:`assign_data`, but for random objects."""
-        if not hasattr(self, 'mesh_randoms'):
+        if getattr(self, 'mesh_randoms', None) is None:
             self.mesh_randoms = self.pm.create(type='real', value=0.)
             self._size_randoms = 0
         self._paint(positions, weights=weights, out=self.mesh_randoms)
@@ -485,7 +485,7 @@ class BaseReconstruction(BaseClass):
 
     @property
     def has_randoms(self):
-        return hasattr(self, 'mesh_randoms')
+        return getattr(self, 'mesh_randoms', None) is not None
 
     def set_density_contrast(self, ran_min=0.01, smoothing_radius=15., check=False):
         r"""

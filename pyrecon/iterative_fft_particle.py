@@ -24,7 +24,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         """
         if weights is None:
             weights = np.ones_like(positions, shape=(len(positions),))
-        if not hasattr(self, 'mesh_data'):
+        if not getattr(self, 'mesh_data', None) is None:
             self.mesh_data = self.pm.create(type='real', value=0.)
             self._positions_data = positions
             self._weights_data = weights
