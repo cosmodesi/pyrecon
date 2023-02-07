@@ -219,7 +219,7 @@ class BasePowerRatio(BaseClass, metaclass=MetaBasePowerRatio):
                 value = state[sname]
             # Backward-compatibility
             elif name in state:
-                value = {'wedges': state[name]}
+                value = {'wedges': state[name], 'attrs': state[name].get('attrs', {})}
                 self._muedges = value['wedges']['edges'][1]
             setattr(self, sname, MeshFFTPower.from_state(value))
 
