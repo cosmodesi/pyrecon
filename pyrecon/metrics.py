@@ -372,7 +372,7 @@ class BasePowerRatio(BaseClass, metaclass=MetaBasePowerRatio):
         .. code-block:: python
 
             statistic.slice(slice(0, 10, 2), slice(0, 6, 3)) # rebin by factor 2 (resp. 3) along axis 0 (resp. 1), up to index 10 (resp. 6)
-            statistic[:10:2,:6:3] # same as above, but return new instance.
+            statistic[:10:2, :6:3] # same as above, but return new instance.
 
         """
         ndim = 2
@@ -392,9 +392,9 @@ class BasePowerRatio(BaseClass, metaclass=MetaBasePowerRatio):
                         start, stop, step = muslice.indices(len(self._muedges) - 1)
                         if step < 0:
                             raise IndexError('Positive slicing step only supported')
-                        self._muedges = self._muedges[slice(start, stop + 1)]
-                        if len(self._muedges) - 1 % step:
+                        if (len(self._muedges) - 1) % step:
                             raise ValueError('Rebinning factor must divide shape')
+                        self._muedges = self._muedges[slice(start, stop + 1, step)]
                 slices = slices[:1]
                 tmp.poles.slice(*slices)
                 setattr(self, '_{}'.format(name), None)  # to force recomputation
