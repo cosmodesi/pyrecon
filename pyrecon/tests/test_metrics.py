@@ -108,6 +108,8 @@ def test_metrics():
         assert np.allclose(correlator_rebin2.ratio, correlator_rebin.ratio, equal_nan=True)
         correlator_rebin2.select((0., 0.1))
         assert correlator_rebin2.k[0][-1] <= 0.1
+        correlator_rebin2 = correlator[:, ::correlator.shape[1]]
+        assert correlator_rebin2.shape[1] == 1
         transfer = correlator.to_transfer(growth=bias)
         propagator = correlator.to_propagator(growth=bias)
 
