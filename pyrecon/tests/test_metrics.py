@@ -110,6 +110,8 @@ def test_metrics():
         assert correlator_rebin2.k[0][-1] <= 0.1
         correlator_rebin2 = correlator[:, ::correlator.shape[1]]
         assert correlator_rebin2.shape[1] == 1
+        k, c = correlator_rebin2.to_propagator(growth=bias)(mu=0., return_k=True)
+        assert c.shape == k.shape and k.ndim == 1
         transfer = correlator.to_transfer(growth=bias)
         propagator = correlator.to_propagator(growth=bias)
 
