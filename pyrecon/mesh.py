@@ -397,7 +397,7 @@ class MeshInfo(BaseClass):
                 if cellsize is not None and nmesh is not None:
                     boxsize = nmesh * cellsize
                 else:
-                    boxsize = delta * boxpad
+                    boxsize = delta.max() * boxpad
             if (boxsize < delta).any(): raise MeshError('boxsize too small to contain all data')
 
         boxsize = _make_array(boxsize, self.ndim, dtype='f8')
