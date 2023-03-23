@@ -95,7 +95,7 @@ def _get_mesh_attrs(nmesh=None, boxsize=None, boxcenter=None, cellsize=None, pos
             if cellsize is not None and nmesh is not None:
                 boxsize = nmesh * cellsize
             else:
-                boxsize = delta.max() * boxpad
+                boxsize = delta * boxpad
         if check and (boxsize < delta).any():
             raise ValueError('boxsize {} too small to contain all data (max {})'.format(boxsize, delta))
 
