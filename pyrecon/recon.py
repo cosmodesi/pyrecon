@@ -40,8 +40,8 @@ def _format_positions(positions, position_type='xyz', dtype=None, copy=True, mpi
         # Array of shape (3, N)
         positions = list(positions)
         for ip, p in enumerate(positions):
-            # Cast to the input dtype if exists (may be set by previous weights)
-            positions[ip] = np.asarray(p, dtype=dtype)
+            # Cast to the input dtype if exists (may be set by previous positions)
+            positions[ip] = np.array(p, dtype=dtype, copy=copy)
         size = len(positions[0])
         dt = positions[0].dtype
         if not np.issubdtype(dt, np.floating):
@@ -102,7 +102,7 @@ def format_positions_weights_wrapper(func):
     def wrapper(self, positions, weights=None, copy=False, **kwargs):
         position_type = kwargs.pop('position_type', self.position_type)
         mpiroot = kwargs.pop('mpiroot', self.mpiroot)
-        positions = _format_positions(positions, position_type=position_type, copy=copy, mpicomm=self.mpicomm, mpiroot=mpiroot)
+        positions = _format_positions(positions, position_type=position_type, dtype=self.rdtype, copy=copy, mpicomm=self.mpicomm, mpiroot=mpiroot)
         if not self.wrap:
             low, high = self.boxcenter - self.boxsize / 2., self.boxcenter + self.boxsize / 2.
             if any(self.mpicomm.allgather(np.any((positions < low) | (positions > high)))):
@@ -116,11 +116,11 @@ def format_positions_wrapper(return_input_type=True):
     def format_positions(func):
         """Method wrapper applying _format_positions on input, and gathering result on mpiroot."""
         @functools.wraps(func)
-        def wrapper(self, positions, copy=False, **kwargs):
+        def wrapper(self, positions, copy=False, dtype=None, **kwargs):
             position_type = kwargs.pop('position_type', self.position_type)
             mpiroot = kwargs.pop('mpiroot', self.mpiroot)
             if not all(self.mpicomm.allgather(isinstance(positions, str))):  # for IterativeFFTParticleReconstruction
-                positions = _format_positions(positions, position_type=position_type, copy=copy, mpicomm=self.mpicomm, mpiroot=mpiroot)
+                positions = _format_positions(positions, position_type=position_type, dtype=dtype, copy=copy, mpicomm=self.mpicomm, mpiroot=mpiroot)
                 if not self.wrap:
                     low, high = self.boxcenter - self.boxsize / 2., self.boxcenter + self.boxsize / 2.
                     if any(self.mpicomm.allgather(np.any((positions < low) | (positions > high)))):
@@ -283,9 +283,9 @@ class BaseReconstruction(BaseClass):
         self.dtype = np.dtype(dtype) if self._compressed else 'c{:d}'.format(2 * self.rdtype.itemsize)
         self.f = f
         self.bias = bias
-        positions = _format_positions(positions, position_type=self.position_type, copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
-        data_positions = _format_positions(data_positions, position_type=self.position_type, copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
-        randoms_positions = _format_positions(randoms_positions, position_type=self.position_type, copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
+        positions = _format_positions(positions, position_type=self.position_type, dtype=self.rdtype, copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
+        data_positions = _format_positions(data_positions, position_type=self.position_type, dtype=self.rdtype, copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
+        randoms_positions = _format_positions(randoms_positions, position_type=self.position_type, dtype=self.rdtype, copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
         all_positions = [pos for pos in [positions, data_positions, randoms_positions] if pos is not None]
         self.nmesh, self.boxsize, self.boxcenter = _get_mesh_attrs(nmesh=nmesh, boxsize=boxsize, boxcenter=boxcenter, cellsize=cellsize, positions=all_positions,
                                                                    boxpad=boxpad, check=positions is not None and not self.wrap, select_nmesh=self._select_nmesh, mpicomm=self.mpicomm)
