@@ -84,7 +84,7 @@ def test_mpi(algorithm):
     gathered_data, gathered_randoms = data.gather(mpiroot=0), randoms.gather(mpiroot=0)
     mpicomm = data.mpicomm
 
-    def get_shifts(data, randoms, position_type='pos', mpicomm=None, mpiroot=None, mode='std'):
+    def get_shifts(data, randoms, position_type='pos', weight_type=True, mpicomm=None, mpiroot=None, mode='std'):
         data_positions, data_weights = data['Position'], data['Weight']
         randoms_positions, randoms_weights = randoms['Position'], randoms['Weight']
         if mpiroot is not None:
@@ -99,6 +99,8 @@ def test_mpi(algorithm):
                 randoms_positions = cartesian_to_sky(randoms_positions)
                 data_positions = list(data_positions[1:]) + [data_positions[0]]
                 randoms_positions = list(randoms_positions[1:]) + [randoms_positions[0]]
+        if not weight_type:
+            data_weights = randoms_weights = None
 
         if mode == 'std':
             recon = algorithm(positions=data_positions, randoms_positions=randoms_positions, nmesh=64, position_type=position_type, los='x', dtype='f8', mpicomm=mpicomm, mpiroot=mpiroot)
@@ -117,17 +119,18 @@ def test_mpi(algorithm):
             assert np.array(shifted_positions).shape == np.array(data_positions).shape
         return recon.read_shifts(data_positions, field='disp+rsd')
 
-    if mpicomm.rank == 0:
-        shifts_ref = get_shifts(gathered_data, gathered_randoms, position_type='pos', mpicomm=gathered_data.mpicomm)
+    for weight_type in [True, False]:
+        if mpicomm.rank == 0:
+            shifts_ref = get_shifts(gathered_data, gathered_randoms, position_type='pos', weight_type=weight_type, mpicomm=gathered_data.mpicomm)
 
-    for mpiroot in [None, 0]:
-        for mode in ['std', 'fast']:
-            for position_type in ['pos', 'rdd', 'xyz']:
-                shifts = get_shifts(data, randoms, position_type=position_type, mpicomm=mpicomm, mpiroot=mpiroot, mode=mode)
-                if mpiroot is None:
-                    shifts = mpi.gather(shifts, mpicomm=mpicomm, mpiroot=0)
-                if mpicomm.rank == 0:
-                    assert np.allclose(shifts, shifts_ref, rtol=1e-6)
+        for mpiroot in [None, 0]:
+            for mode in ['std', 'fast']:
+                for position_type in ['pos', 'rdd', 'xyz']:
+                    shifts = get_shifts(data, randoms, position_type=position_type, weight_type=weight_type, mpicomm=mpicomm, mpiroot=mpiroot, mode=mode)
+                    if mpiroot is None:
+                        shifts = mpi.gather(shifts, mpicomm=mpicomm, mpiroot=0)
+                    if mpicomm.rank == 0:
+                        assert np.allclose(shifts, shifts_ref, rtol=1e-6)
 
 
 def main():

@@ -88,7 +88,7 @@ def _format_weights(weights, size=None, dtype=None, copy=True, mpicomm=None, mpi
         is_none = mpicomm.allgather(weights is None)
         if any(is_none) and not all(is_none):
             raise ValueError('mpiroot = None but weights are None on some ranks')
-    else:
+    elif not mpicomm.bcast(weights is None, root=mpiroot):
         weights = mpi.scatter(weights, mpicomm=mpicomm, mpiroot=mpiroot)
 
     if size is not None and weights is not None and len(weights) != size:
