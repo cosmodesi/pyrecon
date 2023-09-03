@@ -341,8 +341,7 @@ if __name__ == '__main__':
     from pyrecon.utils import setup_logging
 
     setup_logging()
-    # Uncomment to compute catalogs needed for these tests
-    # utils.setup()
+    # Run utils.py to generate catalogs needed for these tests
 
     recon_code = os.path.join(os.path.abspath(os.path.dirname(__file__)), '_codes', 'recon')
     output_data_fn = os.path.join(catalog_dir, 'data_rec.fits')

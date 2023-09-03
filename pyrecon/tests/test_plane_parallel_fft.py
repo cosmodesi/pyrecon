@@ -119,10 +119,12 @@ if __name__ == '__main__':
     from pyrecon.utils import setup_logging
 
     setup_logging()
+    # Run utils.py to generate catalogs needed for these tests
 
     # test_mem()
     test_dtype()
     test_wrap()
     test_mpi(PlaneParallelFFTReconstruction)
     data_fn_rec, randoms_fn_rec = [catalog_rec_fn(fn, 'plane_parallel_fft') for fn in [data_fn, randoms_fn]]
+    # test_ref(data_fn, randoms_fn, data_fn_rec, randoms_fn_rec)
     test_ref(data_fn_rec, randoms_fn_rec, None, None)

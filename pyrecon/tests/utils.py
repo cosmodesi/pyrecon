@@ -138,7 +138,7 @@ def main():
     setup_logging()
     mkdir(catalog_dir)
     save_box_lognormal_catalogs(box_data_fn, seed=42)
-    #save_lognormal_catalogs(data_fn, randoms_fn, seed=42)
+    save_lognormal_catalogs(data_fn, randoms_fn, seed=42)
 
 
 if __name__ == '__main__':

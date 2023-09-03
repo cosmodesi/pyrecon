@@ -331,7 +331,7 @@ def test_script(data_fn, randoms_fn, output_data_fn, output_randoms_fn):
     data = Catalog.read(output_data_fn)
     randoms = Catalog.read(output_randoms_fn)
 
-    # print(ref_positions_rec_data,data['Position_rec'],ref_positions_rec_data-data['Position_rec'])
+    # print(ref_positions_rec_data, data['Position_rec'], ref_positions_rec_data-data['Position_rec'])
     assert np.allclose(ref_positions_rec_data, data['Position_rec'])
     assert np.allclose(ref_positions_rec_randoms, randoms['Position_rec'])
 
@@ -400,13 +400,12 @@ if __name__ == '__main__':
     from pyrecon.utils import setup_logging
 
     setup_logging()
-    # Uncomment to compute catalogs needed for these tests
-    # utils.setup()
+    # Run utils.py to generate catalogs needed for these tests
 
     script_output_box_data_fn = os.path.join(catalog_dir, 'script_box_data_rec.fits')
     script_output_data_fn = os.path.join(catalog_dir, 'script_data_rec.fits')
     script_output_randoms_fn = os.path.join(catalog_dir, 'script_randoms_rec.fits')
-
+    '''
     # test_mem()
     test_dtype()
     test_wrap()
@@ -416,9 +415,10 @@ if __name__ == '__main__':
     test_eboss(data_fn, randoms_fn)
     test_revolver(data_fn, randoms_fn)
     test_revolver(box_data_fn)
+    '''
     # To be run without MPI
     # test_script(data_fn, randoms_fn, script_output_data_fn, script_output_randoms_fn)
     # test_script_no_randoms(box_data_fn, script_output_box_data_fn)
     data_fn_rec, randoms_fn_rec = [catalog_rec_fn(fn, 'iterative_fft_particle') for fn in [data_fn, randoms_fn]]
-    #test_ref(data_fn, randoms_fn, data_fn_rec, randoms_fn_rec)
+    # test_ref(data_fn, randoms_fn, data_fn_rec, randoms_fn_rec)
     test_ref(data_fn_rec, randoms_fn_rec, None, None)
