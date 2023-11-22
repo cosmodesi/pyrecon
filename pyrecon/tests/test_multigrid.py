@@ -289,6 +289,7 @@ def test_ref(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
     recon.assign_data(data['Position'], data['Weight'])
     recon.assign_randoms(randoms['Position'], randoms['Weight'])
     recon.set_density_contrast()
+    recon.mesh_delta += 10.
     recon.run()
 
     from pypower import CatalogFFTPower
@@ -303,7 +304,7 @@ def test_ref(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
             cat['Position_rec'] = rec
         if fn is not None:
             cat.write(fn)
-    exit()
+    return
     kwargs = dict(edges={'min': 0., 'step': 0.01}, ells=(0, 2, 4), boxsize=1000., nmesh=64, resampler='tsc', interlacing=3, position_type='pos')
     power = CatalogFFTPower(data_positions1=data['Position'], randoms_positions1=randoms['Position'], **kwargs)
     poles = power.poles
@@ -351,7 +352,6 @@ if __name__ == '__main__':
     script_output_box_data_fn = os.path.join(catalog_dir, 'script_box_data_rec.fits')
     script_output_data_fn = os.path.join(catalog_dir, 'script_data_rec.fits')
     script_output_randoms_fn = os.path.join(catalog_dir, 'script_randoms_rec.fits')
-
     # test_mem()
     test_dtype()
     test_nmesh()

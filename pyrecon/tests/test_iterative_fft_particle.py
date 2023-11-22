@@ -365,6 +365,7 @@ def test_ref(data_fn, randoms_fn, data_fn_rec=None, randoms_fn_rec=None):
     recon.assign_data(data['Position'], data['Weight'])
     recon.assign_randoms(randoms['Position'], randoms['Weight'])
     recon.set_density_contrast()
+    recon.mesh_delta += 10.
     recon.run(niterations=3)
 
     from pypower import CatalogFFTPower
