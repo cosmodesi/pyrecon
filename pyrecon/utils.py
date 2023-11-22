@@ -127,6 +127,22 @@ def distance(position):
     return np.sqrt((position**2).sum(axis=-1))
 
 
+def safe_divide(x, y, inplace=False):
+    """
+    Divide ``x`` by ``y`` after replacing 0 in ``y`` by 1.
+    If ``inplace`` is ``True``, ``x`` and ``y`` modified in-place.
+    """
+    if not inplace:
+        y = np.array(y)
+    y[y == 0.] = 1.
+    if inplace:
+        toret = x
+        toret /= y
+    else:
+        toret = x / y
+    return toret
+
+
 def cartesian_to_sky(position, wrap=True, degree=True):
     r"""
     Transform Cartesian coordinates into distance, RA, Dec.

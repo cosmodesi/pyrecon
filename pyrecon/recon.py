@@ -596,7 +596,7 @@ class BaseReconstruction(BaseClass):
         if field == 'disp':
             return shifts
         if self.los is None:
-            los = positions / utils.distance(positions)[:, None]
+            los = utils.safe_divide(positions, utils.distance(positions)[:, None])
         else:
             los = self.los.astype(shifts.dtype)
         rsd = self.f * np.sum(shifts * los, axis=-1)[:, None] * los

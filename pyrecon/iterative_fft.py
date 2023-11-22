@@ -1,6 +1,7 @@
 """Implementation of Burden et al. 2015 (https://arxiv.org/abs/1504.02591) algorithm."""
 
 from .recon import BaseReconstruction
+from . import utils
 
 
 class IterativeFFTReconstruction(BaseReconstruction):
@@ -36,9 +37,7 @@ class IterativeFFTReconstruction(BaseReconstruction):
         # First compute \delta(k)/k^{2} based on current \delta_{g,\mathrm{real},n} to estimate \phi_{\mathrm{est},n} (eq. 24)
         delta_k = self.mesh_delta_real.r2c()
         for kslab, slab in zip(delta_k.slabs.x, delta_k.slabs):
-            k2 = sum(kk**2 for kk in kslab)
-            k2[k2 == 0.] = 1.  # avoid dividing by zero
-            slab[...] /= k2
+            utils.safe_divide(slab, sum(kk**2 for kk in kslab), inplace=True)
 
         self.mesh_delta_real = self.mesh_delta.copy()
         # Now compute \beta \nabla \cdot (\nabla \phi_{\mathrm{est},n} \cdot \hat{r}) \hat{r}
@@ -47,8 +46,6 @@ class IterativeFFTReconstruction(BaseReconstruction):
             # global los
             disp_deriv_k = delta_k.copy()
             for kslab, slab in zip(disp_deriv_k.slabs.x, disp_deriv_k.slabs):
-                k2 = sum(kk**2 for kk in kslab)
-                k2[k2 == 0.] = 1.  # avoid dividing by zero
                 slab[...] *= sum(kk * ll for kk, ll in zip(kslab, self.los))**2  # delta_k already divided by k^{2}
             factor = self.beta
             # remove RSD part
@@ -71,9 +68,7 @@ class IterativeFFTReconstruction(BaseReconstruction):
                     disp_deriv = disp_deriv.c2r()
                     for rslab, slab in zip(disp_deriv.slabs.x, disp_deriv.slabs):
                         rslab = self._transform_rslab(rslab)
-                        r2 = sum(rr**2 for rr in rslab)
-                        r2[r2 == 0.] = 1.  # avoid dividing by zero
-                        slab[...] *= rslab[iaxis] * rslab[jaxis] / r2
+                        slab[...] *= utils.safe_divide(rslab[iaxis] * rslab[jaxis], sum(rr**2 for rr in rslab))
                     factor = (1. + (iaxis != jaxis)) * self.beta  # we have j >= i and double-count j > i to account for j < i
                     if self._iter == 0:
                         # Burden et al. 2015: 1504.02591, eq. 12 (flat sky approximation)
@@ -89,10 +84,8 @@ class IterativeFFTReconstruction(BaseReconstruction):
         for iaxis in range(delta_k.ndim):
             psi = delta_k.copy()
             for kslab, islab, slab in zip(psi.slabs.x, psi.slabs.i, psi.slabs):
-                k2 = sum(kk**2 for kk in kslab)
-                k2[k2 == 0.] = 1.  # avoid dividing by zero
                 mask = islab[iaxis] != self.nmesh[iaxis] // 2
-                slab[...] *= 1j * kslab[iaxis] / k2 * mask
+                slab[...] *= 1j * utils.safe_divide(kslab[iaxis], sum(kk**2 for kk in kslab)) * mask
             psis.append(psi.c2r())
             del psi
         return psis

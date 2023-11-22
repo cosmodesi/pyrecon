@@ -134,9 +134,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         del self.mesh_delta
 
         for kslab, slab in zip(delta_k.slabs.x, delta_k.slabs):
-            k2 = sum(kk**2 for kk in kslab)
-            k2[k2 == 0.] = 1.  # avoid dividing by zero
-            slab[...] /= k2
+            utils.safe_divide(slab, sum(kk**2 for kk in kslab), inplace=True)
 
         if self.mpicomm.rank == 0:
             self.log_info('Computing displacement field.')
@@ -162,7 +160,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         # self.log_info('A few displacements values:')
         # for s in shifts[:3]: self.log_info('{}'.format(s))
         if self.los is None:
-            los = self._positions_data / utils.distance(self._positions_data)[:, None]
+            los = utils.safe_divide(self._positions_data, utils.distance(self._positions_data)[:, None])
         else:
             los = self.los
         # Comments in Julian's code:
@@ -235,7 +233,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             return shifts
 
         if self.los is None:
-            los = positions / utils.distance(positions)[:, None]
+            los = utils.safe_divide(positions, utils.distance(positions)[:, None])
         else:
             los = self.los.astype(positions.dtype)
         rsd = self.f * np.sum(shifts * los, axis=-1)[:, None] * los
