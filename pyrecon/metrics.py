@@ -145,7 +145,7 @@ class BasePowerRatio(BaseClass, metaclass=MetaBasePowerRatio):
         ratio : array
             (Optionally interpolated) power spectrum ratio.
         """
-        power = self.ratio
+        power = self.get_ratio(complex=complex, **kwargs)
         kavg, muavg = self.kavg, self.muavg
         if return_k is None:
             return_k = k is None
