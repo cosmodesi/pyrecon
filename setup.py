@@ -22,7 +22,7 @@ if __name__ == '__main__':
           description='Python wrapper for reconstruction codes',
           license='BSD3',
           url='http://github.com/cosmodesi/pyrecon',
-          install_requires=['numpy', 'scipy', 'pmesh @ git+https://github.com/adematti/pmesh'],
+          install_requires=['numpy', 'scipy', 'pmesh @ git+https://github.com/MP-Gadget/pmesh'],
           extras_require={'extras': ['mpytools', 'fitsio', 'h5py'], 'metrics': ['pypower @ git+https://github.com/cosmodesi/pypower']},
           ext_modules=[Extension(f'{package_basename}._multigrid', [f'{package_basename}/_multigrid.pyx'],
                        depends=[f'{package_basename}/_multigrid_imp.h', f'{package_basename}/_multigrid_generics.h'],
