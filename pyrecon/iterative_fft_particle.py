@@ -3,7 +3,7 @@
 import numpy as np
 
 from .recon import BaseReconstruction, ReconstructionError, format_positions_wrapper, format_positions_weights_wrapper
-from . import utils
+from .utils import distance, safe_divide
 
 
 class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
@@ -136,7 +136,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         del self.mesh_delta
 
         for kslab, slab in zip(delta_k.slabs.x, delta_k.slabs):
-            utils.safe_divide(slab, sum(kk**2 for kk in kslab), inplace=True)
+            safe_divide(slab, sum(kk**2 for kk in kslab), inplace=True)
 
         if self.mpicomm.rank == 0:
             self.log_info('Computing displacement field.')
@@ -162,7 +162,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         # self.log_info('A few displacements values:')
         # for s in shifts[:3]: self.log_info('{}'.format(s))
         if self.los is None:
-            los = utils.safe_divide(self._positions_data, utils.distance(self._positions_data)[:, None])
+            los = safe_divide(self._positions_data, distance(self._positions_data)[:, None])
         else:
             los = self.los
         # Comments in Julian's code:
@@ -235,7 +235,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             return shifts
 
         if self.los is None:
-            los = utils.safe_divide(positions, utils.distance(positions)[:, None])
+            los = safe_divide(positions, distance(positions)[:, None])
         else:
             los = self.los.astype(positions.dtype)
         rsd = self.f * np.sum(shifts * los, axis=-1)[:, None] * los
