@@ -397,9 +397,10 @@ class BaseReconstruction(BaseClass):
             Else, may be 'x', 'y' or 'z', for one of the Cartesian axes.
             Else, a 3-vector.
         """
-        if not isinstance(los, (list, np.ndarray)):
-            if los in [None, 'local']:
-                self.los = None
+
+        if los is None or (isinstance(los, str) and los == 'local'):
+            self.los = None
+
         else:
             if isinstance(los, str):
                 los = 'xyz'.index(los)
