@@ -1,7 +1,7 @@
 """Implementation of Burden et al. 2015 (https://arxiv.org/abs/1504.02591) algorithm."""
 
 from .recon import BaseReconstruction
-from . import utils
+from .utils import safe_divide
 
 
 class IterativeFFTReconstruction(BaseReconstruction):
@@ -39,7 +39,7 @@ class IterativeFFTReconstruction(BaseReconstruction):
         # First compute \delta(k)/k^{2} based on current \delta_{g,\mathrm{real},n} to estimate \phi_{\mathrm{est},n} (eq. 24)
         delta_k = self.mesh_delta_real.r2c()
         for kslab, slab in zip(delta_k.slabs.x, delta_k.slabs):
-            utils.safe_divide(slab, sum(kk**2 for kk in kslab), inplace=True)
+            safe_divide(slab, sum(kk**2 for kk in kslab), inplace=True)
 
         self.mesh_delta_real = self.mesh_delta.copy()
         # Now compute \beta \nabla \cdot (\nabla \phi_{\mathrm{est},n} \cdot \hat{r}) \hat{r}
@@ -70,7 +70,7 @@ class IterativeFFTReconstruction(BaseReconstruction):
                     disp_deriv = disp_deriv.c2r()
                     for rslab, slab in zip(disp_deriv.slabs.x, disp_deriv.slabs):
                         rslab = self._transform_rslab(rslab)
-                        slab[...] *= utils.safe_divide(rslab[iaxis] * rslab[jaxis], sum(rr**2 for rr in rslab))
+                        slab[...] *= safe_divide(rslab[iaxis] * rslab[jaxis], sum(rr**2 for rr in rslab))
                     factor = (1. + (iaxis != jaxis)) * self.beta  # we have j >= i and double-count j > i to account for j < i
                     if self._iter == 0:
                         # Burden et al. 2015: 1504.02591, eq. 12 (flat sky approximation)
@@ -87,7 +87,7 @@ class IterativeFFTReconstruction(BaseReconstruction):
             psi = delta_k.copy()
             for kslab, islab, slab in zip(psi.slabs.x, psi.slabs.i, psi.slabs):
                 mask = islab[iaxis] != self.nmesh[iaxis] // 2
-                slab[...] *= 1j * utils.safe_divide(kslab[iaxis], sum(kk**2 for kk in kslab)) * mask
+                slab[...] *= 1j * safe_divide(kslab[iaxis], sum(kk**2 for kk in kslab)) * mask
             psis.append(psi.c2r())
             del psi
         return psis

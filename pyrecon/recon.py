@@ -8,8 +8,8 @@ import numpy as np
 from pmesh.pm import ParticleMesh
 
 from .mesh import _get_mesh_attrs, _get_resampler, _wrap_positions
-from .utils import BaseClass
-from . import utils, mpi
+from .utils import BaseClass, sky_to_cartesian, cartesian_to_sky, distance, safe_divide
+from .mpi import scatter, gather, COMM_WORLD
 
 
 def _gaussian_kernel(smoothing_radius):
@@ -54,7 +54,7 @@ def _format_positions(positions, position_type='xyz', dtype=None, copy=True, mpi
         if len(positions) != 3:
             return None, 'For position type = {}, please provide a list of 3 arrays for positions (found {:d})'.format(position_type, len(positions))
         if position_type == 'rdd':  # RA, Dec, distance
-            positions = utils.sky_to_cartesian(positions[2], *positions[:2], degree=True).T
+            positions = sky_to_cartesian(positions[2], *positions[:2], degree=True).T
         elif position_type != 'xyz':
             return None, 'Position type should be one of ["pos", "xyz", "rdd"]'
         return np.asarray(positions).T, None
@@ -71,7 +71,7 @@ def _format_positions(positions, position_type='xyz', dtype=None, copy=True, mpi
     if errors:
         raise ValueError(errors[0])
     if mpiroot is not None and mpicomm.bcast(positions is not None if mpicomm.rank == mpiroot else None, root=mpiroot):
-        positions = mpi.scatter(positions, mpicomm=mpicomm, mpiroot=mpiroot)
+        positions = scatter(positions, mpicomm=mpicomm, mpiroot=mpiroot)
     return positions
 
 
@@ -89,7 +89,7 @@ def _format_weights(weights, size=None, dtype=None, copy=True, mpicomm=None, mpi
         if any(is_none) and not all(is_none):
             raise ValueError('mpiroot = None but weights are None on some ranks')
     elif not mpicomm.bcast(weights is None, root=mpiroot):
-        weights = mpi.scatter(weights, mpicomm=mpicomm, mpiroot=mpiroot)
+        weights = scatter(weights, mpicomm=mpicomm, mpiroot=mpiroot)
 
     if size is not None and weights is not None and len(weights) != size:
         raise ValueError('Weight arrays should be of the same size as position arrays')
@@ -127,10 +127,10 @@ def format_positions_wrapper(return_input_type=True):
                         raise ValueError('positions not in box range {} - {}'.format(low, high))
             toret = func(self, positions=positions, **kwargs)
             if toret is not None and mpiroot is not None:  # positions returned, gather on the same rank
-                toret = mpi.gather(toret, mpicomm=self.mpicomm, mpiroot=mpiroot)
+                toret = gather(toret, mpicomm=self.mpicomm, mpiroot=mpiroot)
             if toret is not None and return_input_type:
                 if position_type == 'rdd':
-                    dist, ra, dec = utils.cartesian_to_sky(toret)
+                    dist, ra, dec = cartesian_to_sky(toret)
                     toret = [ra, dec, dist]
                 elif position_type == 'xyz':
                     toret = toret.T
@@ -199,7 +199,7 @@ class BaseReconstruction(BaseClass):
 
     def __init__(self, f=None, bias=None, los=None, nmesh=None, boxsize=None, boxcenter=None, cellsize=None, boxpad=2., wrap=False,
                  data_positions=None, randoms_positions=None, data_weights=None, randoms_weights=None,
-                 positions=None, position_type='pos', resampler='cic', decomposition=None, fft_plan='estimate', dtype='f8', mpiroot=None, mpicomm=mpi.COMM_WORLD, **kwargs):
+                 positions=None, position_type='pos', resampler='cic', decomposition=None, fft_plan='estimate', dtype='f8', mpiroot=None, mpicomm=COMM_WORLD, **kwargs):
         """
         Initialize :class:`BaseReconstruction`.
 
@@ -409,7 +409,7 @@ class BaseReconstruction(BaseClass):
                 los = np.zeros(3, dtype='f8')
                 los[ilos] = 1.
             los = np.array(los, dtype='f8')
-            self.los = los / utils.distance(los)
+            self.los = los / distance(los)
 
     @property
     def cellsize(self):
@@ -660,13 +660,13 @@ class BaseReconstruction(BaseClass):
         if field == 'disp':
             return shifts
         if self.los is None:
-            los = utils.safe_divide(positions, utils.distance(positions)[:, None])
+            los = safe_divide(positions, distance(positions)[:, None])
         else:
             los = self.los.astype(shifts.dtype)
         if self.f_callable is None:
             f = self.f
         else:
-            f = self.f_callable(utils.distance(positions))[..., None]
+            f = self.f_callable(distance(positions))[..., None]
         rsd = f * (np.sum(shifts * los, axis=-1)[:, None] * los)
         if field == 'rsd':
             return rsd

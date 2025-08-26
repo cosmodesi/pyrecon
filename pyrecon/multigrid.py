@@ -3,7 +3,9 @@
 import numpy as np
 
 from .recon import BaseReconstruction, ReconstructionError, format_positions_wrapper
-from . import _multigrid, utils, mpi
+from .utils import distance, safe_divide
+from .mpi import COMM_WORLD
+from . import _multigrid
 
 
 class OriginalMultiGridReconstruction(BaseReconstruction):
@@ -31,7 +33,7 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
             toret.append(ntries[iclosest])
         return np.array(toret, dtype='i8')
 
-    def __init__(self, *args, mpicomm=mpi.COMM_WORLD, **kwargs):
+    def __init__(self, *args, mpicomm=COMM_WORLD, **kwargs):
         # We require a split, along axis x.
         super(OriginalMultiGridReconstruction, self).__init__(*args, decomposition=(mpicomm.size, 1), mpicomm=mpicomm, **kwargs)
 
@@ -149,7 +151,7 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
         if field == 'disp':
             return shifts
         if self.los is None:
-            los = utils.safe_divide(positions, utils.distance(positions)[:, None])
+            los = safe_divide(positions, distance(positions)[:, None])
         else:
             los = self.los.astype(shifts.dtype)
         rsd = self.f * np.sum(shifts * los, axis=-1)[:, None] * los
