@@ -33,7 +33,7 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             self._weights_data = np.concatenate([self._weights_data, weights], axis=0)
         self._paint(positions, weights=weights, out=self.mesh_data)
 
-    def set_density_contrast(self, ran_min=0.01, smoothing_radius=15., check=False, kw_weights=None):
+    def set_density_contrast(self, threshold_randoms=None, smoothing_radius=15., check=False, kw_weights=None):
         r"""
         Set :math:`\delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
 
@@ -44,8 +44,11 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
 
         Parameters
         ----------
-        ran_min : float, default=0.01
+        threshold_randoms : float, default=0.01
+            If provided, override value given at initialization.
             :attr:`mesh_randoms` points below this threshold times mean random weights have their density contrast set to 0.
+            For a more consistent thresholding, pass e.g. ('noise', 0.01) to set the threshold has :math:`0.01  \sum w^2 / \sum w`
+            where :math:`\sum w`, :math:`\sum w^2` are the (total) sum of random weights and squared random weights.
 
         smoothing_radius : float, default=15
             Smoothing scale, see :meth:`RealMesh.smooth_gaussian`.
@@ -53,7 +56,8 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
         check : bool, default=False
             If ``True``, run some tests (printed in logger) to assess whether enough randoms have been used.
         """
-        self.ran_min = ran_min
+        if threshold_randoms is not None:
+            self.set_threshold_randoms(threshold_randoms)
         self.smoothing_radius = smoothing_radius
 
         self.mesh_delta = self.mesh_data.copy()
@@ -70,21 +74,29 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             for delta, randoms in zip(self.mesh_delta.slabs, self.mesh_randoms.slabs):
                 delta[...] -= alpha * randoms
 
-            threshold = ran_min * sum_randoms / self._size_randoms
+            if self._threshold_method == 'noise':
+                threshold = self._threshold_value * self._sumw2_randoms / sum_randoms
+            else:
+                threshold = self._threshold_value * sum_randoms / self._size_randoms
 
-            for delta, randoms in zip(self.mesh_delta.slabs, self.mesh_randoms.slabs):
+            if hasattr(self.bias, 'slabs'):
+                bias = self.bias.slabs
+            else:
+                bias = [self.bias] * self.mesh_delta.slabs.nslabs
+
+            for delta, randoms, bias in zip(self.mesh_delta.slabs, self.mesh_randoms.slabs, bias):
                 mask = randoms > threshold
-                delta[mask] /= (self.bias * alpha * randoms[mask])
+                delta[mask] /= (bias * alpha * randoms)[mask]
                 delta[~mask] = 0.
 
             if check:
                 mean_nran_per_cell = self.mpicomm.allreduce(sum(randoms[randoms > 0] for randoms in self.mesh_randoms))
                 std_nran_per_cell = self.mpicomm.allreduce(sum(randoms[randoms > 0]**2 for randoms in self.mesh_randoms)) - mean_nran_per_cell**2
                 if self.mpicomm.rank == 0:
-                    self.log_info('Mean smoothed random density in non-empty cells is {:.4f} (std = {:.4f}), threshold is (ran_min * mean weight) = {:.4f}.'.format(mean_nran_per_cell, std_nran_per_cell, threshold))
+                    self.log_info('Mean smoothed random density in non-empty cells is {:.4f} (std = {:.4f}), threshold is = {:.4f}.'.format(mean_nran_per_cell, std_nran_per_cell, threshold))
 
                 frac_nonzero_masked = 1. - self.mpicomm.allreduce(sum(np.sum(randoms > 0.) for randoms in self.mesh_randoms)) / nnonzero
-                del mask_nonzero
+
                 if self.mpicomm.rank == 0:
                     if frac_nonzero_masked > 0.1:
                         self.log_warning('Masking a large fraction {:.4f} of non-empty cells. You should probably increase the number of randoms.'.format(frac_nonzero_masked))
@@ -131,7 +143,8 @@ class OriginalIterativeFFTParticleReconstruction(BaseReconstruction):
             # Gaussian smoothing before density contrast calculation
             self.mesh_data = self._smooth_gaussian(self.mesh_data)
 
-        self.set_density_contrast(ran_min=self.ran_min, smoothing_radius=self.smoothing_radius)
+        self.set_density_contrast(smoothing_radius=self.smoothing_radius)
+
         delta_k = self.mesh_delta.r2c()
         del self.mesh_delta
 

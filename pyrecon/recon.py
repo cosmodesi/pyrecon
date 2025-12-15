@@ -199,8 +199,9 @@ class BaseReconstruction(BaseClass):
 
     def __init__(self, f=None, bias=None, los=None, nmesh=None, boxsize=None, boxcenter=None, cellsize=None, boxpad=2., wrap=False,
                  data_positions=None, randoms_positions=None, data_weights=None, randoms_weights=None,
-                 positions=None, position_type='pos', resampler='cic', decomposition=None, fft_plan='estimate', dtype='f8', mpiroot=None, mpicomm=mpi.COMM_WORLD, **kwargs):
-        """
+                 positions=None, position_type='pos', resampler='cic', decomposition=None, fft_plan='estimate', dtype='f8', mpiroot=None, mpicomm=mpi.COMM_WORLD,
+                 threshold_randoms=0.01, **kwargs):
+        r"""
         Initialize :class:`BaseReconstruction`.
 
         Parameters
@@ -276,6 +277,11 @@ class BaseReconstruction(BaseClass):
 
         mpicomm : MPI communicator, default=MPI.COMM_WORLD
             The MPI communicator.
+
+        threshold_randoms : float, default=0.01
+            :attr:`mesh_randoms` points below this threshold times mean random weights have their density contrast set to 0.
+            For a more consistent thresholding, pass e.g. ('noise', 0.01) to set the threshold has :math:`0.01  \sum w^2 / \sum w`
+            where :math:`\sum w`, :math:`\sum w^2` are the (total) sum of random weights and squared random weights.
         """
         self.mpicomm = mpicomm
         self.mpiroot = mpiroot
@@ -296,6 +302,7 @@ class BaseReconstruction(BaseClass):
             self.log_info('Using mesh with nmesh={}, boxsize={}, boxcenter={}.'.format(self.nmesh, self.boxsize, self.boxcenter))
         self.set_f(f)
         self.set_bias(bias)
+        self.set_threshold_randoms(threshold_randoms)
         if data_positions is not None:
             data_weights = _format_weights(data_weights, size=len(data_positions), copy=True, mpicomm=self.mpicomm, mpiroot=self.mpiroot)
             self.assign_data(data_positions, data_weights, position_type='pos', copy=False, mpiroot=None)
@@ -345,6 +352,7 @@ class BaseReconstruction(BaseClass):
         return (coord + partition.local_i_start) * self.cellsize + self.offset
 
     def set_f(self, f):
+        """Set growth rate. If callable, set real space mesh :attr:`f`."""
         self.f_callable = None
         if callable(f):
             self.f_callable = f
@@ -359,6 +367,7 @@ class BaseReconstruction(BaseClass):
             self.f = f
 
     def set_bias(self, bias):
+        """Set bias. If callable, set real space mesh :attr:`bias`."""
         if callable(bias):
             if not self._bias_z:
                 raise ValueError('{} does not support redshift-evolving bias')
@@ -371,9 +380,7 @@ class BaseReconstruction(BaseClass):
             self.bias = bias
 
     def _set_optimal_weights(self, P0=None, nbar=None, alpha=1., factor=1):
-        """
-        Set optimal weights.
-        """
+        """Set optimal weights."""
         def func(nbar):
             return factor * nbar * P0 / (1 + nbar * P0)
 
@@ -410,6 +417,14 @@ class BaseReconstruction(BaseClass):
                 los[ilos] = 1.
             los = np.array(los, dtype='f8')
             self.los = los / utils.distance(los)
+
+    def set_threshold_randoms(self, threshold_randoms=0.01):
+        """Set threshold on randoms to define the density contrast."""
+        if isinstance(threshold_randoms, tuple):
+            self._threshold_method, self._threshold_value = threshold_randoms
+        else:
+            self._threshold_method, self._threshold_value = 'mean', threshold_randoms
+        assert self._threshold_method in ['noise', 'mean']
 
     @property
     def cellsize(self):
@@ -531,14 +546,16 @@ class BaseReconstruction(BaseClass):
         if getattr(self, 'mesh_randoms', None) is None:
             self.mesh_randoms = self.pm.create(type='real', value=0.)
             self._size_randoms = 0
+            self._sumw2_randoms = 0
         self._paint(positions, weights=weights, out=self.mesh_randoms)
         self._size_randoms += self.mpicomm.allreduce(len(positions))
+        self._sumw2_randoms += self.mpicomm.allreduce(sum(weights**2) if weights is not None else len(positions))
 
     @property
     def has_randoms(self):
         return getattr(self, 'mesh_randoms', None) is not None
 
-    def set_density_contrast(self, ran_min=0.01, smoothing_radius=15., check=False, kw_weights=None):
+    def set_density_contrast(self, threshold_randoms=None, smoothing_radius=15., check=False, kw_weights=None):
         r"""
         Set :math:`\delta` field :attr:`mesh_delta` from data and randoms fields :attr:`mesh_data` and :attr:`mesh_randoms`.
 
@@ -548,8 +565,11 @@ class BaseReconstruction(BaseClass):
 
         Parameters
         ----------
-        ran_min : float, default=0.01
+        threshold_randoms : float, default=0.01
+            If provided, override value given at initialization.
             :attr:`mesh_randoms` points below this threshold times mean random weights have their density contrast set to 0.
+            For a more consistent thresholding, pass e.g. ('noise', 0.01) to set the threshold has :math:`0.01  \sum w^2 / \sum w`
+            where :math:`\sum w`, :math:`\sum w^2` are the (total) sum of random weights and squared random weights.
 
         smoothing_radius : float, default=15
             Smoothing scale.
@@ -562,6 +582,8 @@ class BaseReconstruction(BaseClass):
             and 'nbar' (comoving density at given comoving distance). If 'nbar' not provided,
             :attr:`mesh_randoms` rescaled to the data density is used instead.
         """
+        if threshold_randoms is not None:
+            self.set_threshold_randoms(threshold_randoms)
         self.smoothing_radius = smoothing_radius
         self.mesh_delta = self._smooth_gaussian(self.mesh_data)
         del self.mesh_data
@@ -579,27 +601,28 @@ class BaseReconstruction(BaseClass):
             for delta, randoms in zip(self.mesh_delta.slabs, self.mesh_randoms.slabs):
                 delta[...] -= alpha * randoms
 
-            threshold = ran_min * sum_randoms / self._size_randoms
+            if self._threshold_method == 'noise':
+                threshold = self._threshold_value * self._sumw2_randoms / sum_randoms
+            else:
+                threshold = self._threshold_value * sum_randoms / self._size_randoms
 
             if hasattr(self.bias, 'slabs'):
-                for delta, randoms, bias in zip(self.mesh_delta.slabs, self.mesh_randoms.slabs, self.bias.slabs):
-                    mask = randoms > threshold
-                    delta[mask] /= (bias[mask] * alpha * randoms[mask])
-                    delta[~mask] = 0.
+                bias = self.bias.slabs
             else:
-                for delta, randoms in zip(self.mesh_delta.slabs, self.mesh_randoms.slabs):
-                    mask = randoms > threshold
-                    delta[mask] /= (self.bias * alpha * randoms[mask])
-                    delta[~mask] = 0.
+                bias = [self.bias] * self.mesh_delta.slabs.nslabs
+
+            for delta, randoms, bias in zip(self.mesh_delta.slabs, self.mesh_randoms.slabs, bias):
+                mask = randoms > threshold
+                delta[mask] /= (bias * alpha * randoms)[mask]
+                delta[~mask] = 0.
 
             if check:
                 mean_nran_per_cell = self.mpicomm.allreduce(sum(randoms[randoms > 0] for randoms in self.mesh_randoms))
                 std_nran_per_cell = self.mpicomm.allreduce(sum(randoms[randoms > 0]**2 for randoms in self.mesh_randoms)) - mean_nran_per_cell**2
                 if self.mpicomm.rank == 0:
-                    self.log_info('Mean smoothed random density in non-empty cells is {:.4f} (std = {:.4f}), threshold is (ran_min * mean weight) = {:.4f}.'.format(mean_nran_per_cell, std_nran_per_cell, threshold))
+                    self.log_info('Mean smoothed random density in non-empty cells is {:.4f} (std = {:.4f}), threshold is = {:.4f}.'.format(mean_nran_per_cell, std_nran_per_cell, threshold))
 
                 frac_nonzero_masked = 1. - self.mpicomm.allreduce(sum(np.sum(randoms > 0.) for randoms in self.mesh_randoms)) / nnonzero
-                del mask_nonzero
                 if self.mpicomm.rank == 0:
                     if frac_nonzero_masked > 0.1:
                         self.log_warning('Masking a large fraction {:.4f} of non-empty cells. You should probably increase the number of randoms.'.format(frac_nonzero_masked))

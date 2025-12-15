@@ -41,7 +41,7 @@ class OriginalMultiGridReconstruction(BaseReconstruction):
 
         Note
         ----
-        This method follows Martin's reconstruction code: we are not satisfied with the ``ran_min`` prescription.
+        This method follows Martin's reconstruction code: we decided to change the ``ran_min`` prescription.
         At least ``ran_min`` should depend on random weights. See also Martin's notes below.
 
         Parameters
