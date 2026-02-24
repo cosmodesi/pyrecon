@@ -41,7 +41,7 @@ def _format_positions(positions, position_type='xyz', dtype=None, copy=True, mpi
         positions = list(positions)
         for ip, p in enumerate(positions):
             # Cast to the input dtype if exists (may be set by previous positions)
-            positions[ip] = np.array(p, dtype=dtype, copy=copy)
+            positions[ip] = np.array(p, dtype=dtype) if copy else np.asarray(p, dtype=dtype)
         size = len(positions[0])
         dt = positions[0].dtype
         if not np.issubdtype(dt, np.floating):
