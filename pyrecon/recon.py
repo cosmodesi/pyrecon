@@ -31,7 +31,7 @@ def _format_positions(positions, position_type='xyz', dtype=None, copy=True, mpi
 
     def __format_positions(positions):
         if position_type == 'pos':  # array of shape (N, 3)
-            positions = np.array(positions, dtype=dtype, copy=copy)
+            positions = np.array(positions, dtype=dtype) if copy else np.asarray(positions, dtype=dtype)
             if not np.issubdtype(positions.dtype, np.floating):
                 return None, 'Input position arrays should be of floating type, not {}'.format(positions.dtype)
             if positions.shape[-1] != 3:
