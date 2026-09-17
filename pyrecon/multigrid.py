@@ -164,6 +164,6 @@ class MultiGridReconstruction(OriginalMultiGridReconstruction):
 
     """Any update / test / improvement upon original algorithm."""
 
-    def set_density_contrast(self, *args, **kwargs):
-        """See :class:`BaseReconstruction.set_density_contrast`."""
-        BaseReconstruction.set_density_contrast(self, *args, **kwargs)
+    # Not a wrapper, such that the signature is that of :meth:`BaseReconstruction.set_density_contrast`,
+    # which :meth:`BaseReconstruction.__init__` inspects to dispatch its keyword arguments.
+    set_density_contrast = BaseReconstruction.set_density_contrast
